@@ -1,0 +1,767 @@
+.forms-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.forms-header {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #2c3e50;
+  position: relative;
+}
+
+.forms-header h1 {
+  color: #2c3e50;
+  font-size: 18px;
+  margin: 0 0 5px 0;
+}
+
+.forms-subtitle {
+  color: #666;
+  font-style: italic;
+  font-size: 12px;
+  margin: 0;
+}
+
+.watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 60px;
+  color: rgba(44, 62, 80, 0.05);
+  font-weight: bold;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.forms-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.forms-controls .btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #3498db;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2980b9;
+}
+
+.btn-secondary {
+  background: #95a5a6;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #7f8c8d;
+}
+
+.btn-success {
+  background: #27ae60;
+  color: white;
+}
+
+.btn-success:hover {
+  background: #219a52;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Assessment Form Styles */
+.assessment-form {
+  overflow-x: auto;
+}
+
+.assessment-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+}
+
+.assessment-table th,
+.assessment-table td {
+  border: 1px solid #ddd;
+  padding: 4px;
+  text-align: center;
+}
+
+.assessment-table th {
+  background: #2c3e50;
+  color: white;
+  font-weight: bold;
+}
+
+.assessment-table .student-name-cell {
+  width: 150px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.assessment-table .vertical-text {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  font-weight: bold;
+}
+
+.assessment-table .summary-value {
+  font-weight: bold;
+  background: #f8f9fa;
+}
+
+.assessment-table input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 9px;
+  padding: 2px;
+  color: #000000;
+}
+
+.assessment-table input:focus {
+  outline: none;
+  background: #fff3cd;
+}
+
+/* Remarks Section */
+.remarks-section {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f9f9f9;
+}
+
+.section-title {
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #87CEEB;
+}
+
+.signature-area {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #ddd;
+}
+
+.signature-line {
+  border-bottom: 1px solid #000;
+  width: 200px;
+  height: 20px;
+  margin: 10px 0;
+}
+
+/* Print Styles */
+@media print {
+  .forms-controls,
+  .no-print {
+    display: none !important;
+  }
+  
+  .forms-container {
+    box-shadow: none;
+    padding: 10px;
+    max-width: 100%;
+  }
+  
+  .assessment-table {
+    font-size: 8px;
+  }
+  
+  .assessment-table th,
+  .assessment-table td {
+    padding: 2px;
+  }
+}
+
+/* Lesson Plan Specific Styles */
+.lesson-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+}
+
+.lesson-table th,
+.lesson-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+}
+
+.lesson-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.lesson-table input,
+.lesson-table select,
+.lesson-table textarea {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 11px;
+  padding: 4px;
+  color: #000000;
+}
+
+.lesson-table input:focus,
+.lesson-table select:focus,
+.lesson-table textarea:focus {
+  outline: none;
+  background: #fff3cd;
+}
+
+/* Steps Table */
+.steps-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+}
+
+.steps-table th {
+  background: #2c3e50;
+  color: white;
+  padding: 8px;
+  text-align: center;
+  font-size: 10px;
+}
+
+.steps-table td {
+  border: 1px solid #ddd;
+  padding: 6px;
+  vertical-align: top;
+  background: #ffffff;
+}
+
+.steps-table textarea {
+  width: 100%;
+  min-height: 80px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 4px;
+  font-size: 10px;
+  resize: vertical;
+  color: #1e293b !important;
+  background: #ffffff !important;
+}
+
+.steps-table input {
+  width: 100%;
+  padding: 4px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 10px;
+  color: #1e293b !important;
+  background: #ffffff !important;
+}
+
+/* Form Labels */
+.form-label {
+  font-size: 11px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 3px;
+  display: block;
+}
+
+/* Form Inputs */
+.form-input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-bottom: 10px;
+  color: #000000;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 12px;
+  min-height: 60px;
+  resize: vertical;
+  margin-bottom: 10px;
+  color: #000000;
+}
+
+/* Bordered Section */
+.bordered-section {
+  border: 1px solid #2c3e50;
+  border-radius: 5px;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+
+.bordered-section-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #2c3e50;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+/* ========================================
+   SCHEME OF WORK STYLES
+   ======================================== */
+.scheme-container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 15px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+}
+
+.scheme-header {
+  text-align: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #2c3e50;
+}
+
+.scheme-title {
+  color: #2c3e50;
+  font-size: 16px;
+  margin: 0 0 5px 0;
+}
+
+.scheme-subtitle {
+  color: #666;
+  font-style: italic;
+  font-size: 11px;
+  margin: 0;
+}
+
+.scheme-container .header-section {
+  margin-bottom: 15px;
+}
+
+.scheme-container .header-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.scheme-container .header-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scheme-container .header-item {
+  margin-bottom: 5px;
+}
+
+.scheme-container .header-label {
+  font-weight: bold;
+  font-size: 10px;
+  margin-bottom: 2px;
+  display: block;
+  color: #2c3e50;
+}
+
+.scheme-container .header-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 10px;
+  box-sizing: border-box;
+  color: #000000;
+}
+
+.scheme-container .header-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+/* Format Toggle */
+.format-toggle-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.format-toggle {
+  display: flex;
+  gap: 5px;
+}
+
+.format-option {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-size: 10px;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.format-option:hover {
+  background: #e9ecef;
+}
+
+.format-option.active {
+  background: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.format-description {
+  font-size: 9px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Scheme Table */
+.table-container {
+  overflow-x: auto;
+  margin-bottom: 15px;
+}
+
+.scheme-table {
+  width: 100%;
+  min-width: 1200px;
+  border-collapse: collapse;
+  font-size: 8px;
+  table-layout: fixed;
+}
+
+.scheme-table th {
+  background-color: #2c3e50;
+  color: #ffffff;
+  font-weight: bold;
+  padding: 4px 2px;
+  text-align: center;
+  border: 1px solid #000000;
+  font-size: 8px;
+  vertical-align: middle;
+}
+
+.scheme-table td {
+  padding: 2px;
+  border: 1px solid #cccccc;
+  text-align: center;
+  vertical-align: top;
+  font-size: 8px;
+}
+
+.scheme-table .editable-cell {
+  width: 100%;
+  min-height: 50px;
+  max-height: 80px;
+  border: 1px solid #e0e0e0;
+  padding: 3px;
+  font-size: 8px;
+  font-family: Arial, sans-serif;
+  resize: vertical;
+  box-sizing: border-box;
+  color: #000000;
+}
+
+.scheme-table input.editable-cell {
+  min-height: 24px;
+  max-height: 24px;
+}
+
+.scheme-table .horizontal-header {
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.2;
+}
+
+.scheme-table .swahili-text {
+  font-size: 6px;
+  font-style: italic;
+  display: block;
+  margin-top: 2px;
+}
+
+/* Column widths for Scheme of Work */
+.scheme-table .col-week { width: 6%; }
+.scheme-table .col-competence { width: 9%; }
+.scheme-table .col-topic { width: 10%; }
+.scheme-table .col-outcomes { width: 10%; }
+.scheme-table .col-teaching { width: 9%; }
+.scheme-table .col-learning { width: 9%; }
+.scheme-table .col-resources { width: 8%; }
+.scheme-table .col-assessment { width: 8%; }
+.scheme-table .col-periods { width: 4%; }
+.scheme-table .col-references { width: 8%; }
+.scheme-table .col-remarks { width: 8%; }
+.scheme-table .col-main { width: 10%; }
+.scheme-table .col-specific { width: 10%; }
+.scheme-table .col-activities { width: 10%; }
+.scheme-table .col-specific-activities { width: 10%; }
+.scheme-table .col-month { width: 5%; }
+.scheme-table .col-methods { width: 8%; }
+
+/* Action Buttons */
+.action-section {
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.action-group {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-btn {
+  background: #3498db;
+  color: white;
+}
+
+.add-btn:hover {
+  background: #2980b9;
+}
+
+.save-btn {
+  background: #27ae60;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #219a52;
+}
+
+.print-btn {
+  background: #95a5a6;
+  color: white;
+}
+
+.print-btn:hover {
+  background: #7f8c8d;
+}
+
+/* ========================================
+   SUBJECT EVALUATION STYLES
+   ======================================== */
+.subject-evaluation-container {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.subject-evaluation-form {
+  width: 100%;
+}
+
+.subject-evaluation-form .form-section {
+  margin-bottom: 15px;
+}
+
+.subject-evaluation-form .info-label {
+  font-weight: bold;
+  font-size: 10px;
+  color: #2c3e50;
+  margin-bottom: 3px;
+  display: block;
+}
+
+.subject-evaluation-form .input-line {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 10px;
+  box-sizing: border-box;
+  color: #000000;
+}
+
+.subject-evaluation-form .input-line.large {
+  min-height: 60px;
+  resize: vertical;
+}
+
+/* Evaluation Table */
+.table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 15px;
+}
+
+.evaluation-table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: 8px;
+  table-layout: fixed;
+}
+
+.evaluation-table th {
+  background-color: #2c3e50;
+  color: #ffffff;
+  font-weight: bold;
+  padding: 4px 2px;
+  text-align: center;
+  border: 1px solid #000000;
+  font-size: 8px;
+}
+
+.evaluation-table td {
+  padding: 2px;
+  border: 1px solid #cccccc;
+  vertical-align: top;
+  font-size: 8px;
+}
+
+.evaluation-table .topic-cell {
+  text-align: left;
+}
+
+.evaluation-table .month-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.evaluation-table .comment-cell {
+  text-align: left;
+}
+
+.evaluation-table .topic-textarea,
+.evaluation-table .comment-textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #e0e0e0;
+  padding: 3px;
+  font-size: 8px;
+  font-family: Arial, sans-serif;
+  resize: vertical;
+  box-sizing: border-box;
+  color: #000000;
+}
+
+.evaluation-table .month-checkbox {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* Summary Section */
+.summary-section {
+  margin: 15px 0;
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #f9f9f9;
+}
+
+.summary-section .section-title {
+  font-size: 11px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #87CEEB;
+}
+
+.summary-section .summary-value {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+/* Danger Button */
+.btn-danger {
+  background: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c0392b;
+}
+
+.btn-danger:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+/* Print Styles for New Forms */
+@media print {
+  .scheme-container,
+  .subject-evaluation-container {
+    box-shadow: none;
+    padding: 5px;
+    max-width: 100%;
+  }
+  
+  .scheme-table,
+  .evaluation-table {
+    font-size: 7px;
+    min-width: auto;
+  }
+  
+  .scheme-table th,
+  .evaluation-table th {
+    font-size: 7px;
+    padding: 2px;
+  }
+  
+  .scheme-table td,
+  .evaluation-table td {
+    padding: 2px;
+  }
+  
+  .action-section,
+  .forms-controls {
+    display: none !important;
+  }
+  
+  .scheme-table .editable-cell,
+  .evaluation-table .topic-textarea,
+  .evaluation-table .comment-textarea {
+    border: none;
+    min-height: auto;
+  }
+}
