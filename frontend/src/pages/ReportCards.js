@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { dataService } from '../services/dataService';
 import { studentService } from '../services/studentService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { 
   FileText, Search, Printer, Download, Send, Save, 
   ChevronRight, Star, User, BookOpen, Award, Settings,
@@ -259,7 +259,190 @@ function ReportCards() {
       });
       
       if (response.ok) {
-        toast.success('Report card sent to student portal');
+        // Save a copy to Documents component (localStorage) with report_card source tag
+        const fileName = `Report_Card_${selectedStudent.first_name}_${selectedStudent.last_name}_${selectedTerm.replace(/\s+/g, '_')}.docx`;
+        
+        const getGradeClass = (grade) => {
+          if (grade >= 80) return 'grade-excellent';
+          if (grade >= 60) return 'grade-good';
+          if (grade >= 40) return 'grade-average';
+          return 'grade-poor';
+        };
+        const getGradeLetter = (grade) => {
+          if (grade >= 80) return 'A';
+          if (grade >= 70) return 'B';
+          if (grade >= 60) return 'C';
+          if (grade >= 40) return 'D';
+          return 'F';
+        };
+        
+        const behaviorMarksArray = BEHAVIOR_MARKS.map(mark => ({
+          category: mark.charAt(0).toUpperCase() + mark.slice(1),
+          rating: behaviorMarks[mark]
+        }));
+        
+        // Use school settings (custom name, subtitle, logo) from the loaded school settings
+        const schoolName = schoolSettings?.school_name || 'IHEZA';
+        const schoolSubtitle = schoolSettings?.school_subtitle || 'The Institute of Holistic Education of Zanzibar';
+        const schoolLogo = schoolSettings?.logo || '';
+        const logoHtml = schoolLogo ? `<img src="${schoolLogo}" alt="School Logo" style="max-width: 100px; max-height: 80px; margin-bottom: 8px; object-fit: contain;" />` : '';
+        
+        const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Report Card - ${selectedStudent.first_name} ${selectedStudent.last_name}</title>
+  <style>
+    body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; color: #000; margin: 0; padding: 20px; }
+    h1 { font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 10px; color: #0f4c81; }
+    h2 { font-size: 14pt; font-weight: bold; margin-top: 15px; margin-bottom: 10px; color: #1e3a5f; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+    th { background-color: #0f4c81; color: white; font-weight: bold; }
+    tr:nth-child(even) { background-color: #f5f5f5; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0f4c81; padding-bottom: 15px; }
+    .logo-text { font-size: 24pt; font-weight: bold; color: #0f4c81; }
+    .subtitle { font-size: 10pt; color: #666; }
+    .section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+    .grade-excellent { color: #059669; font-weight: bold; }
+    .grade-good { color: #2563eb; }
+    .grade-average { color: #d97706; }
+    .grade-poor { color: #dc2626; }
+    .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc; text-align: center; font-size: 10pt; color: #666; }
+    .signature-section { margin-top: 40px; display: flex; justify-content: space-between; }
+    .signature-box { width: 200px; text-align: center; }
+    .signature-line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; }
+    /* Star rating using CSS content to avoid unicode encoding issues */
+    .star-filled, .star-empty { display: inline-block; width: 16px; height: 16px; }
+    .star-filled::before { content: "\\2605"; color: #f59e0b; font-size: 14pt; }
+    .star-empty::before { content: "\\2606"; color: #999; font-size: 14pt; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    ${logoHtml}
+    <div class="logo-text">${schoolName}</div>
+    <div class="subtitle">${schoolSubtitle}</div>
+    <h1>STUDENT REPORT CARD</h1>
+  </div>
+  
+  <div class="section">
+    <h2>Student Information</h2>
+    <table>
+      <tr>
+        <td><strong>Name:</strong></td>
+        <td>${selectedStudent.first_name} ${selectedStudent.last_name}</td>
+        <td><strong>Admission No:</strong></td>
+        <td>${selectedStudent.admission_no || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td><strong>Class:</strong></td>
+        <td>${selectedStudent.class_name || 'N/A'}</td>
+        <td><strong>Academic Year:</strong></td>
+        <td>${academicYear}</td>
+      </tr>
+      <tr>
+        <td><strong>Term:</strong></td>
+        <td>${selectedTerm}</td>
+        <td><strong>Position:</strong></td>
+        <td>${reportData?.position || 'N/A'} / ${reportData?.total_students || 'N/A'}</td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>Academic Performance</h2>
+    <table>
+      <tr>
+        <th>Subject</th>
+        <th>Score</th>
+        <th>Grade</th>
+        <th>Remarks</th>
+      </tr>
+      ${(Array.isArray(reportData.grades) ? reportData.grades : []).map(g => `
+        <tr>
+          <td>${g.subject_name || g.subject || 'N/A'}</td>
+          <td class="${getGradeClass(g.score || 0)}">${g.score || 0}</td>
+          <td>${getGradeLetter(g.score || 0)}</td>
+          <td>${(g.score || 0) >= 80 ? 'Excellent' : (g.score || 0) >= 60 ? 'Good' : (g.score || 0) >= 40 ? 'Fair' : 'Needs Improvement'}</td>
+        </tr>
+      `).join('')}
+      <tr style="background: #e0f2fe;">
+        <td><strong>Average</strong></td>
+        <td colspan="3"><strong class="${getGradeClass(reportData.average || 0)}">${(reportData.average || 0).toFixed(1)}% (${getGradeLetter(reportData.average || 0)})</strong></td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>Behavior & Conduct</h2>
+    <table>
+      <tr>
+        <th>Category</th>
+        <th>Rating (1-5)</th>
+        <th>Comment</th>
+      </tr>
+      ${behaviorMarksArray.map(b => `
+        <tr>
+          <td>${b.category || 'N/A'}</td>
+          <td>${'<span class="star-filled"></span>'.repeat(b.rating || 0)}${'<span class="star-empty"></span>'.repeat(5 - (b.rating || 0))}</td>
+          <td>${(b.rating || 0) >= 4 ? 'Excellent' : (b.rating || 0) >= 3 ? 'Good' : 'Needs Improvement'}</td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>Teacher's Comments</h2>
+    <p>${teacherComment || 'The student has shown consistent effort throughout the term. Keep up the good work!'}</p>
+  </div>
+  
+  <div class="signature-section">
+    <div class="signature-box">
+      <div class="signature-line">Class Teacher</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line">Principal</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line">Parent/Guardian</div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <p>Generated on: ${new Date().toLocaleDateString()}</p>
+    <p>${schoolName} School Management System</p>
+  </div>
+</body>
+</html>`;
+
+        // Store as HTML content with text/html MIME type since report cards are HTML documents,
+        // NOT real .docx files. This ensures the Documents page previews them correctly
+        // as HTML in an iframe rather than trying to parse them with mammoth.js.
+        const base64Data = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(htmlContent)));
+        const saved = localStorage.getItem('iheza_documents');
+        const existingDocs = saved ? JSON.parse(saved) : [];
+        existingDocs.push({
+          id: Date.now().toString(),
+          name: fileName,
+          type: 'text/html',
+          size: htmlContent.length,
+          data: base64Data,
+          source: 'report_card',
+          chain: selectedStudent.chain || currentUser?.chain || '',
+          uploaded_by: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email || 'Unknown' : 'Unknown',
+          metadata: {
+            student: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
+            admission_no: selectedStudent.admission_no,
+            class: selectedStudent.class_name,
+            term: selectedTerm,
+            academic_year: academicYear
+          },
+          uploadedAt: new Date().toISOString()
+        });
+        localStorage.setItem('iheza_documents', JSON.stringify(existingDocs));
+        
+        toast.success('Report card sent to student portal and saved to Documents');
         loadReportCard();
       } else {
         throw new Error('Failed to send');
@@ -317,8 +500,196 @@ function ReportCards() {
         grades: reportData.grades || []
       };
       
+      // Download the Word document
       exportReportCard(exportData, selectedStudent);
-      toast.success('Report card downloaded as Word document');
+      
+      // Also save to Documents component (localStorage)
+      const fileName = `Report_Card_${selectedStudent.first_name}_${selectedStudent.last_name}_${selectedTerm.replace(/\s+/g, '_')}.docx`;
+      
+      // Generate the same HTML content that exportReportCard uses
+      const getGradeClass = (grade) => {
+        if (grade >= 80) return 'grade-excellent';
+        if (grade >= 60) return 'grade-good';
+        if (grade >= 40) return 'grade-average';
+        return 'grade-poor';
+      };
+      const getGradeLetter = (grade) => {
+        if (grade >= 80) return 'A';
+        if (grade >= 70) return 'B';
+        if (grade >= 60) return 'C';
+        if (grade >= 40) return 'D';
+        return 'F';
+      };
+      
+      const behaviorMarksArray = Array.isArray(exportData.behavior_marks) 
+        ? exportData.behavior_marks 
+        : Object.entries(exportData.behavior_marks || {}).map(([key, value]) => ({
+            category: key.charAt(0).toUpperCase() + key.slice(1),
+            rating: value
+          }));
+      
+      // Use school settings (custom name, subtitle, logo) from the loaded school settings
+      const schoolName = schoolSettings?.school_name || 'IHEZA';
+      const schoolSubtitle = schoolSettings?.school_subtitle || 'The Institute of Holistic Education of Zanzibar';
+      const schoolLogo = schoolSettings?.logo || '';
+      const logoHtml = schoolLogo ? `<img src="${schoolLogo}" alt="School Logo" style="max-width: 100px; max-height: 80px; margin-bottom: 8px; object-fit: contain;" />` : '';
+      
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Report Card - ${selectedStudent.first_name} ${selectedStudent.last_name}</title>
+  <style>
+    body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5; color: #000; margin: 0; padding: 20px; }
+    h1 { font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 10px; color: #0f4c81; }
+    h2 { font-size: 14pt; font-weight: bold; margin-top: 15px; margin-bottom: 10px; color: #1e3a5f; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+    th { background-color: #0f4c81; color: white; font-weight: bold; }
+    tr:nth-child(even) { background-color: #f5f5f5; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #0f4c81; padding-bottom: 15px; }
+    .logo-text { font-size: 24pt; font-weight: bold; color: #0f4c81; }
+    .subtitle { font-size: 10pt; color: #666; }
+    .section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+    .grade-excellent { color: #059669; font-weight: bold; }
+    .grade-good { color: #2563eb; }
+    .grade-average { color: #d97706; }
+    .grade-poor { color: #dc2626; }
+    .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc; text-align: center; font-size: 10pt; color: #666; }
+    .signature-section { margin-top: 40px; display: flex; justify-content: space-between; }
+    .signature-box { width: 200px; text-align: center; }
+    .signature-line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; }
+    /* Star rating using CSS content to avoid unicode encoding issues */
+    .star-filled, .star-empty { display: inline-block; width: 16px; height: 16px; }
+    .star-filled::before { content: "\\2605"; color: #f59e0b; font-size: 14pt; }
+    .star-empty::before { content: "\\2606"; color: #999; font-size: 14pt; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    ${logoHtml}
+    <div class="logo-text">${schoolName}</div>
+    <div class="subtitle">${schoolSubtitle}</div>
+    <h1>STUDENT REPORT CARD</h1>
+  </div>
+  
+  <div class="section">
+    <h2>Student Information</h2>
+    <table>
+      <tr>
+        <td><strong>Name:</strong></td>
+        <td>${selectedStudent.first_name} ${selectedStudent.last_name}</td>
+        <td><strong>Admission No:</strong></td>
+        <td>${selectedStudent.admission_no || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td><strong>Class:</strong></td>
+        <td>${selectedStudent.class_name || 'N/A'}</td>
+        <td><strong>Academic Year:</strong></td>
+        <td>${academicYear}</td>
+      </tr>
+      <tr>
+        <td><strong>Term:</strong></td>
+        <td>${selectedTerm}</td>
+        <td><strong>Position:</strong></td>
+        <td>${reportData?.position || 'N/A'} / ${reportData?.total_students || 'N/A'}</td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>Academic Performance</h2>
+    <table>
+      <tr>
+        <th>Subject</th>
+        <th>Score</th>
+        <th>Grade</th>
+        <th>Remarks</th>
+      </tr>
+      ${(Array.isArray(reportData.grades) ? reportData.grades : []).map(g => `
+        <tr>
+          <td>${g.subject_name || g.subject || 'N/A'}</td>
+          <td class="${getGradeClass(g.score || 0)}">${g.score || 0}</td>
+          <td>${getGradeLetter(g.score || 0)}</td>
+          <td>${(g.score || 0) >= 80 ? 'Excellent' : (g.score || 0) >= 60 ? 'Good' : (g.score || 0) >= 40 ? 'Fair' : 'Needs Improvement'}</td>
+        </tr>
+      `).join('')}
+      <tr style="background: #e0f2fe;">
+        <td><strong>Average</strong></td>
+        <td colspan="3"><strong class="${getGradeClass(reportData.average || 0)}">${(reportData.average || 0).toFixed(1)}% (${getGradeLetter(reportData.average || 0)})</strong></td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>Behavior & Conduct</h2>
+    <table>
+      <tr>
+        <th>Category</th>
+        <th>Rating (1-5)</th>
+        <th>Comment</th>
+      </tr>
+      ${behaviorMarksArray.map(b => `
+        <tr>
+          <td>${b.category || 'N/A'}</td>
+          <td>${'<span class="star-filled"></span>'.repeat(b.rating || 0)}${'<span class="star-empty"></span>'.repeat(5 - (b.rating || 0))}</td>
+          <td>${(b.rating || 0) >= 4 ? 'Excellent' : (b.rating || 0) >= 3 ? 'Good' : 'Needs Improvement'}</td>
+        </tr>
+      `).join('')}
+    </table>
+  </div>
+  
+  <div class="section">
+    <h2>Teacher's Comments</h2>
+    <p>${teacherComment || 'The student has shown consistent effort throughout the term. Keep up the good work!'}</p>
+  </div>
+  
+  <div class="signature-section">
+    <div class="signature-box">
+      <div class="signature-line">Class Teacher</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line">Principal</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line">Parent/Guardian</div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <p>Generated on: ${new Date().toLocaleDateString()}</p>
+    <p>${schoolName} School Management System</p>
+  </div>
+</body>
+</html>`;
+
+      // Store as HTML content with text/html MIME type since report cards are HTML documents,
+      // NOT real .docx files. This ensures the Documents page previews them correctly
+      // as HTML in an iframe rather than trying to parse them with mammoth.js.
+      const base64Data = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(htmlContent)));
+      const saved = localStorage.getItem('iheza_documents');
+      const existingDocs = saved ? JSON.parse(saved) : [];
+      existingDocs.push({
+        id: Date.now().toString(),
+        name: fileName,
+        type: 'text/html',
+        size: htmlContent.length,
+        data: base64Data,
+        source: 'report_card',
+        chain: selectedStudent.chain || currentUser?.chain || '',
+        uploaded_by: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email || 'Unknown' : 'Unknown',
+        metadata: {
+          student: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
+          admission_no: selectedStudent.admission_no,
+          class: selectedStudent.class_name,
+          term: selectedTerm,
+          academic_year: academicYear
+        },
+        uploadedAt: new Date().toISOString()
+      });
+      localStorage.setItem('iheza_documents', JSON.stringify(existingDocs));
+      
+      toast.success('Report card downloaded and saved to Documents');
     } catch (error) {
       console.error('Export error:', error);
       toast.error('Failed to export report card');

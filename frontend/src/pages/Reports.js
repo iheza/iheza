@@ -4,7 +4,7 @@ import { selectCurrentUser } from '../store/slices/authSlice';
 import { dataService } from '../services/dataService';
 import { studentService } from '../services/studentService';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { BarChart3, Users, Calendar, DollarSign, Download, Search, Filter, RefreshCw, Plus, FileText } from 'lucide-react';
 import ChainToggle from '../components/ChainToggle';
 import { API_URL } from '../config/api';
@@ -827,7 +827,7 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
     csv += 'Name,Admission No,Class,Total Fee,Paid,Outstanding,Status,Fee Type\n';
     
     filteredStudents.forEach(s => {
-      csv += `"${s.name}","${s.admission_no}","${s.class_name}",${s.total_fee || 0},${s.paid || 0},${s.outstanding || 0},"${s.status}","${s.fee_type || 'tuition'}"\n`;
+      csv += `"${s.name}","${s.admission_no}","${s.class_name}",${s.total_fees || 0},${s.total_paid || s.paid || 0},${s.balance || s.outstanding || 0},"${s.status}","${s.fee_type || 'tuition'}"\n`;
     });
     
     csv += `\nTotal Students,${totals.totalStudents}\n`;
@@ -883,9 +883,9 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
               <tr>
                 <td>${s.name}<br/><small>${s.admission_no}</small></td>
                 <td>${s.class_name}</td>
-                <td>TZS ${(s.total_fee || 0).toLocaleString()}</td>
-                <td style="color: green;">TZS ${(s.paid || 0).toLocaleString()}</td>
-                <td style="color: red;">TZS ${(s.outstanding || 0).toLocaleString()}</td>
+                <td>TZS ${(s.total_fees || 0).toLocaleString()}</td>
+                <td style="color: green;">TZS ${(s.total_paid || s.paid || 0).toLocaleString()}</td>
+                <td style="color: red;">TZS ${(s.balance || s.outstanding || 0).toLocaleString()}</td>
                 <td class="${s.status}">${s.status === 'paid' ? 'Fully Paid' : s.status === 'partial' ? 'Partial' : 'Unpaid'}</td>
               </tr>
             `).join('')}
@@ -906,9 +906,9 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
   // Calculate totals
   const totals = {
     totalStudents: filteredStudents.length,
-    totalExpected: filteredStudents.reduce((sum, s) => sum + (s.total_fee || 0), 0),
-    totalCollected: filteredStudents.reduce((sum, s) => sum + (s.paid || 0), 0),
-    totalOutstanding: filteredStudents.reduce((sum, s) => sum + (s.outstanding || 0), 0),
+    totalExpected: filteredStudents.reduce((sum, s) => sum + (s.total_fees || 0), 0),
+    totalCollected: filteredStudents.reduce((sum, s) => sum + (s.total_paid || s.paid || 0), 0),
+    totalOutstanding: filteredStudents.reduce((sum, s) => sum + (s.balance || s.outstanding || 0), 0),
     paidCount: filteredStudents.filter(s => s.status === 'paid').length,
     partialCount: filteredStudents.filter(s => s.status === 'partial').length,
     unpaidCount: filteredStudents.filter(s => s.status === 'unpaid').length
@@ -1217,9 +1217,9 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{student.admission_no}</div>
                   </td>
                   <td>{student.class_name}</td>
-                  <td>TZS {(student.total_fee || 0).toLocaleString()}</td>
-                  <td style={{ color: '#22c55e', fontWeight: 500 }}>TZS {(student.paid || 0).toLocaleString()}</td>
-                  <td style={{ color: '#ef4444', fontWeight: 500 }}>TZS {(student.outstanding || 0).toLocaleString()}</td>
+                  <td>TZS {(student.total_fees || 0).toLocaleString()}</td>
+                  <td style={{ color: '#22c55e', fontWeight: 500 }}>TZS {(student.total_paid || student.paid || 0).toLocaleString()}</td>
+                  <td style={{ color: '#ef4444', fontWeight: 500 }}>TZS {(student.balance || student.outstanding || 0).toLocaleString()}</td>
                   <td>
                     <span className={`fin-status-badge ${student.status}`}>
                       {student.status === 'paid' ? 'Fully Paid' : student.status === 'partial' ? 'Partial' : 'Unpaid'}

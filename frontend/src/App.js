@@ -28,11 +28,16 @@ import MyTasks from './pages/MyTasks';
 import Teachers from './pages/Teachers';
 import GenerateChainPage from './pages/GenerateChainPage';
 import ChainLandingPage from './pages/ChainLandingPage';
+import Documents from './pages/Documents';
+import Bin from './pages/Bin';
+import Expenses from './pages/Expenses';
 
 // Components
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import { ToastProvider } from './components/Common/Toast';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 import './App.css';
 
@@ -145,6 +150,8 @@ function App() {
   return (
     <div className="app">
       <PWAInstallPrompt />
+      <LanguageProvider>
+      <ToastProvider>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
@@ -179,6 +186,9 @@ function App() {
                   <Route path="my-tasks" element={<MyTasks />} />
                   <Route path="teachers" element={<Teachers />} />
                   <Route path="generate-chain" element={<GenerateChainPage />} />
+                  <Route path="documents" element={<Documents />} />
+                  <Route path="bin" element={<Bin />} />
+                  <Route path="expenses" element={<Expenses />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>
@@ -188,6 +198,8 @@ function App() {
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ToastProvider>
+      </LanguageProvider>
     </div>
   );
 }

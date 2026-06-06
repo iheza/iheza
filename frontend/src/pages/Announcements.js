@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { 
   Bell, Plus, Edit2, Trash2, X, Download, Search,
   AlertTriangle, Calendar, User, FileText, Printer

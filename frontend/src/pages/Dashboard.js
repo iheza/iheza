@@ -4,7 +4,7 @@ import { selectCurrentUser, selectCurrentPortal } from '../store/slices/authSlic
 import { dataService } from '../services/dataService';
 import { apiClient } from '../services/authService';
 import GenerateChain from '../components/Principal/GenerateChain';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { 
   Users, GraduationCap, Calendar, ClipboardList, 
   TrendingUp, BookOpen, DollarSign, Bell, Database

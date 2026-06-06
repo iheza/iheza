@@ -4,7 +4,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchStudents, createStudent, updateStudent, deleteStudent, bulkUploadStudents, selectStudents, selectStudentsLoading } from '../store/slices/studentSlice';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { dataService } from '../services/dataService';
-import { toast } from 'sonner';
+import { studentService } from '../services/studentService';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { Plus, Search, Edit2, Trash2, X, GraduationCap, Building, Upload, FileText, Users, BookOpen, Layers, Download } from 'lucide-react';
 import ChainToggle from '../components/ChainToggle';
 
@@ -354,6 +355,25 @@ function Students() {
     setBulkData({ chain: defaultChain, class_name: '', students_text: '' });
     setBulkResults(null);
     setShowBulkModal(true);
+  };
+
+  const handleExportAllStudents = () => {
+    if (!students || students.length === 0) {
+      toast.error('No students to export');
+      return;
+    }
+    
+    try {
+      const chainLabel = chainFilter || 'all_schools';
+      const dateStr = new Date().toISOString().split('T')[0];
+      const filename = `iheza_students_${chainLabel}_${dateStr}.doc`;
+      
+      studentService.exportStudentsToDoc(students, filename);
+      toast.success(`Exported ${students.length} students to Word document`);
+    } catch (error) {
+      toast.error('Failed to export students');
+      console.error('Export error:', error);
+    }
   };
 
   return (
@@ -739,6 +759,20 @@ function Students() {
           Student Management
         </h1>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button 
+            className="btn btn-secondary"
+            onClick={handleExportAllStudents}
+            data-testid="export-students-btn"
+            title="Download all students as a Word document"
+            style={{ 
+              background: 'rgba(16, 185, 129, 0.15)', 
+              color: '#34d399', 
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+            }}
+          >
+            <FileText size={18} />
+            Export All Students
+          </button>
           {canAddStudent && (
             <>
               <button 

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 import './Forms.css';
+import { useToast } from '../components/Common/Toast';
+import { staffService } from '../services/staffService';
 
 const AssessmentForm = () => {
   const [students, setStudents] = useState([
@@ -20,6 +23,10 @@ const AssessmentForm = () => {
 
   const [subject, setSubject] = useState("MATHEMATICS");
   const [teacherRemarks, setTeacherRemarks] = useState("");
+  const [teacherSignature, setTeacherSignature] = useState("");
+  const [teachers, setTeachers] = useState([]);
+  const [teacherId, setTeacherId] = useState("");
+  const [teacherName, setTeacherName] = useState("");
 
   const gradingScale = [
     { min: 81, max: 100, grade: 'A' },
@@ -92,17 +99,6 @@ const AssessmentForm = () => {
     });
   };
 
-  const updatePositions = () => {
-    const sortedStudents = [...students].sort((a, b) => b.total - a.total);
-    
-    setStudents(prevStudents => {
-      return prevStudents.map(student => {
-        const position = sortedStudents.findIndex(s => s.id === student.id) + 1;
-        return { ...student, position };
-      });
-    });
-  };
-
   const handleMarksChange = (studentId, type, index, value) => {
     setStudents(prevStudents => {
       return prevStudents.map(student => {
@@ -160,6 +156,18 @@ const AssessmentForm = () => {
     
     setStudents(prev => [...prev, newStudent]);
   };
+  
+  // Auto-recalculate positions whenever student totals change
+  useEffect(() => {
+    const hasData = students.some(s => s.total > 0 || s.name);
+    if (hasData) {
+      const sorted = [...students].sort((a, b) => b.total - a.total);
+      setStudents(prev => prev.map(student => ({
+        ...student,
+        position: sorted.findIndex(s => s.id === student.id) + 1
+      })));
+    }
+  }, [students.map(s => s.total).join(',')]);
 
   const clearAllData = () => {
     if (window.confirm('Are you sure you want to clear all student data?')) {
@@ -181,14 +189,29 @@ const AssessmentForm = () => {
     }
   };
 
+  const { addToast } = useToast();
+
   const calculateAll = () => {
-    students.forEach(student => {
-      updateStudentCalculations(student.id);
+    // Calculate totals and grades for all students synchronously
+    const updatedStudents = students.map(student => {
+      const term40Num = parseFloat(student.term40) || 0;
+      const term60Num = parseFloat(student.term60) || 0;
+      const total = term40Num + term60Num;
+      const grade = getGrade(total);
+      return { ...student, total, grade };
     });
-    updatePositions();
+    
+    // Sort by total (highest first) and assign positions
+    const sorted = [...updatedStudents].sort((a, b) => b.total - a.total);
+    const withPositions = updatedStudents.map(student => ({
+      ...student,
+      position: sorted.findIndex(s => s.id === student.id) + 1
+    }));
+    
+    setStudents(withPositions);
   };
 
-  const saveForm = () => {
+  const saveForm = async () => {
     const saveButton = document.querySelector('.btn-primary');
     const originalButtonText = saveButton.textContent;
     saveButton.textContent = 'Generating Word Document...';
@@ -261,24 +284,79 @@ const AssessmentForm = () => {
     <h3>SUBJECT TEACHER REMARKS</h3>
     <p>${teacherRemarks}</p>
     <div style="margin-top:30px">
-      <div style="border-bottom:1px solid #000;width:200px;margin-bottom:5px"></div>
-      <div>Name & Signature of Subject Teacher</div>
+      <h3>NAME & SIGNATURE OF THE SUBJECT TEACHER</h3>
+      <p>${teacherSignature}</p>
     </div>
   </div>
 </body>
 </html>`;
 
       const blob = new Blob([htmlContent], { type: 'application/msword' });
+      const fileName = `assessment-${subject}-${new Date().toISOString().split('T')[0]}.doc`;
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `assessment-${subject}-${new Date().toISOString().split('T')[0]}.doc`;
+      link.download = fileName;
       link.click();
+
+      // Save to backend database and localStorage
+      const token = localStorage.getItem('sessionToken');
+      
+      // Convert to base64 using btoa (more reliable than FileReader)
+      const base64Data = 'data:application/msword;base64,' + btoa(unescape(encodeURIComponent(htmlContent)));
+      
+      const docPayload = {
+        name: fileName,
+        type: 'application/msword',
+        size: blob.size,
+        data: base64Data,
+        source: 'assessment'
+      };
+
+      // Always save to localStorage first (for Documents component)
+      const saved = localStorage.getItem('iheza_documents');
+      const existingDocs = saved ? JSON.parse(saved) : [];
+      existingDocs.push({
+        id: Date.now().toString(),
+        name: fileName,
+        type: 'application/msword',
+        size: blob.size,
+        data: base64Data,
+        source: 'assessment',
+        uploadedAt: new Date().toISOString(),
+        metadata: {
+          type: 'assessment',
+          subject: subject,
+          teacher: teacherName || teacherSignature || 'Unknown'
+        }
+      });
+      localStorage.setItem('iheza_documents', JSON.stringify(existingDocs));
+
+      // Then try to save to backend
+      try {
+        const response = await fetch(`${API_URL}/api/documents`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(docPayload)
+        });
+
+        if (response.ok) {
+          addToast('Assessment saved successfully! ✓', 'success');
+        } else {
+          addToast('Assessment saved to Documents page.', 'success');
+        }
+      } catch (err) {
+        console.log('Backend save failed, but document is saved locally:', err.message);
+        addToast('Assessment saved to Documents page.', 'success');
+      }
       
       saveButton.textContent = originalButtonText;
       saveButton.disabled = false;
     } catch (error) {
       console.error('Error:', error);
-      alert('Error generating document.');
+      addToast('Error generating document.', 'error');
       saveButton.textContent = originalButtonText;
       saveButton.disabled = false;
     }
@@ -321,9 +399,24 @@ const AssessmentForm = () => {
     window.print();
   };
 
+  // Load teachers for dropdown on mount
+  useEffect(() => {
+    const loadTeachers = async () => {
+      try {
+        const staffData = await staffService.getStaff();
+        const teacherList = staffData.filter(s =>
+          ['teacher', 'academic', 'section_leader'].includes(s.role?.toLowerCase())
+        );
+        setTeachers(teacherList || []);
+      } catch (error) {
+        console.error('Failed to load teachers:', error);
+      }
+    };
+    loadTeachers();
+  }, []);
+
   useEffect(() => {
     calculateAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -484,6 +577,35 @@ const AssessmentForm = () => {
       </div>
 
       <div className="remarks-section">
+        <div className="section-title">SUBJECT TEACHER</div>
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ fontSize: '10px', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Select Teacher:</label>
+          <select
+            value={teacherId}
+            onChange={(e) => {
+              const selectedId = e.target.value;
+              setTeacherId(selectedId);
+              const selectedTeacher = teachers.find(t => t.id === selectedId);
+              if (selectedTeacher) {
+                const name = selectedTeacher.name || `${selectedTeacher.first_name} ${selectedTeacher.last_name}`;
+                setTeacherName(name);
+                setTeacherSignature(name);
+              } else {
+                setTeacherName("");
+                setTeacherSignature("");
+              }
+            }}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '10px' }}
+          >
+            <option value="">-- Select Teacher --</option>
+            {teachers.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.name || `${t.first_name} ${t.last_name}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="section-title">SUBJECT TEACHER REMARKS</div>
         <textarea
           style={{ width: '100%', height: '100px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}
@@ -493,8 +615,13 @@ const AssessmentForm = () => {
         />
         
         <div className="signature-area" style={{ marginTop: '20px' }}>
-          <div>NAME & SIGNATURE OF THE SUBJECT TEACHER</div>
-          <div className="signature-line"></div>
+          <div className="section-title">NAME & SIGNATURE OF THE SUBJECT TEACHER</div>
+          <textarea
+            style={{ width: '100%', height: '60px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical', fontFamily: '"Times New Roman", serif', fontSize: '12pt' }}
+            value={teacherSignature}
+            onChange={(e) => setTeacherSignature(e.target.value)}
+            placeholder="Type your name and signature here..."
+          />
         </div>
       </div>
     </div>

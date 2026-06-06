@@ -1,7 +1,7 @@
 // Service Worker for IHEZA School Management System
 // Version-based cache to ensure updates are applied immediately
 // Bump this version on EVERY deployment to force cache refresh
-const CACHE_VERSION = 'v5-20260420a';
+const CACHE_VERSION = 'v6-20260531b';  // BUMPED: force cache refresh
 const CACHE_NAME = `iheza-cache-${CACHE_VERSION}`;
 
 // Only cache truly static assets that rarely change
@@ -22,7 +22,6 @@ self.addEventListener('install', (event) => {
         return cache.addAll(STATIC_ASSETS);
       })
       .then(() => {
-        // Force the waiting service worker to become active immediately
         console.log('[SW] Skip waiting - activating immediately');
         return self.skipWaiting();
       })
@@ -36,7 +35,6 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          // Delete ALL old caches (any cache that doesn't match current version)
           if (cacheName !== CACHE_NAME) {
             console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
@@ -44,11 +42,9 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => {
-      // Take control of all clients immediately
       console.log('[SW] Claiming all clients');
       return self.clients.claim();
     }).then(() => {
-      // Notify all clients to reload for the new version
       return self.clients.matchAll().then((clients) => {
         clients.forEach((client) => {
           client.postMessage({ type: 'SW_UPDATED', version: CACHE_VERSION });
@@ -61,19 +57,18 @@ self.addEventListener('activate', (event) => {
 // Fetch event - Network-first strategy for all JS/CSS/HTML
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  
+
   // Skip non-GET requests
   if (event.request.method !== 'GET') {
     return;
   }
-  
+
   // Skip API calls - never cache these
   if (url.pathname.startsWith('/api')) {
     return;
   }
-  
+
   // For JS, CSS, and HTML files - ALWAYS fetch from network (no caching)
-  // This ensures users always get the latest build
   if (url.pathname.endsWith('.js') || 
       url.pathname.endsWith('.css') || 
       url.pathname.endsWith('.html') ||
@@ -82,9 +77,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .catch(() => {
-          // Only use cache as fallback if network fails
           return caches.match(event.request).then((cachedResponse) => {
-            // If not in cache, return a proper offline response
             if (cachedResponse) {
               return cachedResponse;
             }
@@ -98,9 +91,9 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  
+
   // For static assets (images, fonts, manifest) - cache-first strategy
-  if (STATIC_ASSETS.some(asset => url.pathname.endsWith(asset.replace('/', '')))) {
+  if (STATIC_ASSETS.includes(url.pathname)) {
     event.respondWith(
       caches.match(event.request)
         .then((response) => {
@@ -108,7 +101,6 @@ self.addEventListener('fetch', (event) => {
             return response;
           }
           return fetch(event.request).then((fetchResponse) => {
-            // Cache the fetched response
             if (fetchResponse.ok) {
               const responseClone = fetchResponse.clone();
               caches.open(CACHE_NAME).then((cache) => {
@@ -121,18 +113,21 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  
-  // For everything else - network only with error handling
-  // This prevents 503 errors for dynamic content
+
+  // For everything else - network only with proper error handling
   event.respondWith(
-    fetch(event.request).catch((error) => {
-      console.log('[SW] Fetch failed, returning empty response:', error);
-      // Return a minimal response to avoid "Failed to fetch" error
-      return new Response('', {
-        status: 200,
-        headers: { 'Content-Type': 'text/html' }
-      });
-    })
+    fetch(event.request)
+      .then((response) => {
+        // Return whatever the server gave us (even 404s are valid Response objects)
+        return response;
+      })
+      .catch((error) => {
+        console.log('[SW] Fetch failed, returning empty response:', error);
+        return new Response('', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' }
+        });
+      })
   );
 });
 
@@ -142,7 +137,7 @@ self.addEventListener('message', (event) => {
     console.log('[SW] Received skip waiting message');
     self.skipWaiting();
   }
-  
+
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     console.log('[SW] Clearing all caches');
     caches.keys().then((cacheNames) => {

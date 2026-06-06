@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout, selectCurrentUser, selectCurrentPortal } from '../store/slices/authSlice';
+import { SoundEffects } from '../hooks/useNotificationSound';
+import { useLanguage } from '../contexts/LanguageContext';
 import { 
   LayoutDashboard, Users, GraduationCap, BookOpen, 
   Calendar, BarChart3, Settings, LogOut, Menu, X,
   ChevronRight, QrCode, Award, FileText, DollarSign,
-  ClipboardList, BookMarked, User, Bell, Building
+  ClipboardList, BookMarked, User, Bell, Building, Trash2,
+  Globe
 } from 'lucide-react';
 
 // Navigation permissions by role
@@ -28,8 +31,8 @@ const NAV_PERMISSIONS = {
   grades: ['principal', 'academic', 'teacher', 'section_leader'],
   // Report Cards: Only Academic portal and Section Leaders can edit/send
   'report-cards': ['academic', 'section_leader'],
-  // Fees: Secretary and principals only - NOT Directors or Coordinators
-  fees: ['principal', 'secretary'],
+  // Fees: Secretary, principals, directors, and coordinators
+  fees: ['principal', 'secretary', 'director', 'coordinator'],
   // Fee Structure: Read-only, visible to all staff and students
   'fee-structure': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
   // Task Assignment: Principal assigns to staff
@@ -55,6 +58,12 @@ const NAV_PERMISSIONS = {
   // Generate Chain: Only for DUP/PRINCIPAL/0002/2021 (special principal access)
   // BACA principals and other principals created by DUP/PRINCIPAL/0002/2021 cannot have this
   'generate-chain': [], // Will be handled in custom logic
+  // Documents: All staff can upload and view documents
+  'documents': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+  // Bin: All staff can view and restore deleted items
+  'bin': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+  // Expenses: Only principals, directors, and coordinators
+  'expenses': ['director', 'coordinator', 'principal'],
 };
 
 function Layout({ children }) {
@@ -69,6 +78,8 @@ function Layout({ children }) {
   const chainName = currentUser?.chain || 'IHEZA';
 
   const handleLogout = async () => {
+    // Play logout sound before dispatching
+    SoundEffects.logout();
     await dispatch(logout());
     // Redirect to chain landing page for school chain users, otherwise home page
     const userChain = currentUser?.chain;
@@ -101,6 +112,9 @@ function Layout({ children }) {
     { path: '/portal/announcements', icon: Bell, label: 'Announcements', key: 'announcements' },
     { path: '/portal/student-portal', icon: User, label: 'My Portal', key: 'student-portal' },
     { path: '/portal/teachers', icon: Users, label: 'Teachers', key: 'teachers' },
+    { path: '/portal/documents', icon: FileText, label: 'Documents', key: 'documents' },
+    { path: '/portal/bin', icon: Trash2, label: 'Bin', key: 'bin' },
+    { path: '/portal/expenses', icon: DollarSign, label: 'Expenses', key: 'expenses' },
     { path: '/portal/reports', icon: BarChart3, label: 'Reports', key: 'reports' },
   ];
 
@@ -117,6 +131,8 @@ function Layout({ children }) {
     
     return permissions && permissions.includes(userRole);
   });
+
+  const { t, toggleLanguage, isTurkish } = useLanguage();
 
   const isActive = (path) => location.pathname === path;
   
@@ -516,7 +532,7 @@ function Layout({ children }) {
                 data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
               >
                 <Icon size={20} className="nav-icon" />
-                <span className="nav-label">{item.label}</span>
+                <span className="nav-label">{t(`nav.${item.key}`, item.label)}</span>
               </Link>
             );
           })}
@@ -536,9 +552,32 @@ function Layout({ children }) {
               <div className="user-role">{currentPortal || currentUser?.role || 'Portal'}</div>
             </div>
           </div>
+          <button
+            onClick={toggleLanguage}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: sidebarOpen ? 'flex-start' : 'center',
+              gap: '0.75rem',
+              padding: '0.75rem 1rem',
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: 'none',
+              borderRadius: '0.75rem',
+              color: '#ffffff',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              marginBottom: '0.5rem',
+            }}
+            title={isTurkish ? 'Switch to English' : 'Türkçe\'ye Geç'}
+          >
+            <Globe size={18} />
+            {sidebarOpen && <span>{isTurkish ? 'English' : 'Türkçe'}</span>}
+          </button>
           <button className="logout-btn" onClick={handleLogout} data-testid="logout-btn">
             <LogOut size={18} />
-            {sidebarOpen && <span>Logout</span>}
+            {sidebarOpen && <span>{t('nav.logout', 'Logout')}</span>}
           </button>
         </div>
       </aside>
@@ -551,10 +590,10 @@ function Layout({ children }) {
               <Menu size={20} />
             </button>
             <div className="breadcrumb">
-              <span>Portal</span>
+              <span>{t('nav.portal', 'Portal')}</span>
               <ChevronRight size={16} />
               <span className="breadcrumb-item">
-                {location.pathname.split('/').pop() || 'Dashboard'}
+                {t(`nav.${location.pathname.split('/').pop()}`, location.pathname.split('/').pop() || 'Dashboard')}
               </span>
             </div>
           </div>

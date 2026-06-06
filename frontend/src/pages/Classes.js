@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { dataService } from '../services/dataService';
 import { studentService } from '../services/studentService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { Plus, Edit2, Trash2, X, BookOpen, Users, UserCheck, Male, Female } from 'lucide-react';
 import { apiClient } from '../services/authService';
 import ChainToggle from '../components/ChainToggle';
@@ -590,6 +590,7 @@ function Classes() {
                       required
                     >
                       <option value="">Select Level</option>
+                      <option value="nursery">Nursery</option>
                       <option value="primary">Primary</option>
                       <option value="secondary">Secondary</option>
                       <option value="high">High School</option>

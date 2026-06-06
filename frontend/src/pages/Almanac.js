@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser, selectCurrentPortal } from '../store/slices/authSlice';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { ArrowLeft, Plus, Trash2, Calendar, RefreshCw, X } from 'lucide-react';
 import { API_URL } from '../config/api';
 import ChainToggle from '../components/ChainToggle';

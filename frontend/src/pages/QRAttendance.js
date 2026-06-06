@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { QrCode, Camera, Check, X, RefreshCw, Users, Clock, UserCheck, CameraOff, ScanLine, LogIn, LogOut, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 

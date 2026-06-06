@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { 
   Building, Users, BookOpen, Home, 
   Shield, Users2, School, ClipboardList,
@@ -251,7 +251,7 @@ function ChainLandingPage() {
   const displayName = chain.display_name || chain.name || chain.code;
 
   // Portal options for the new chain - reordered as requested
-  const portals = [
+  const allPortals = [
     {
       id: 'director',
       title: 'Director',
@@ -309,6 +309,11 @@ function ChainLandingPage() {
       color: 'linear-gradient(135deg, #8b5cf6, #a78bfa)'
     }
   ];
+
+  // Hide director and coordinator portals for LALE and DLP chains
+  const chainCodeUpper = (chain?.code || '').toUpperCase();
+  const hiddenPortals = ['LALE', 'DLP'].includes(chainCodeUpper) ? ['director', 'coordinator'] : [];
+  const portals = allPortals.filter(p => !hiddenPortals.includes(p.id));
 
   return (
     <div className="chain-landing-page">

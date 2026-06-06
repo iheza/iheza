@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 import './Forms.css';
 import { dataService } from '../services/dataService';
+import { staffService } from '../services/staffService';
+import { useToast } from '../components/Common/Toast';
 
 const SubjectEvaluation = () => {
   const [subjects, setSubjects] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [teacherId, setTeacherId] = useState("");
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingSubjectsForClass, setLoadingSubjectsForClass] = useState(false);
@@ -37,7 +42,7 @@ const SubjectEvaluation = () => {
     "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
   ];
 
-  // Load classes from backend on mount
+  // Load classes and teachers from backend on mount
   useEffect(() => {
     const loadClasses = async () => {
       try {
@@ -51,6 +56,21 @@ const SubjectEvaluation = () => {
       }
     };
     loadClasses();
+    
+    // Load teachers for dropdown
+    const loadTeachers = async () => {
+      try {
+        const staffData = await staffService.getStaff();
+        // Filter to only teachers and academic staff
+        const teacherList = staffData.filter(s => 
+          ['teacher', 'academic', 'section_leader'].includes(s.role?.toLowerCase())
+        );
+        setTeachers(teacherList || []);
+      } catch (error) {
+        console.error('Failed to load teachers:', error);
+      }
+    };
+    loadTeachers();
   }, []);
 
   // When class changes, load subjects for that class
@@ -168,6 +188,8 @@ const SubjectEvaluation = () => {
     }));
   };
 
+  const { addToast } = useToast();
+
   const clearAllMonths = () => {
     if (window.confirm('Are you sure you want to clear all month selections?')) {
       setTopics(topics.map(topic => ({
@@ -177,7 +199,7 @@ const SubjectEvaluation = () => {
     }
   };
 
-  const saveForm = () => {
+  const saveForm = async () => {
     // Show loading message
     const saveButton = document.querySelector('.btn-success');
     const originalButtonText = saveButton.textContent;
@@ -388,7 +410,7 @@ const SubjectEvaluation = () => {
           </td>
           ${topic.months.map(covered => `
             <td class="month-cell checkbox-cell">
-              ${covered ? '✓' : ''}
+              ${covered ? '<span class="tick-mark" style="color: #22c55e; font-size: 14pt; font-weight: bold;">&#10003;</span>' : ''}
             </td>
           `).join('')}
           <td class="comment-cell">
@@ -470,10 +492,66 @@ const SubjectEvaluation = () => {
       
       // Create blob and download
       const blob = new Blob([wordContent], { type: 'application/msword' });
+      const fileName = `subject-evaluation-${subject}-${classLevel}-${academicYear}-${new Date().toISOString().split('T')[0]}.doc`;
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `subject-evaluation-${subject}-${classLevel}-${academicYear}-${new Date().toISOString().split('T')[0]}.doc`;
+      link.download = fileName;
       link.click();
+
+      // Save to backend database and localStorage
+      const token = localStorage.getItem('sessionToken');
+      
+      // Convert blob to base64 data URL using a simpler approach
+      const base64Data = 'data:application/msword;base64,' + btoa(unescape(encodeURIComponent(wordContent)));
+      
+      const docPayload = {
+        name: fileName,
+        type: 'application/msword',
+        size: blob.size,
+        data: base64Data,
+        source: 'subject_evaluation'
+      };
+
+      // Always save to localStorage first (for Documents component)
+      const saved = localStorage.getItem('iheza_documents');
+      const existingDocs = saved ? JSON.parse(saved) : [];
+      existingDocs.push({
+        id: Date.now().toString(),
+        name: fileName,
+        type: 'application/msword',
+        size: blob.size,
+        data: base64Data,
+        source: 'subject_evaluation',
+        uploadedAt: new Date().toISOString(),
+        metadata: {
+          type: 'subject_evaluation',
+          subject: subject,
+          class: classLevel,
+          teacher: teacherName || 'Unknown'
+        }
+      });
+      localStorage.setItem('iheza_documents', JSON.stringify(existingDocs));
+
+      // Then try to save to backend
+      try {
+        const response = await fetch(`${API_URL}/api/documents`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(docPayload)
+        });
+
+        if (response.ok) {
+          addToast('Subject evaluation saved successfully! ✓', 'success');
+        } else {
+          addToast('Subject evaluation saved to Documents page.', 'success');
+        }
+      } catch (err) {
+        console.log('Backend save failed, but document is saved locally:', err.message);
+        addToast('Subject evaluation saved to Documents page.', 'success');
+      }
       
       // Restore button state
       saveButton.textContent = originalButtonText;
@@ -481,7 +559,7 @@ const SubjectEvaluation = () => {
       
     } catch (error) {
       console.error('Error generating document:', error);
-      alert('Error generating document. Please try again.');
+      addToast('Error generating document. Please try again.', 'error');
       
       // Restore button state
       const saveButton = document.querySelector('.btn-success');
@@ -632,14 +710,28 @@ const SubjectEvaluation = () => {
             </div>
             <div style={{ flex: '1 1 200px' }}>
               <div className="info-label" style={{ fontSize: '9px', marginBottom: '2px' }}>Teacher's Name:</div>
-              <input
-                type="text"
+              <select
                 className="input-line"
-                value={teacherName}
-                onChange={(e) => setTeacherName(e.target.value)}
-                placeholder="Enter teacher name..."
-                style={{ fontSize: '9px', height: '24px', lineHeight: '1', padding: '2px 4px' }}
-              />
+                value={teacherId}
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  setTeacherId(selectedId);
+                  const selectedTeacher = teachers.find(t => t.id === selectedId);
+                  if (selectedTeacher) {
+                    setTeacherName(selectedTeacher.name || `${selectedTeacher.first_name} ${selectedTeacher.last_name}`);
+                  } else {
+                    setTeacherName("");
+                  }
+                }}
+                style={{ fontSize: '9px', height: '24px', lineHeight: '1', padding: '2px 4px', width: '100%' }}
+              >
+                <option value="">-- Select Teacher --</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name || `${t.first_name} ${t.last_name}`}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

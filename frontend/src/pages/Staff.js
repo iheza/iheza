@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchStaff, createStaff, updateStaff, deleteStaff, selectStaff, selectStaffLoading } from '../store/slices/staffSlice';
 import { selectCurrentUser, updateCurrentUser } from '../store/slices/authSlice';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { Plus, Search, Edit2, Trash2, X, Users, Eye, UserX, Camera, Upload } from 'lucide-react';
 import { apiClient } from '../services/authService';
 import ChainToggle from '../components/ChainToggle';

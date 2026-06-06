@@ -53,6 +53,15 @@ app = FastAPI(title="IHEZA School Management API", version="2.0.0")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.PyJWTError:
+        return None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -323,6 +332,7 @@ class Payment(BaseModel):
     notes: Optional[str] = None
     uniform_fee_details: Optional[str] = None
     admission_fee_details: Optional[str] = None
+    receipt_image: Optional[str] = None  # Base64 encoded receipt image
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # ============ REPORT CARD MODEL ============
@@ -428,6 +438,202 @@ class StudentTaskCompletion(BaseModel):
     feedback: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# ============ DOCUMENTS MODEL ============
+
+class DocumentRecord(BaseModel):
+    """Generic document record for the Documents page"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    type: str  # MIME type
+    size: int
+    data: str  # base64 encoded data
+    source: str = "upload"  # "upload", "lesson_plan", "scheme_of_work", etc.
+    uploadedAt: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    uploaded_by: Optional[str] = None
+    chain: Optional[str] = None
+
+# ============ DOCUMENTS API ENDPOINTS ============
+
+@api_router.post("/documents", response_model=Dict)
+async def save_document(doc: DocumentRecord, current_user: dict = Depends(get_current_user)):
+    """Save a document to the database (from lesson plan, upload, etc.)"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    doc_doc = doc.model_dump()
+    doc_doc["uploaded_by"] = current_user.get("id")
+    doc_doc["chain"] = current_user.get("chain")
+    
+    await db.documents.insert_one(doc_doc)
+    doc_doc.pop('_id', None)
+    return doc_doc
+
+@api_router.post("/documents/save", response_model=Dict)
+async def save_document_generic(payload: Dict, current_user: dict = Depends(get_current_user)):
+    """Save a generic document/data to the database (from scheme of work, etc.)"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    doc_doc = {
+        "id": str(uuid.uuid4()),
+        "name": payload.get("name", f"{payload.get('type', 'document')}_{datetime.now(timezone.utc).isoformat()}"),
+        "type": payload.get("type", "application/json"),
+        "size": payload.get("size", 0),
+        "data": payload.get("data", ""),
+        "source": payload.get("source", payload.get("type", "upload")),
+        "uploadedAt": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": current_user.get("id"),
+        "chain": current_user.get("chain"),
+        "metadata": payload.get("metadata", {})
+    }
+    
+    await db.documents.insert_one(doc_doc)
+    doc_doc.pop('_id', None)
+    return doc_doc
+
+@api_router.get("/documents", response_model=List[Dict])
+async def get_documents(
+    source: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all documents for the current user's chain"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    query = get_chain_filter(current_user) if current_user else {}
+    if source:
+        query["source"] = source
+    
+    docs = await db.documents.find(query, {"_id": 0}).sort("uploadedAt", -1).to_list(500)
+    return [serialize_doc(d) for d in docs]
+
+@api_router.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a document"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    result = await db.documents.delete_one({"id": doc_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"success": True, "message": "Document deleted"}
+
+# ============ DOCUMENTS ANALYTICS ENDPOINTS ============
+
+@api_router.get("/documents/analytics/summary")
+async def get_documents_analytics_summary(current_user: dict = Depends(get_current_user)):
+    """Get summary analytics for documents"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    query = get_chain_filter(current_user) if current_user else {}
+    
+    now = datetime.now(timezone.utc)
+    current_year = now.year
+    current_month = now.month
+    
+    # Get start of current week (Monday)
+    week_start = now - timedelta(days=now.weekday())
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Get current term boundaries (approximate)
+    def get_term_bounds(date):
+        m = date.month
+        if m >= 1 and m <= 4:
+            return (datetime(date.year, 1, 1, tzinfo=timezone.utc), datetime(date.year, 4, 30, 23, 59, 59, tzinfo=timezone.utc))
+        elif m >= 5 and m <= 8:
+            return (datetime(date.year, 5, 1, tzinfo=timezone.utc), datetime(date.year, 8, 31, 23, 59, 59, tzinfo=timezone.utc))
+        else:
+            return (datetime(date.year, 9, 1, tzinfo=timezone.utc), datetime(date.year, 12, 31, 23, 59, 59, tzinfo=timezone.utc))
+    
+    term_start, term_end = get_term_bounds(now)
+    
+    # Counts
+    total = await db.documents.count_documents(query)
+    
+    query_week = {**query, "uploadedAt": {"$gte": week_start.isoformat()}}
+    this_week = await db.documents.count_documents(query_week)
+    
+    query_month = {**query, "uploadedAt": {"$gte": datetime(current_year, current_month, 1, tzinfo=timezone.utc).isoformat()}}
+    this_month = await db.documents.count_documents(query_month)
+    
+    query_term = {**query, "uploadedAt": {"$gte": term_start.isoformat(), "$lte": term_end.isoformat()}}
+    this_term = await db.documents.count_documents(query_term)
+    
+    query_year = {**query, "uploadedAt": {"$gte": datetime(current_year, 1, 1, tzinfo=timezone.utc).isoformat()}}
+    this_year = await db.documents.count_documents(query_year)
+    
+    # Source breakdown
+    pipeline_source = [
+        {"$match": query},
+        {"$group": {"_id": "$source", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    source_breakdown = await db.documents.aggregate(pipeline_source).to_list(50)
+    
+    # Monthly breakdown for current year
+    pipeline_monthly = [
+        {"$match": {**query, "uploadedAt": {"$gte": datetime(current_year, 1, 1, tzinfo=timezone.utc).isoformat()}}},
+        {"$group": {"_id": {"$substr": ["$uploadedAt", 5, 2]}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    monthly_breakdown = await db.documents.aggregate(pipeline_monthly).to_list(12)
+    
+    return {
+        "total": total,
+        "this_week": this_week,
+        "this_month": this_month,
+        "this_term": this_term,
+        "this_year": this_year,
+        "source_breakdown": [{"source": s["_id"], "count": s["count"]} for s in source_breakdown],
+        "monthly_breakdown": [{"month": int(m["_id"]), "count": m["count"]} for m in monthly_breakdown]
+    }
+
+@api_router.get("/documents/analytics/by-teacher")
+async def get_documents_analytics_by_teacher(current_user: dict = Depends(get_current_user)):
+    """Get document counts grouped by teacher"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    query = get_chain_filter(current_user) if current_user else {}
+    
+    # Try to group by uploaded_by first
+    pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$uploaded_by", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    by_teacher = await db.documents.aggregate(pipeline).to_list(100)
+    
+    return {
+        "by_teacher": [{"teacher_id": t["_id"], "count": t["count"]} for t in by_teacher]
+    }
+
+@api_router.get("/documents/analytics/projects")
+async def get_documents_analytics_projects(current_user: dict = Depends(get_current_user)):
+    """Get analytics specifically for uploaded projects"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    query = get_chain_filter(current_user) if current_user else {}
+    query["source"] = "upload"
+    
+    total_projects = await db.documents.count_documents(query)
+    
+    # By teacher
+    pipeline = [
+        {"$match": query},
+        {"$group": {"_id": "$uploaded_by", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    by_teacher = await db.documents.aggregate(pipeline).to_list(100)
+    
+    return {
+        "total_projects": total_projects,
+        "by_teacher": [{"teacher_id": t["_id"], "count": t["count"]} for t in by_teacher]
+    }
+
 # ============ ACADEMIC HUB MODELS ============
 
 class LessonPlan(BaseModel):
@@ -519,15 +725,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if not credentials:
-        return None
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.PyJWTError:
-        return None
 
 def serialize_doc(doc: dict) -> dict:
     """Convert MongoDB document to JSON-serializable dict"""
@@ -793,10 +990,12 @@ async def update_user(user_id: str, updates: Dict, current_user: dict = Depends(
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    # Move to bin before deleting
+    await move_to_bin("staff", user_id, current_user or {})
     result = await db.users.delete_one({"id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"success": True, "message": "User deleted"}
+    return {"success": True, "message": "User moved to bin"}
 
 @api_router.post("/users/generate-chain", response_model=Dict)
 async def generate_new_chain(
@@ -1074,14 +1273,17 @@ async def update_staff_member(staff_id: str, updates: Dict, current_user: dict =
 @api_router.delete("/staff/{staff_id}")
 async def delete_staff_member(staff_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a staff member"""
-    if current_user.get('role') not in ['director', 'coordinator', 'principal']:
+    if not current_user or current_user.get('role') not in ['director', 'coordinator', 'principal']:
         raise HTTPException(status_code=403, detail="Only directors, coordinators, and principals can delete staff")
+    
+    # Move to bin before deleting
+    await move_to_bin("staff", staff_id, current_user or {})
     
     result = await db.users.delete_one({"id": staff_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Staff member not found")
     
-    return {"success": True, "message": "Staff member deleted"}
+    return {"success": True, "message": "Staff member moved to bin"}
 
 @api_router.post("/staff/upload-profile-pic")
 async def upload_staff_profile_pic(
@@ -1130,8 +1332,14 @@ async def get_students(class_name: Optional[str] = None, chain: Optional[str] = 
     
     if class_name:
         query["class_name"] = class_name
-    students = await db.students.find(query, {"_id": 0, "password_hash": 0}).to_list(1000)
-    return [serialize_doc(s) for s in students]
+    students = await db.students.find(query, {"password_hash": 0}).to_list(1000)
+    result = []
+    for s in students:
+        # Preserve the original UUID id field, only fall back to _id if no id exists
+        if not s.get("id"):
+            s["id"] = str(s.get("_id"))
+        result.append(serialize_doc(s))
+    return result
 
 @api_router.post("/students", response_model=Dict)
 async def create_student(student: StudentCreate, current_user: dict = Depends(get_current_user)):
@@ -1208,10 +1416,23 @@ async def update_student(student_id: str, updates: Dict, current_user: dict = De
 
 @api_router.delete("/students/{student_id}")
 async def delete_student(student_id: str, current_user: dict = Depends(get_current_user)):
+    # Move to bin before deleting
+    try:
+        print(f"DEBUG: Calling move_to_bin for student {student_id}")
+        print(f"DEBUG: current_user keys: {list((current_user or {}).keys())}")
+        result = await move_to_bin("students", student_id, current_user or {})
+        print(f"DEBUG: move_to_bin returned {result}")
+    except Exception as e:
+        print(f"Warning: Failed to move student to bin: {e}")
+        import traceback
+        traceback.print_exc()
+        # Continue with deletion even if bin move fails
+    print(f"DEBUG: About to delete student {student_id} from students collection")
     result = await db.students.delete_one({"id": student_id})
+    print(f"DEBUG: delete_one result: deleted_count={result.deleted_count}")
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
-    return {"success": True, "message": "Student deleted"}
+    return {"success": True, "message": "Student moved to bin"}
 
 @api_router.post("/students/bulk-upload", response_model=Dict)
 async def bulk_upload_students(
@@ -1356,11 +1577,13 @@ async def update_class(class_id: str, updates: Dict):
     return serialize_doc(cls)
 
 @api_router.delete("/classes/{class_id}")
-async def delete_class(class_id: str):
+async def delete_class(class_id: str, current_user: dict = Depends(get_current_user)):
+    # Move to bin before deleting
+    await move_to_bin("classes", class_id, current_user or {})
     result = await db.classes.delete_one({"id": class_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Class not found")
-    return {"success": True, "message": "Class deleted"}
+    return {"success": True, "message": "Class moved to bin"}
 
 # ============ SUBJECTS ROUTES ============
 
@@ -1399,11 +1622,13 @@ async def update_subject(subject_id: str, updates: Dict):
     return serialize_doc(subject)
 
 @api_router.delete("/subjects/{subject_id}")
-async def delete_subject(subject_id: str):
+async def delete_subject(subject_id: str, current_user: dict = Depends(get_current_user)):
+    # Move to bin before deleting
+    await move_to_bin("subjects", subject_id, current_user or {})
     result = await db.subjects.delete_one({"id": subject_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Subject not found")
-    return {"success": True, "message": "Subject deleted"}
+    return {"success": True, "message": "Subject moved to bin"}
 
 # ============ ATTENDANCE ROUTES (STAFF QR SCANNING) ============
 
@@ -1431,6 +1656,10 @@ async def get_attendance(
 
 @api_router.post("/attendance", response_model=Dict)
 async def record_attendance(record: AttendanceRecord, current_user: dict = Depends(get_current_user)):
+    # Only school-level roles can record attendance (not directors/coordinators)
+    if current_user.get('role') in ['director', 'coordinator']:
+        raise HTTPException(status_code=403, detail="Directors and coordinators cannot record attendance")
+    
     record_doc = record.model_dump()
     record_doc["recorded_at"] = datetime.now(timezone.utc).isoformat()
     
@@ -1482,9 +1711,14 @@ async def staff_qr_checkin(data: Dict, current_user: dict = Depends(get_current_
     today = current_time.strftime('%Y-%m-%d')
     time_str = current_time.strftime('%H:%M:%S')
     
-    # Define late threshold (8:00 AM East Africa Time)
-    late_threshold_hour = 8
-    late_threshold_minute = 0
+    # Define late threshold based on chain (DLP starts at 7:30 AM, others at 8:00 AM East Africa Time)
+    staff_chain = (staff.get('chain') or '').upper()
+    if staff_chain == 'DLP':
+        late_threshold_hour = 7
+        late_threshold_minute = 30
+    else:
+        late_threshold_hour = 8
+        late_threshold_minute = 0
     
     # Check for existing record today
     existing = await db.attendance.find_one({
@@ -1600,9 +1834,14 @@ async def manual_qr_checkin(data: Dict, current_user: dict = Depends(get_current
     today = current_time.strftime('%Y-%m-%d')
     time_str = current_time.strftime('%H:%M:%S')
     
-    # Define late threshold (8:00 AM East Africa Time)
-    late_threshold_hour = 8
-    late_threshold_minute = 0
+    # Define late threshold based on chain (DLP starts at 7:30 AM, others at 8:00 AM East Africa Time)
+    staff_chain = (staff.get('chain') or '').upper()
+    if staff_chain == 'DLP':
+        late_threshold_hour = 7
+        late_threshold_minute = 30
+    else:
+        late_threshold_hour = 8
+        late_threshold_minute = 0
     
     # Check for existing record today
     existing = await db.attendance.find_one({
@@ -1715,7 +1954,11 @@ async def get_staff_attendance_today(chain: Optional[str] = None, current_user: 
     return result
 
 @api_router.post("/attendance/bulk", response_model=Dict)
-async def bulk_record_attendance(records: List[Dict]):
+async def bulk_record_attendance(records: List[Dict], current_user: dict = Depends(get_current_user)):
+    # Only school-level roles can record attendance (not directors/coordinators)
+    if current_user and current_user.get('role') in ['director', 'coordinator']:
+        raise HTTPException(status_code=403, detail="Directors and coordinators cannot record attendance")
+    
     recorded = 0
     for record in records:
         record["id"] = record.get("id", str(uuid.uuid4()))
@@ -1796,11 +2039,13 @@ async def delete_qr_code(qr_id: str, current_user: dict = Depends(get_current_us
     if current_user.get('role') not in ['director', 'coordinator', 'principal']:
         raise HTTPException(status_code=403, detail="Only Directors, Coordinators, and Principals can delete QR codes")
     
+    # Move to bin before deleting
+    await move_to_bin("qr_codes", qr_id, current_user or {})
     result = await db.qr_codes.delete_one({"id": qr_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="QR code not found")
     
-    return {"success": True, "message": "QR code deleted"}
+    return {"success": True, "message": "QR code moved to bin"}
 
 @api_router.post("/qr-codes/verify")
 async def verify_qr_code(data: Dict, current_user: dict = Depends(get_current_user)):
@@ -1971,6 +2216,9 @@ async def delete_fee_structure(structure_id: str, current_user: dict = Depends(g
     if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary or principal can manage fee structures")
     
+    # Move to bin before soft deleting
+    await move_to_bin("fee_structures", structure_id, current_user or {})
+    
     # Soft delete - set status to inactive
     result = await db.fee_structures.update_one(
         {"id": structure_id}, 
@@ -1978,7 +2226,7 @@ async def delete_fee_structure(structure_id: str, current_user: dict = Depends(g
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Fee structure not found")
-    return {"success": True, "message": "Fee structure deleted"}
+    return {"success": True, "message": "Fee structure moved to bin"}
 
 # ============ PAYMENTS ROUTES (Secretary) ============
 
@@ -2160,10 +2408,12 @@ async def delete_almanac_event(id: str, current_user: dict = Depends(get_current
     if current_user and current_user.get('role') not in ['section_leader', 'principal']:
         raise HTTPException(status_code=403, detail="Only Section Leader or Principal can delete events")
     
+    # Move to bin before deleting
+    await move_to_bin("almanac_events", id, current_user or {})
     result = await db.almanac_events.delete_one({"id": id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
-    return {"success": True}
+    return {"success": True, "message": "Event moved to bin"}
 
 
 # ============== TASK ENDPOINTS ==============
@@ -2259,11 +2509,14 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_use
     if current_user and current_user.get('role') not in ['principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only Principal can delete tasks")
     
+    # Move to bin before deleting
+    await move_to_bin("tasks", task_id, current_user or {})
+    
     result = await db.tasks.delete_one({"id": task_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    return {"success": True}
+    return {"success": True, "message": "Task moved to bin"}
 
 
 @api_router.post("/payments", response_model=Dict)
@@ -2296,8 +2549,10 @@ async def record_payment(payment: Payment, current_user: dict = Depends(get_curr
                 {"$set": {"paid_amount": new_paid_amount}}
             )
         else:
-            # Get student info for chain
+            # Get student info for chain - try id first, then admission_no (for DLP students)
             student = await db.students.find_one({"id": student_id}, {"_id": 0})
+            if not student:
+                student = await db.students.find_one({"admission_no": student_id}, {"_id": 0})
             if student:
                 # Calculate total fees from payments
                 all_payments = await db.payments.find({"student_id": student_id}).to_list(100)
@@ -2367,6 +2622,35 @@ async def update_payment(payment_id: str, payment_data: Dict, current_user: dict
     updated_payment = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     return serialize_doc(updated_payment)
 
+@api_router.put("/payments/{payment_id}/receipt")
+async def upload_payment_receipt(payment_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
+    """Upload/update receipt image for a payment - Secretary only"""
+    if current_user and current_user.get('role') not in ['secretary']:
+        raise HTTPException(status_code=403, detail="Only secretary can upload receipt images")
+    
+    receipt_image = data.get("receipt_image")
+    if not receipt_image:
+        raise HTTPException(status_code=400, detail="receipt_image is required")
+    
+    # Validate it looks like a base64 image
+    if not receipt_image.startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Invalid image format. Must be a base64 data URL")
+    
+    result = await db.payments.update_one(
+        {"id": payment_id},
+        {"$set": {
+            "receipt_image": receipt_image,
+            "receipt_updated_at": datetime.now(timezone.utc).isoformat(),
+            "receipt_updated_by": current_user.get("id")
+        }}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    return {"success": True, "message": "Receipt image uploaded"}
+
+
 @api_router.delete("/payments/{payment_id}")
 async def delete_payment(payment_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a payment record"""
@@ -2380,6 +2664,9 @@ async def delete_payment(payment_id: str, current_user: dict = Depends(get_curre
     
     payment_amount = existing_payment.get("amount", 0)
     student_id = existing_payment.get("student_id")
+    
+    # Move to bin before deleting
+    await move_to_bin("payments", payment_id, current_user or {})
     
     # Delete payment
     await db.payments.delete_one({"id": payment_id})
@@ -2399,21 +2686,77 @@ async def delete_payment(payment_id: str, current_user: dict = Depends(get_curre
 @api_router.get("/student-fees/{student_id}")
 async def get_student_fee_summary(student_id: str, current_user: dict = Depends(get_current_user)):
     """Get fee summary for a student including all applicable fees and payments"""
+    from urllib.parse import unquote
     
-    # Get student
-    student = await db.students.find_one({"id": student_id}, {"_id": 0, "password_hash": 0})
+    # Decode URL-encoded ID (handles DLP/STU0414/2026 encoded as DLP%2FSTU0414%2F2026)
+    decoded_id = unquote(student_id)
+    
+    # Get student - try by id first, then by admission_no, then by MongoDB _id
+    student = await db.students.find_one({"id": decoded_id}, {"password_hash": 0})
+    if not student:
+        student = await db.students.find_one({"admission_no": decoded_id.upper()}, {"password_hash": 0})
+    if not student:
+        # Also try by MongoDB _id if it's a valid ObjectId
+        try:
+            from bson import ObjectId
+            student = await db.students.find_one({"_id": ObjectId(decoded_id)}, {"password_hash": 0})
+        except:
+            pass
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Get the actual MongoDB _id and admission_no for lookups
+    actual_mongo_id = str(student.get("_id"))
+    admission_no = student.get("admission_no", decoded_id)
+    
+    # Ensure student dict has 'id' field for frontend compatibility
+    student["id"] = student.get("id") or actual_mongo_id
     
     chain = student.get("chain")
     class_name = student.get("class_name")
     
-    # Get all payments for this student - this is the source of truth
-    payments = await db.payments.find({"student_id": student_id}, {"_id": 0}).to_list(100)
+    # Get all payments for this student - try MongoDB _id, UUID id, and admission_no
+    student_uuid_id = student.get("id")
+    
+    # Build $or conditions, filtering out None values to avoid matching null student_ids
+    or_conditions = []
+    if actual_mongo_id:
+        or_conditions.append({"student_id": actual_mongo_id})
+    if student_uuid_id and student_uuid_id != actual_mongo_id:
+        or_conditions.append({"student_id": student_uuid_id})
+    if admission_no and admission_no not in [actual_mongo_id, student_uuid_id]:
+        or_conditions.append({"student_id": admission_no})
+    
+    if or_conditions:
+        payments = await db.payments.find({
+            "$or": or_conditions
+        }, {"_id": 0}).to_list(100)
+    else:
+        payments = []
+    
+    # If no payments found, try individual lookups with all possible identifiers
+    if not payments:
+        # Collect all unique identifiers to try
+        identifiers_to_try = []
+        for ident in [actual_mongo_id, student_uuid_id, admission_no]:
+            if ident and ident not in identifiers_to_try:
+                identifiers_to_try.append(ident)
+        
+        for ident in identifiers_to_try:
+            payments = await db.payments.find({"student_id": ident}, {"_id": 0}).to_list(100)
+            if payments:
+                break
+    
     total_paid = sum(p.get("amount", 0) for p in payments)
     
-    # Check student_fees collection for total fee amount
-    student_fee = await db.student_fees.find_one({"student_id": student_id}, {"_id": 0})
+    # Check student_fees collection - try MongoDB _id, UUID id, and admission_no
+    student_fee = await db.student_fees.find_one({
+        "$or": [
+            {"student_id": actual_mongo_id},
+            {"student_id": student_uuid_id},
+            {"student_id": admission_no}
+        ]
+    }, {"_id": 0})
     
     if student_fee:
         # Use fee amount from student_fees collection
@@ -2435,6 +2778,32 @@ async def get_student_fee_summary(student_id: str, current_user: dict = Depends(
     
     balance = total_fees - total_paid
     
+    # Collect receipt images from student_fees collection (for receipts uploaded from All Students table)
+    student_fee_receipt_images = []
+    if student_fee:
+        if student_fee.get("receipt_images"):
+            student_fee_receipt_images = list(student_fee.get("receipt_images", []))
+        elif student_fee.get("receipt_image"):
+            student_fee_receipt_images = [{
+                "id": "1",
+                "image": student_fee.get("receipt_image"),
+                "uploaded_at": student_fee.get("receipt_updated_at", "")
+            }]
+    
+    # Also collect receipt images from individual payments
+    payment_receipt_ids = set()
+    for p in payments:
+        if p.get("receipt_image"):
+            img_prefix = p["receipt_image"][:50] if len(p["receipt_image"]) > 50 else p["receipt_image"]
+            if img_prefix not in payment_receipt_ids:
+                payment_receipt_ids.add(img_prefix)
+                student_fee_receipt_images.append({
+                    "id": f"payment_{p.get('id', len(student_fee_receipt_images))}",
+                    "image": p["receipt_image"],
+                    "uploaded_at": p.get("created_at", ""),
+                    "source": "payment"
+                })
+    
     return {
         "student": serialize_doc(student),
         "fee_structures": [serialize_doc(f) for f in fee_structures],
@@ -2442,7 +2811,9 @@ async def get_student_fee_summary(student_id: str, current_user: dict = Depends(
         "total_fees": total_fees,
         "total_paid": total_paid,
         "balance": balance,
-        "status": "fully_paid" if balance <= 0 else ("partial" if total_paid > 0 else "unpaid")
+        "status": "fully_paid" if balance <= 0 else ("partial" if total_paid > 0 else "unpaid"),
+        "receipt_images": student_fee_receipt_images,
+        "receipt_image": student_fee_receipt_images[-1]["image"] if student_fee_receipt_images else None
     }
 
 @api_router.put("/student-fees/{student_id}/total")
@@ -2453,8 +2824,10 @@ async def update_student_total_fees(student_id: str, request: Request, current_u
     if user_role not in ["secretary", "principal", "director", "coordinator"]:
         raise HTTPException(status_code=403, detail="Not authorized to update fees")
     
-    # Get student
+    # Get student - try by id first, then by admission_no (for DLP students)
     student = await db.students.find_one({"id": student_id}, {"_id": 0})
+    if not student:
+        student = await db.students.find_one({"admission_no": student_id}, {"_id": 0})
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
     
@@ -2523,7 +2896,129 @@ async def update_student_total_fees(student_id: str, request: Request, current_u
         "status": status
     }
 
+@api_router.put("/student-fees/{student_id}/receipt")
+async def upload_student_receipt(student_id: str, data: Dict, current_user: dict = Depends(get_current_user)):
+    """Upload/update receipt image for a student (stored in student_fees collection) - Secretary only"""
+    if current_user and current_user.get('role') not in ['secretary']:
+        raise HTTPException(status_code=403, detail="Only secretary can upload receipt images")
+    
+    receipt_image = data.get("receipt_image")
+    if not receipt_image:
+        raise HTTPException(status_code=400, detail="receipt_image is required")
+    
+    # Validate it looks like a base64 image
+    if not receipt_image.startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Invalid image format. Must be a base64 data URL")
+    
+    # Check if student_fees record exists
+    student_fee = await db.student_fees.find_one({"student_id": student_id})
+    
+    if student_fee:
+        # Get existing receipt images array or create new one
+        existing_images = student_fee.get("receipt_images", [])
+        if not existing_images and student_fee.get("receipt_image"):
+            # Migrate old single receipt to array
+            existing_images = [{
+                "id": str(uuid.uuid4())[:8],
+                "image": student_fee["receipt_image"],
+                "uploaded_at": student_fee.get("receipt_updated_at", datetime.now(timezone.utc).isoformat()),
+                "uploaded_by": student_fee.get("receipt_updated_by", current_user.get("id"))
+            }]
+        
+        # Add new receipt image to the array
+        new_receipt = {
+            "id": str(uuid.uuid4())[:8],
+            "image": receipt_image,
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+            "uploaded_by": current_user.get("id")
+        }
+        existing_images.append(new_receipt)
+        
+        # Update existing record with receipt images array
+        await db.student_fees.update_one(
+            {"student_id": student_id},
+            {"$set": {
+                "receipt_images": existing_images,
+                "receipt_image": receipt_image,  # Keep latest as primary for backward compat
+                "receipt_updated_at": datetime.now(timezone.utc).isoformat(),
+                "receipt_updated_by": current_user.get("id")
+            }}
+        )
+    else:
+        # Get student info
+        student = await db.students.find_one({"id": student_id}, {"_id": 0})
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        new_receipt = {
+            "id": str(uuid.uuid4())[:8],
+            "image": receipt_image,
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+            "uploaded_by": current_user.get("id")
+        }
+        
+        # Create new student_fees record with receipt
+        await db.student_fees.insert_one({
+            "id": str(uuid.uuid4()),
+            "student_id": student_id,
+            "chain": student.get("chain"),
+            "amount": 0,
+            "paid_amount": 0,
+            "balance": 0,
+            "status": "pending",
+            "receipt_images": [new_receipt],
+            "receipt_image": receipt_image,
+            "receipt_updated_at": datetime.now(timezone.utc).isoformat(),
+            "receipt_updated_by": current_user.get("id"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return {"success": True, "message": "Receipt image uploaded successfully"}
+
+
+@api_router.delete("/student-fees/{student_id}/receipt/{receipt_id}")
+async def delete_student_receipt(student_id: str, receipt_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a specific receipt image from a student's receipt_images array - Secretary only"""
+    if current_user and current_user.get('role') not in ['secretary']:
+        raise HTTPException(status_code=403, detail="Only secretary can delete receipt images")
+    
+    # Check if student_fees record exists
+    student_fee = await db.student_fees.find_one({"student_id": student_id})
+    if not student_fee:
+        raise HTTPException(status_code=404, detail="Student fee record not found")
+    
+    existing_images = student_fee.get("receipt_images", [])
+    
+    # Find and remove the receipt with matching id
+    filtered_images = [img for img in existing_images if img.get("id") != receipt_id]
+    
+    if len(filtered_images) == len(existing_images):
+        raise HTTPException(status_code=404, detail="Receipt image not found")
+    
+    # Update the record
+    update_data = {
+        "receipt_images": filtered_images,
+        "receipt_updated_at": datetime.now(timezone.utc).isoformat(),
+        "receipt_updated_by": current_user.get("id")
+    }
+    
+    # Update the primary receipt_image field too (set to latest remaining or null)
+    if filtered_images:
+        update_data["receipt_image"] = filtered_images[-1]["image"]
+    else:
+        update_data["receipt_image"] = None
+    
+    await db.student_fees.update_one(
+        {"student_id": student_id},
+        {"$set": update_data}
+    )
+    
+    return {"success": True, "message": "Receipt image deleted successfully"}
+
+
 @api_router.get("/all-student-fees")
+
 async def get_all_student_fees(
     class_name: Optional[str] = None,
     status: Optional[str] = None,
@@ -2534,10 +3029,11 @@ async def get_all_student_fees(
     if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary, principal, director, or coordinator can view all fee records")
     
-    # For Directors/Coordinators, use the explicit chain param if provided
-    user_role = current_user.get('role', '').lower() if current_user else ''
-    if user_role in ['director', 'coordinator'] and chain:
-        chain_filter = {'chain': chain.upper()}
+    # Use explicit chain param if provided (for Directors/Coordinators filtering by chain)
+    if chain:
+        # Strip any suffix like ":1" from chain value (e.g., "DLP:1" -> "DLP")
+        clean_chain = chain.upper().split(':')[0]
+        chain_filter = {'chain': clean_chain}
     else:
         chain_filter = get_chain_filter(current_user) if current_user else {}
     
@@ -2546,19 +3042,35 @@ async def get_all_student_fees(
     if class_name:
         student_query["class_name"] = class_name
     
-    students = await db.students.find(student_query, {"_id": 0, "password_hash": 0}).to_list(1000)
-    student_map = {s["id"]: s for s in students}
+    students = await db.students.find(student_query, {"password_hash": 0}).to_list(1000)
+    # Use _id as the primary student identifier, with admission_no as fallback
+    student_map = {}
+    for s in students:
+        sid = str(s.get("_id")) or s.get("id") or s.get("admission_no")
+        if sid:
+            # Ensure the student dict has an 'id' field for frontend compatibility
+            s["id"] = s.get("id") or str(s.get("_id"))
+            student_map[sid] = s
     
-    # Get all student fee records
-    fee_records = await db.student_fees.find(chain_filter, {"_id": 0}).to_list(5000)
+    # Get all student fee records (with fallback if collection doesn't exist or has no chain field)
+    try:
+        fee_records = await db.student_fees.find(chain_filter, {"_id": 0}).to_list(5000)
+    except Exception:
+        fee_records = []
     fee_map = {f["student_id"]: f for f in fee_records}
     
-    # Get all special details
-    special_details = await db.student_special_details.find(chain_filter, {"_id": 0}).to_list(5000)
+    # Get all special details (with fallback)
+    try:
+        special_details = await db.student_special_details.find(chain_filter, {"_id": 0}).to_list(5000)
+    except Exception:
+        special_details = []
     special_details_map = {sd["student_id"]: sd for sd in special_details}
     
-    # Get special fees to determine fee types
-    special_fees = await db.special_fees.find(chain_filter, {"_id": 0}).to_list(5000)
+    # Get special fees to determine fee types (with fallback)
+    try:
+        special_fees = await db.special_fees.find(chain_filter, {"_id": 0}).to_list(5000)
+    except Exception:
+        special_fees = []
     special_fee_map = {}
     for sf in special_fees:
         sid = sf.get("student_id")
@@ -2566,7 +3078,10 @@ async def get_all_student_fees(
             special_fee_map[sid] = sf.get("fee_type", "tuition")
     
     # Get all payments grouped by student - THIS IS THE SOURCE OF TRUTH FOR PAID AMOUNTS
-    payments = await db.payments.find(chain_filter, {"_id": 0}).to_list(5000)
+    try:
+        payments = await db.payments.find(chain_filter, {"_id": 0}).to_list(5000)
+    except Exception:
+        payments = []
     payment_map = {}
     paid_totals = {}  # Track total paid per student
     fee_type_from_payment = {}  # Track fee type from payments
@@ -2583,13 +3098,49 @@ async def get_all_student_fees(
     
     result = []
     for student in students:
-        student_id = student["id"]
-        fee_record = fee_map.get(student_id, {})
-        student_payments = payment_map.get(student_id, [])
+        # Get the student's MongoDB _id and admission_no for lookups
+        actual_mongo_id = str(student.get("_id", ""))
+        adm_no = student.get("admission_no", "")
+        student_id = student.get("id") or adm_no
+        if not student_id:
+            continue
         
+        fee_record = fee_map.get(student_id, {})
+        if not fee_record:
+            fee_record = fee_map.get(adm_no, {})
+        if not fee_record and actual_mongo_id:
+            fee_record = fee_map.get(actual_mongo_id, {})
+        
+        # Try to get payments by multiple possible identifiers
+        student_payments = payment_map.get(student_id, [])
+        if not student_payments and adm_no:
+            student_payments = payment_map.get(adm_no, [])
+        if not student_payments and actual_mongo_id:
+            student_payments = payment_map.get(actual_mongo_id, [])
+        
+        # Use the identifier that actually has payments for paid_totals lookup
+        effective_id = student_id
+        if not paid_totals.get(effective_id, 0) and adm_no and paid_totals.get(adm_no, 0):
+            effective_id = adm_no
+        elif not paid_totals.get(effective_id, 0) and actual_mongo_id and paid_totals.get(actual_mongo_id, 0):
+            effective_id = actual_mongo_id
+        
+        # Get total fee - try student_fees first, then fall back to fee structures
         total_fee = fee_record.get("amount", 0)
+        
+        # If no student_fees record, fall back to fee structures
+        if total_fee == 0:
+            chain = student.get("chain")
+            class_name = student.get("class_name")
+            fee_structures = await db.fee_structures.find({
+                "chain": chain,
+                "status": "active",
+                "$or": [{"class_name": class_name}, {"class_name": None}, {"class_name": ""}]
+            }, {"_id": 0}).to_list(50)
+            total_fee = sum(f.get("amount", 0) for f in fee_structures)
+        
         # Use calculated paid amount from payments collection
-        paid_amount = paid_totals.get(student_id, 0)
+        paid_amount = paid_totals.get(effective_id, 0)
         outstanding = total_fee - paid_amount
         
         # Determine status
@@ -2606,11 +3157,49 @@ async def get_all_student_fees(
         if status and fee_status != status:
             continue
         
-        # Get latest payment date
+        # Get latest payment date and receipt images
         last_payment_date = None
+        latest_receipt_image = None
+        receipt_images = []
+        
+        # Collect ALL receipt images from both student_fees level and individual payments
+        # 1. First, get receipts uploaded from the All Students table (stored at student_fees level)
+        if fee_record.get("receipt_images"):
+            receipt_images = list(fee_record.get("receipt_images", []))
+        elif fee_record.get("receipt_image"):
+            receipt_images = [{
+                "id": "1",
+                "image": fee_record.get("receipt_image"),
+                "uploaded_at": fee_record.get("receipt_updated_at", "")
+            }]
+        
+        # 2. Also collect receipt images from individual payments
         if student_payments:
             sorted_payments = sorted(student_payments, key=lambda x: x.get("created_at", ""), reverse=True)
             last_payment_date = sorted_payments[0].get("created_at")
+            
+            # Collect all receipt images from payments
+            payment_receipt_ids = set()
+            for sp in sorted_payments:
+                if sp.get("receipt_image"):
+                    # Check if this image is already in receipt_images (by comparing a hash/prefix)
+                    img_prefix = sp["receipt_image"][:50] if len(sp["receipt_image"]) > 50 else sp["receipt_image"]
+                    if img_prefix not in payment_receipt_ids:
+                        payment_receipt_ids.add(img_prefix)
+                        receipt_images.append({
+                            "id": f"payment_{sp.get('id', len(receipt_images))}",
+                            "image": sp["receipt_image"],
+                            "uploaded_at": sp.get("created_at", ""),
+                            "source": "payment"
+                        })
+            
+            # Set latest_receipt_image to the most recent one
+            if not latest_receipt_image:
+                for sp in sorted_payments:
+                    if sp.get("receipt_image"):
+                        latest_receipt_image = sp.get("receipt_image")
+                        break
+
         
         # Get special notes and fee type
         student_special = special_details_map.get(student_id, {})
@@ -2618,14 +3207,22 @@ async def get_all_student_fees(
         
         result.append({
             "id": student_id,
+            "student_id": student_id,
+            "first_name": student.get("first_name", ""),
+            "last_name": student.get("last_name", ""),
             "name": f"{student.get('first_name', '')} {student.get('last_name', '')}".strip(),
             "admission_no": student.get("admission_no", ""),
             "class_name": student.get("class_name", "N/A"),
-            "total_fee": total_fee,
+            "total_fees": total_fee,
+            "total_paid": paid_amount,
             "paid": paid_amount,
+            "balance": outstanding,
             "outstanding": outstanding,
             "status": fee_status,
             "last_payment_date": last_payment_date,
+            "receipt_image": latest_receipt_image,
+            "receipt_images": receipt_images,
+            "payments": student_payments,
             "special_notes": student_special.get("special_notes", ""),
             "fee_type": fee_type
         })
@@ -3143,10 +3740,12 @@ async def delete_staff_task(task_id: str, current_user: dict = Depends(get_curre
     if current_user and current_user.get('role') not in ['principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only principal can delete staff tasks")
     
+    # Move to bin before deleting
+    await move_to_bin("staff_tasks", task_id, current_user or {})
     result = await db.staff_tasks.delete_one({"id": task_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Task not found")
-    return {"success": True, "message": "Task deleted"}
+    return {"success": True, "message": "Task moved to bin"}
 
 @api_router.get("/staff-tasks/report")
 async def get_staff_tasks_report(current_user: dict = Depends(get_current_user)):
@@ -3308,6 +3907,9 @@ async def delete_student_task(task_id: str, current_user: dict = Depends(get_cur
     if current_user and current_user.get('role') not in ['teacher', 'academic', 'section_leader', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Not authorized to delete tasks")
     
+    # Move to bin before deleting
+    await move_to_bin("student_tasks", task_id, current_user or {})
+    
     # Delete the task
     result = await db.student_tasks.delete_one({"id": task_id})
     
@@ -3317,7 +3919,7 @@ async def delete_student_task(task_id: str, current_user: dict = Depends(get_cur
     # Also delete all completions for this task
     await db.student_task_completions.delete_many({"task_id": task_id})
     
-    return {"success": True, "message": "Task deleted"}
+    return {"success": True, "message": "Task moved to bin"}
 
 @api_router.get("/my-tasks")
 async def get_my_student_tasks(current_user: dict = Depends(get_current_user)):
@@ -3389,11 +3991,13 @@ async def update_lesson_plan(plan_id: str, updates: Dict):
     return serialize_doc(plan)
 
 @api_router.delete("/lesson-plans/{plan_id}")
-async def delete_lesson_plan(plan_id: str):
+async def delete_lesson_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
+    # Move to bin before deleting
+    await move_to_bin("lesson_plans", plan_id, current_user or {})
     result = await db.lesson_plans.delete_one({"id": plan_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Lesson plan not found")
-    return {"success": True}
+    return {"success": True, "message": "Lesson plan moved to bin"}
 
 # Scheme of Work
 @api_router.get("/schemes-of-work", response_model=List[Dict])
@@ -3528,11 +4132,13 @@ async def update_assessment(assessment_id: str, updates: Dict):
     return serialize_doc(assessment)
 
 @api_router.delete("/assessments/{assessment_id}")
-async def delete_assessment(assessment_id: str):
+async def delete_assessment(assessment_id: str, current_user: dict = Depends(get_current_user)):
+    # Move to bin before deleting
+    await move_to_bin("assessments", assessment_id, current_user or {})
     result = await db.assessments.delete_one({"id": assessment_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Assessment not found")
-    return {"success": True}
+    return {"success": True, "message": "Assessment moved to bin"}
 
 # ============ COMMUNICATIONS ROUTES ============
 
@@ -3614,10 +4220,194 @@ async def delete_announcement(announcement_id: str, current_user: dict = Depends
     if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary can delete announcements")
     
+    # Move to bin before deleting
+    await move_to_bin("announcements", announcement_id, current_user or {})
     result = await db.announcements.delete_one({"id": announcement_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Announcement not found")
-    return {"success": True, "message": "Announcement deleted"}
+    return {"success": True, "message": "Announcement moved to bin"}
+
+# ============ BIN / RECYCLE BIN ROUTES ============
+
+@api_router.get("/bin")
+async def get_bin_items(current_user: dict = Depends(get_current_user)):
+    """Get all items in the bin for the user's chain"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    chain_filter = get_chain_filter(current_user)
+    query = {**chain_filter}
+    
+    items = await db.bin.find(query, {"_id": 0}).sort("deleted_at", -1).to_list(200)
+    return [serialize_doc(a) for a in items]
+
+
+@api_router.post("/bin/restore/{item_id}")
+async def restore_bin_item(item_id: str, current_user: dict = Depends(get_current_user)):
+    """Restore an item from the bin back to its original collection - Principal only"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if current_user.get('role') != 'principal':
+        raise HTTPException(status_code=403, detail="Only principals can restore items from the bin")
+    
+    # Find the item in bin
+    bin_item = await db.bin.find_one({"id": item_id}, {"_id": 0})
+    if not bin_item:
+        raise HTTPException(status_code=404, detail="Bin item not found")
+    
+    original_collection = bin_item.get("original_collection")
+    original_data = bin_item.get("original_data", {})
+    
+    if not original_collection or not original_data:
+        raise HTTPException(status_code=400, detail="Invalid bin item - missing original data")
+    
+    # Restore to original collection
+    collection_map = {
+        "students": db.students,
+        "staff": db.users,
+        "tasks": db.tasks,
+        "staff_tasks": db.staff_tasks,
+        "student_tasks": db.student_tasks,
+        "classes": db.classes,
+        "subjects": db.subjects,
+        "announcements": db.announcements,
+        "lesson_plans": db.lesson_plans,
+        "assessments": db.assessments,
+        "payments": db.payments,
+        "qr_codes": db.qr_codes,
+        "almanac_events": db.almanac_events,
+        "fee_structures": db.fee_structures,
+    }
+    
+    target_collection = collection_map.get(original_collection)
+    if target_collection is None:
+        raise HTTPException(status_code=400, detail=f"Unknown collection: {original_collection}")
+    
+    # Check if item already exists (restore or create new)
+    existing = await target_collection.find_one({"id": original_data.get("id")})
+    if existing:
+        # Update the existing record
+        await target_collection.update_one(
+            {"id": original_data.get("id")},
+            {"$set": original_data}
+        )
+    else:
+        # Insert as new
+        await target_collection.insert_one(original_data)
+    
+    # Remove from bin
+    await db.bin.delete_one({"id": item_id})
+    
+    return {"success": True, "message": "Item restored successfully"}
+
+
+@api_router.delete("/bin/{item_id}")
+async def permanently_delete_bin_item(item_id: str, current_user: dict = Depends(get_current_user)):
+    """Permanently delete an item from the bin - Principal only"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if current_user.get('role') != 'principal':
+        raise HTTPException(status_code=403, detail="Only principals can permanently delete items from the bin")
+    
+    result = await db.bin.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Bin item not found")
+    
+    return {"success": True, "message": "Item permanently deleted"}
+
+
+@api_router.delete("/bin")
+async def empty_bin(current_user: dict = Depends(get_current_user)):
+    """Empty all items from the bin for the user's chain - Principal only"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if current_user.get('role') != 'principal':
+        raise HTTPException(status_code=403, detail="Only principals can empty the bin")
+    
+    chain_filter = get_chain_filter(current_user)
+    result = await db.bin.delete_many(chain_filter)
+    
+    return {"success": True, "message": f"Permanently deleted {result.deleted_count} items"}
+
+
+# Helper function to move an item to the bin
+async def move_to_bin(collection_name: str, item_id: str, deleted_by: dict, chain: str = None):
+    """Move a deleted item to the bin collection for potential restoration"""
+    collection_map = {
+        "students": db.students,
+        "staff": db.users,
+        "tasks": db.tasks,
+        "staff_tasks": db.staff_tasks,
+        "student_tasks": db.student_tasks,
+        "classes": db.classes,
+        "subjects": db.subjects,
+        "announcements": db.announcements,
+        "lesson_plans": db.lesson_plans,
+        "assessments": db.assessments,
+        "payments": db.payments,
+        "qr_codes": db.qr_codes,
+        "almanac_events": db.almanac_events,
+        "fee_structures": db.fee_structures,
+    }
+    
+    source_collection = collection_map.get(collection_name)
+    if source_collection is None:
+        return False
+    
+    # Get the original data before deleting
+    original_data = await source_collection.find_one({"id": item_id}, {"_id": 0})
+    if not original_data:
+        return False
+    
+    # Create bin entry
+    deleted_by_name = (
+        deleted_by.get("name") or 
+        f"{deleted_by.get('first_name', '')} {deleted_by.get('last_name', '')}".strip() or
+        deleted_by.get("access_code", "Unknown")
+    )
+    bin_entry = {
+        "id": str(uuid.uuid4()),
+        "original_collection": collection_name,
+        "original_id": item_id,
+        "original_data": original_data,
+        "deleted_by": {
+            "id": deleted_by.get("id") or deleted_by.get("sub"),
+            "name": deleted_by_name,
+            "role": deleted_by.get("role"),
+        },
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+        "chain": chain or original_data.get("chain", ""),
+        "item_type": collection_name,
+        "item_summary": _get_item_summary(collection_name, original_data),
+    }
+    
+    await db.bin.insert_one(bin_entry)
+    return True
+
+
+def _get_item_summary(collection_name: str, data: dict) -> str:
+    """Generate a human-readable summary of the deleted item"""
+    summaries = {
+        "students": f"{data.get('first_name', '')} {data.get('last_name', '')} ({data.get('admission_no', 'N/A')})",
+        "staff": f"{data.get('name') or data.get('first_name', '')} {data.get('last_name', '')} ({data.get('access_code', 'N/A')})",
+        "tasks": data.get("title") or data.get("description", "Untitled Task"),
+        "staff_tasks": data.get("title") or data.get("description", "Untitled Task"),
+        "student_tasks": data.get("title") or data.get("description", "Untitled Task"),
+        "classes": data.get("name", "Untitled Class"),
+        "subjects": data.get("name", "Untitled Subject"),
+        "announcements": data.get("title", "Untitled Announcement"),
+        "lesson_plans": data.get("title") or data.get("topic", "Untitled Lesson Plan"),
+        "assessments": data.get("title", "Untitled Assessment"),
+        "payments": f"Payment of {data.get('amount', 'N/A')} by {data.get('student_name', 'N/A')}",
+        "qr_codes": f"QR Code - {data.get('label', data.get('id', 'N/A'))}",
+        "almanac_events": data.get("title", "Untitled Event"),
+        "fee_structures": data.get("name", "Untitled Fee Structure"),
+    }
+    return summaries.get(collection_name, f"Deleted {collection_name} item")
+
 
 # ============ STUDENT PORTAL ROUTES ============
 
@@ -3823,6 +4613,107 @@ async def get_student_announcements(current_user: dict = Depends(get_current_use
         }, {"_id": 0}).sort("created_at", -1).to_list(50)
     
     return [serialize_doc(a) for a in announcements]
+
+# ============ EXPENSES ============
+
+@api_router.get("/expenses")
+async def get_expenses(chain: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Get all expenses for the user's chain"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    chain_filter = get_chain_filter(current_user)
+    query = {**chain_filter}
+    
+    # Allow IHEZA users (directors/coordinators) to filter by specific chain
+    if chain and current_user.get('role') in ['director', 'coordinator']:
+        query['chain'] = chain
+    
+    expenses = await db.expenses.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return [serialize_doc(e) for e in expenses]
+
+
+@api_router.post("/expenses")
+async def create_expense(expense: dict, current_user: dict = Depends(get_current_user)):
+    """Create a new expense entry"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    allowed_roles = ['principal', 'director', 'coordinator', 'secretary']
+    if current_user.get('role') not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Not authorized to create expenses")
+    
+    expense_id = str(uuid.uuid4())
+    chain = expense.get('chain') or current_user.get('chain') or 'IHEZA'
+    
+    expense_doc = {
+        "id": expense_id,
+        "description": expense.get('description', ''),
+        "amount": float(expense.get('amount', 0)),
+        "category": expense.get('category', 'other'),
+        "payment_method": expense.get('payment_method', 'cash'),
+        "vendor": expense.get('vendor', ''),
+        "receipt_number": expense.get('receipt_number', ''),
+        "notes": expense.get('notes', ''),
+        "expense_date": expense.get('expense_date', datetime.now(timezone.utc).isoformat()),
+        "chain": chain,
+        "created_by": current_user.get('_id') or current_user.get('id', ''),
+        "created_by_name": current_user.get('name') or current_user.get('first_name', 'Unknown'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    
+    await db.expenses.insert_one(expense_doc)
+    return serialize_doc(expense_doc)
+
+
+@api_router.put("/expenses/{expense_id}")
+async def update_expense(expense_id: str, expense: dict, current_user: dict = Depends(get_current_user)):
+    """Update an existing expense"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    allowed_roles = ['principal', 'director', 'coordinator', 'secretary']
+    if current_user.get('role') not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Not authorized to update expenses")
+    
+    existing = await db.expenses.find_one({"id": expense_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    
+    update_data = {
+        "description": expense.get('description', existing.get('description', '')),
+        "amount": float(expense.get('amount', existing.get('amount', 0))),
+        "category": expense.get('category', existing.get('category', 'other')),
+        "payment_method": expense.get('payment_method', existing.get('payment_method', 'cash')),
+        "vendor": expense.get('vendor', existing.get('vendor', '')),
+        "receipt_number": expense.get('receipt_number', existing.get('receipt_number', '')),
+        "notes": expense.get('notes', existing.get('notes', '')),
+        "expense_date": expense.get('expense_date', existing.get('expense_date', '')),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    
+    await db.expenses.update_one({"id": expense_id}, {"$set": update_data})
+    updated = await db.expenses.find_one({"id": expense_id})
+    return serialize_doc(updated)
+
+
+@api_router.delete("/expenses/{expense_id}")
+async def delete_expense(expense_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete an expense"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    allowed_roles = ['principal', 'director', 'coordinator', 'secretary']
+    if current_user.get('role') not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Not authorized to delete expenses")
+    
+    result = await db.expenses.delete_one({"id": expense_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    
+    return {"success": True, "message": "Expense deleted successfully"}
+
 
 # ============ SYNC & HEALTH ============
 

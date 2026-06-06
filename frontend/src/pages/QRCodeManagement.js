@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { QrCode, Plus, Download, Printer, Trash2, X, Calendar, Building, Clock } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import GenerateChain from '../components/Principal/GenerateChain';
 import { Edit, Link as LinkIcon, Save, X, Building, Globe, Trash2 } from 'lucide-react';
 

@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { dataService } from '../services/dataService';
 import { studentService } from '../services/studentService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { BookOpen, Save, Search, Award, Users } from 'lucide-react';
 
 function Grades() {

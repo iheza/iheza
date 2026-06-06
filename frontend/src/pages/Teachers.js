@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser, selectCurrentPortal } from '../store/slices/authSlice';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { Users, Search, Mail, Phone, BookOpen, User } from 'lucide-react';
 import ChainToggle from '../components/ChainToggle';
 

@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 import './Forms.css';
+import { staffService } from '../services/staffService';
+import { useToast } from '../components/Common/Toast';
 
 const SchemeOfWork = ({ onSave }) => {
+  const [teachers, setTeachers] = useState([]);
+  const [teacherId, setTeacherId] = useState("");
   // Create row structure based on format
   const createEmptyRow = (format) => {
     if (format === 'zanzibar') {
@@ -47,6 +52,22 @@ const SchemeOfWork = ({ onSave }) => {
     format: 'tanzania', // 'tanzania' or 'zanzibar'
     rows: Array(10).fill().map(() => createEmptyRow('tanzania'))
   });
+
+  // Load teachers for dropdown on mount
+  useEffect(() => {
+    const loadTeachers = async () => {
+      try {
+        const staffData = await staffService.getStaff();
+        const teacherList = staffData.filter(s => 
+          ['teacher', 'academic', 'section_leader'].includes(s.role?.toLowerCase())
+        );
+        setTeachers(teacherList || []);
+      } catch (error) {
+        console.error('Failed to load teachers:', error);
+      }
+    };
+    loadTeachers();
+  }, []);
 
   const autoResize = (textarea) => {
     if (textarea && textarea.tagName === 'TEXTAREA' && textarea.style) {
@@ -338,6 +359,8 @@ const SchemeOfWork = ({ onSave }) => {
     }
   };
 
+  const { addToast } = useToast();
+
   const addRow = () => {
     setFormData({
       ...formData,
@@ -348,14 +371,16 @@ const SchemeOfWork = ({ onSave }) => {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Show loading message
     const saveButton = document.querySelector('.save-btn');
     const originalButtonText = saveButton.textContent;
-    saveButton.textContent = 'Generating Word Document...';
+    saveButton.textContent = 'Saving...';
     saveButton.disabled = true;
 
     try {
+      saveButton.textContent = 'Generating Word Document...';
+
       // Generate Word document content
       const generateWordDocument = () => {
         // Create HTML content for Word document
@@ -659,10 +684,69 @@ const SchemeOfWork = ({ onSave }) => {
       
       // Create blob and download
       const blob = new Blob([wordContent], { type: 'application/msword' });
+      const fileName = `scheme-of-work-${formData.subject}-${formData.class}-${formData.year}-${new Date().toISOString().split('T')[0]}.doc`;
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `scheme-of-work-${formData.subject}-${formData.class}-${formData.year}-${new Date().toISOString().split('T')[0]}.doc`;
+      link.download = fileName;
       link.click();
+
+      // Save to backend database and localStorage
+      const token = localStorage.getItem('sessionToken');
+      
+      // Convert to base64 using btoa (more reliable than FileReader)
+      const base64Data = 'data:application/msword;base64,' + btoa(unescape(encodeURIComponent(wordContent)));
+      
+      const docPayload = {
+        name: fileName,
+        type: 'application/msword',
+        size: blob.size,
+        data: base64Data,
+        source: 'scheme_of_work'
+      };
+
+      // Always save to localStorage first (for Documents component)
+      const saved = localStorage.getItem('iheza_documents');
+      const existingDocs = saved ? JSON.parse(saved) : [];
+      existingDocs.push({
+        id: 'sow_' + Date.now(),
+        name: fileName,
+        type: 'application/msword',
+        size: blob.size,
+        data: base64Data,
+        source: 'scheme_of_work',
+        uploadedAt: new Date().toISOString(),
+        metadata: {
+          type: 'scheme_of_work',
+          subject: formData.subject,
+          class: formData.class,
+          year: formData.year,
+          term: formData.term,
+          teacher: formData.teacher,
+          school: formData.school
+        }
+      });
+      localStorage.setItem('iheza_documents', JSON.stringify(existingDocs));
+
+      // Then try to save to backend
+      try {
+        const response = await fetch(`${API_URL}/api/documents`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(docPayload)
+        });
+
+        if (response.ok) {
+          addToast('Scheme of Work saved successfully! ✓', 'success');
+        } else {
+          addToast('Scheme of Work saved to Documents page.', 'success');
+        }
+      } catch (err) {
+        console.log('Backend save failed, but document is saved locally:', err.message);
+        addToast('Scheme of Work saved to Documents page.', 'success');
+      }
       
       // Restore button state
       saveButton.textContent = originalButtonText;
@@ -675,7 +759,7 @@ const SchemeOfWork = ({ onSave }) => {
       
     } catch (error) {
       console.error('Error generating document:', error);
-      alert('Error generating document. Please try again.');
+      addToast('Error generating document. Please try again.', 'error');
       
       // Restore button state
       const saveButton = document.querySelector('.save-btn');
@@ -713,14 +797,29 @@ const SchemeOfWork = ({ onSave }) => {
             </div>
             <div className="header-item">
               <label className="header-label">Teacher's Name</label>
-              <input
-                type="text"
+              <select
                 name="teacher"
-                value={formData.teacher}
-                onChange={handleInputChange}
+                value={teacherId}
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  setTeacherId(selectedId);
+                  const selectedTeacher = teachers.find(t => t.id === selectedId);
+                  if (selectedTeacher) {
+                    const teacherName = selectedTeacher.name || `${selectedTeacher.first_name} ${selectedTeacher.last_name}`;
+                    setFormData({...formData, teacher: teacherName});
+                  } else {
+                    setFormData({...formData, teacher: ""});
+                  }
+                }}
                 className="header-input"
-                placeholder="Enter teacher's name"
-              />
+              >
+                <option value="">-- Select Teacher --</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name || `${t.first_name} ${t.last_name}`}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           

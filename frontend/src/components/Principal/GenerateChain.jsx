@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { apiClient } from '../../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../../hooks/useSoundEnabledToast';
 
 const GenerateChain = ({ onChainCreated }) => {
   const [formData, setFormData] = useState({

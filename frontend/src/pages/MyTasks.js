@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser, selectCurrentPortal } from '../store/slices/authSlice';
 import { apiClient } from '../services/authService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { ClipboardList, Check, Clock, AlertCircle, X, ChevronRight, Download, FileText, Image } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -24,7 +24,8 @@ const MyTasks = () => {
     
     try {
       setLoading(true);
-      const response = await apiClient.get(`/tasks/my-tasks`);
+      // Query staff-tasks filtered by the current user's ID
+      const response = await apiClient.get(`/staff-tasks?assigned_to=${currentUser.id}`);
       const myTasks = response.data || [];
       setTasks(myTasks);
       
@@ -195,7 +196,7 @@ const MyTasks = () => {
 
   const updateTaskStatus = async (taskId, newStatus) => {
     try {
-      await apiClient.put(`/tasks/${taskId}`, { status: newStatus });
+      await apiClient.put(`/staff-tasks/${taskId}`, { status: newStatus });
       toast.success(`Task marked as ${newStatus}`);
       loadTasks();
       setSelectedTask(null);

@@ -2,13 +2,15 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { studentService } from '../services/studentService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { 
   DollarSign, Edit2, Trash2, Search, X, 
-  CreditCard, Users, MessageCircle, Check, AlertCircle
+  CreditCard, Users, MessageCircle, Check, AlertCircle, Image, Upload, Eye, Download, Receipt
 } from 'lucide-react';
 import ChainToggle from '../components/ChainToggle';
 import { API_URL } from '../config/api';
+import { saveAs } from 'file-saver';
+import { jsPDF } from 'jspdf';
 
 function FeesManagement() {
   const currentUser = useSelector(selectCurrentUser);
@@ -35,6 +37,17 @@ function FeesManagement() {
 
   const [editingPayment, setEditingPayment] = useState(null);
   const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
+  
+  // All Students table view state
+  const [allStudentFees, setAllStudentFees] = useState([]);
+  const [loadingAllFees, setLoadingAllFees] = useState(false);
+  const [activeTab, setActiveTab] = useState(
+    ['secretary', 'principal'].includes(currentUser?.role?.toLowerCase()) ? 'payments' : 'all-students'
+  ); // 'payments' or 'all-students'
+  
+  // Receipt viewer modal state
+  const [receiptViewer, setReceiptViewer] = useState({ open: false, images: [], currentIndex: 0, studentName: '', studentId: '' });
+
 
   // Fee type options for payment modal
   const FEE_TYPE_OPTIONS = [
@@ -46,6 +59,8 @@ function FeesManagement() {
   ];
 
   const canManageFees = ['secretary', 'principal', 'director', 'coordinator'].includes(currentUser?.role?.toLowerCase());
+  const canViewPayments = ['secretary', 'principal'].includes(currentUser?.role?.toLowerCase());
+  const canUploadReceipts = currentUser?.role === 'secretary';
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('sessionToken');
@@ -82,16 +97,45 @@ function FeesManagement() {
   };
 
   const handleSelectStudent = async (student) => {
+    // Accept either student.id or student.admission_no as the identifier
+    const studentId = student?.id || student?.admission_no;
+    if (!student || !studentId) {
+      toast.error('Invalid student selected');
+      return;
+    }
     setSelectedStudent(student);
     setEditingTotalFees(false);
-    try {
-      const response = await fetch(`${API_URL}/api/student-fees/${student.id}`, {
+    
+    // Try fetching with the resolved studentId
+    const tryFetch = async (id) => {
+      const response = await fetch(`${API_URL}/api/student-fees/${encodeURIComponent(id)}`, {
         headers: getAuthHeaders()
       });
-      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json();
+    };
+    
+    try {
+      let data = await tryFetch(studentId);
+      
+      // If 404 and we have both id and admission_no, try the other one
+      if (!data && student?.id && student?.admission_no && studentId !== student.admission_no) {
+        data = await tryFetch(student.admission_no);
+      }
+      
+      if (!data) {
+        toast.error('Student fee data not found');
+        setStudentFeeData(null);
+        return;
+      }
+      
       setStudentFeeData(data);
       setTotalFeesInput(data.total_fees?.toString() || '0');
     } catch (error) {
+      console.error('Failed to load student fees:', error);
       toast.error('Failed to load student fees');
     }
   };
@@ -108,7 +152,7 @@ function FeesManagement() {
     
     setSavingTotalFees(true);
     try {
-      const response = await fetch(`${API_URL}/api/student-fees/${selectedStudent.id}/total`, {
+      const response = await fetch(`${API_URL}/api/student-fees/${encodeURIComponent(selectedStudent.id || selectedStudent.admission_no)}/total`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ total_fees: numAmount })
@@ -185,7 +229,7 @@ function FeesManagement() {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          student_id: selectedStudent.id,
+          student_id: selectedStudent.id || selectedStudent.admission_no,
           fee_type: paymentForm.fee_structure_id, // full_day, half_day, uniform, admission, custom
           amount: parseFloat(paymentForm.amount),
           payment_method: paymentForm.payment_method,
@@ -285,6 +329,123 @@ function FeesManagement() {
     }
   };
 
+  // Receipt image upload handler (for individual payments)
+  const handleUploadReceipt = (paymentId) => {
+    // Create a hidden file input
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image must be less than 5MB');
+        return;
+      }
+      
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64Image = event.target.result;
+        
+        try {
+          const response = await fetch(`${API_URL}/api/payments/${paymentId}/receipt`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ receipt_image: base64Image })
+          });
+          
+          if (response.ok) {
+            toast.success('Receipt uploaded successfully');
+            // Refresh the student fee data to show the receipt
+            handleSelectStudent(selectedStudent);
+          } else {
+            const err = await response.json();
+            toast.error(err.detail || 'Failed to upload receipt');
+          }
+        } catch (error) {
+          toast.error('Failed to upload receipt');
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    fileInput.click();
+  };
+
+  // Delete a specific receipt image from the viewer (Secretary only)
+  const handleDeleteReceiptImage = async (studentId, receiptId) => {
+    if (!window.confirm('Delete this receipt image? This cannot be undone.')) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/api/student-fees/${encodeURIComponent(studentId)}/receipt/${receiptId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        toast.success('Receipt image deleted');
+        // Remove from local state
+        const updatedImages = receiptViewer.images.filter(img => img.id !== receiptId);
+        setReceiptViewer(prev => ({ ...prev, images: updatedImages }));
+        // Refresh the all student fees table
+        loadAllStudentFees();
+      } else {
+        const err = await response.json();
+        toast.error(err.detail || 'Failed to delete receipt image');
+      }
+    } catch (error) {
+      toast.error('Failed to delete receipt image');
+    }
+  };
+
+  // Receipt image upload handler for the All Students table (stores at student level, not payment level)
+  const handleUploadStudentReceipt = (studentId) => {
+    // Create a hidden file input
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image must be less than 5MB');
+        return;
+      }
+      
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64Image = event.target.result;
+        
+        try {
+          const response = await fetch(`${API_URL}/api/student-fees/${encodeURIComponent(studentId)}/receipt`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ receipt_image: base64Image })
+          });
+          
+          if (response.ok) {
+            toast.success('Receipt uploaded successfully');
+            // Refresh the all student fees table to show the receipt
+            loadAllStudentFees();
+          } else {
+            const err = await response.json();
+            toast.error(err.detail || 'Failed to upload receipt');
+          }
+        } catch (error) {
+          toast.error('Failed to upload receipt');
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    fileInput.click();
+  };
+
+
   // WhatsApp share function for payment info
   const shareToWhatsApp = () => {
     if (!selectedStudent || !studentFeeData) return;
@@ -295,6 +456,7 @@ function FeesManagement() {
     const paidAmount = studentFeeData.total_paid?.toLocaleString() || '0';
     const balance = studentFeeData.balance?.toLocaleString() || '0';
     const status = studentFeeData.status === 'fully_paid' ? 'Fully Paid' : studentFeeData.status === 'partial' ? 'Partial' : 'Unpaid';
+    const studentChain = selectedStudent.chain?.toUpperCase();
     
     let paymentHistory = '';
     if (studentFeeData.payments?.length > 0) {
@@ -304,16 +466,162 @@ function FeesManagement() {
       });
     }
     
-    const message = `*IHEZA SCHOOL - Fee Statement*\n\n` +
-      `*Student:* ${studentName}\n` +
-      `*Admission No:* ${admNo}\n\n` +
-      `*Total Fees:* TZS ${totalFee}\n` +
-      `*Paid:* TZS ${paidAmount}\n` +
-      `*Balance:* TZS ${balance}\n` +
-      `*Status:* ${status}` +
-      paymentHistory +
-      `\n\n_Deniz Primary School_\n_Email: denizprimary@gmail.com_\n_Phone: 0748 555525 / 0776101088_`;
+    let message;
+    if (studentChain === 'LALE') {
+      message = `*LALE BUSTANI CHILDREN'S ACADEMY - Fee Statement*\n\n` +
+        `*Student:* ${studentName}\n` +
+        `*Admission No:* ${admNo}\n\n` +
+        `*Total Fees:* TZS ${totalFee}\n` +
+        `*Paid:* TZS ${paidAmount}\n` +
+        `*Balance:* TZS ${balance}\n` +
+        `*Status:* ${status}` +
+        paymentHistory +
+        `\n\n_Lale Bustani Children's Academy_\n_Email: lalebustaniacademy@gmail.com_\n_Phone: +255 779 206 080_\n_Bank: EXIM BANK - 0150020984 (HOLISTIC EDUCATION OF ZANZIBAR)_`;
+    } else {
+      message = `*IHEZA SCHOOL - Fee Statement*\n\n` +
+        `*Student:* ${studentName}\n` +
+        `*Admission No:* ${admNo}\n\n` +
+        `*Total Fees:* TZS ${totalFee}\n` +
+        `*Paid:* TZS ${paidAmount}\n` +
+        `*Balance:* TZS ${balance}\n` +
+        `*Status:* ${status}` +
+        paymentHistory +
+        `\n\n_Deniz Primary School_\n_Email: denizprimary@gmail.com_\n_Phone: 0748 555525 / 0776101088_`;
+    }
     
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Generate PDF with ALL receipt images using jsPDF - 2 images per page side by side
+  const generateReceiptPdfBlob = async () => {
+    if (!receiptViewer.images || receiptViewer.images.length === 0) return null;
+    
+    const studentName = receiptViewer.studentName || 'Student';
+    
+    // Create a new PDF document (A4 landscape for better image display)
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 12;
+    const usableWidth = pageWidth - margin * 2;
+    const usableHeight = pageHeight - margin * 2 - 30; // leave room for header/footer
+    
+    // Determine chain name for header
+    const getChainName = () => {
+      const chain = selectedChain?.toUpperCase();
+      if (chain === 'LALE') return 'LALE BUSTANI CHILDREN\'S ACADEMY';
+      if (chain === 'DENIZ') return 'DENIZ LOWER PRIMARY';
+      return 'IHEZA SCHOOL';
+    };
+    const chainName = getChainName();
+    
+    // Helper to add header to a page
+    const addHeader = () => {
+      pdf.setFontSize(16);
+      pdf.setTextColor(15, 76, 129);
+      pdf.text(`${getChainName()} - PAYMENT RECEIPT`, pageWidth / 2, margin + 5, { align: 'center' });
+      pdf.setFontSize(10);
+      pdf.setTextColor(80);
+      pdf.text(studentName, pageWidth / 2, margin + 12, { align: 'center' });
+      pdf.setDrawColor(15, 76, 129);
+      pdf.setLineWidth(0.3);
+      pdf.line(margin, margin + 15, pageWidth - margin, margin + 15);
+    };
+    
+    // Helper to add footer to a page
+    const addFooter = () => {
+      pdf.setFontSize(7);
+      pdf.setTextColor(150);
+      pdf.text(`Generated on: ${new Date().toLocaleDateString()} - ${getChainName()} Management System`, pageWidth / 2, pageHeight - margin, { align: 'center' });
+    };
+    
+    addHeader();
+    addFooter();
+    
+    // Layout: 2 images per row, 2 rows per page = 4 images per page
+    const cols = 2;
+    const rowsPerPage = 2;
+    const imagesPerPage = cols * rowsPerPage;
+    const cellWidth = (usableWidth - 4) / cols; // small gap between columns
+    const cellHeight = (usableHeight - 4) / rowsPerPage;
+    
+    // Filter out empty images
+    const validImages = receiptViewer.images.filter(img => img?.image);
+    
+    for (let i = 0; i < validImages.length; i++) {
+      const pageIndex = Math.floor(i / imagesPerPage);
+      const posInPage = i % imagesPerPage;
+      const col = posInPage % cols;
+      const row = Math.floor(posInPage / cols);
+      
+      // Start a new page if needed (after first page)
+      if (pageIndex > 0 && posInPage === 0) {
+        pdf.addPage();
+        addHeader();
+        addFooter();
+      }
+      
+      const x = margin + 1 + col * (cellWidth + 2);
+      const y = margin + 18 + row * (cellHeight + 2);
+      
+      try {
+        pdf.addImage(validImages[i].image, 'JPEG', x, y, cellWidth, cellHeight, undefined, 'FAST');
+      } catch (e) {
+        try {
+          pdf.addImage(validImages[i].image, 'PNG', x, y, cellWidth, cellHeight, undefined, 'FAST');
+        } catch (e2) {
+          console.warn('Could not add image to PDF:', e2);
+        }
+      }
+    }
+    
+    return pdf.output('blob');
+  };
+
+  // Share receipt(s) directly to WhatsApp as a PDF
+  const handleShareReceiptToWhatsApp = async () => {
+    if (!receiptViewer.images || receiptViewer.images.length === 0) {
+      toast.error('No receipt images to share');
+      return;
+    }
+    
+    const studentName = receiptViewer.studentName || 'Student';
+    
+    toast.info('Generating PDF with all receipt images...');
+    
+    const blob = await generateReceiptPdfBlob();
+    if (!blob) {
+      toast.error('Failed to generate receipt PDF');
+      return;
+    }
+    
+    const fileName = `Receipt_${studentName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    
+    // Try to use the Web Share API first (works on mobile browsers)
+    if (navigator.share && navigator.canShare) {
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Receipt - ${studentName}`,
+            text: `Payment receipt for ${studentName}`,
+            files: [file]
+          });
+          return;
+        } catch (err) {
+          // If share fails or user cancels, fall back
+          if (err.name === 'AbortError') return;
+        }
+      }
+    }
+    
+    // Fallback: Download the PDF and open WhatsApp with a pre-filled message
+    saveAs(blob, fileName);
+    toast.success('Receipt PDF downloaded! Share it via WhatsApp from your file manager.');
+    
+    // Open WhatsApp with a message
+    const message = `Payment receipt for ${studentName} - ${chainName}\n\nReceipt PDF has been downloaded. Please attach the file from your device.`;
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -332,15 +640,55 @@ function FeesManagement() {
     }
   };
 
+  // Load all student fees for the table view
+  const loadAllStudentFees = async () => {
+    setLoadingAllFees(true);
+    try {
+      let url = `${API_URL}/api/all-student-fees`;
+      if (selectedChain) {
+        url += `?chain=${selectedChain}`;
+      }
+      const response = await fetch(url, { headers: getAuthHeaders() });
+      if (!response.ok) {
+        // Don't try to read the body - it may already be consumed by middleware
+        // Just use the status code for the error message
+        console.error('Server error response:', response.status, response.statusText);
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setAllStudentFees(data);
+    } catch (error) {
+      console.error('Failed to load all student fees:', error);
+      toast.error('Failed to load student fee data');
+    } finally {
+      setLoadingAllFees(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'all-students') {
+      loadAllStudentFees();
+    }
+  }, [activeTab, selectedChain]);
+
   const exportToCSV = () => {
-    if (!financialReport) return;
+    if (!allStudentFees || allStudentFees.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+    
+    const totalStudents = allStudentFees.length;
+    const totalExpected = allStudentFees.reduce((sum, s) => sum + (s.total_fees || 0), 0);
+    const totalCollected = allStudentFees.reduce((sum, s) => sum + (s.total_paid || 0), 0);
+    const outstandingBalance = allStudentFees.reduce((sum, s) => sum + (s.balance || 0), 0);
+    const collectionRate = totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : '0.0';
     
     let csv = 'Financial Report\n\n';
-    csv += `Total Students,${financialReport.total_students}\n`;
-    csv += `Total Expected,${financialReport.total_expected}\n`;
-    csv += `Total Collected,${financialReport.total_collected}\n`;
-    csv += `Outstanding Balance,${financialReport.outstanding_balance}\n`;
-    csv += `Collection Rate,${financialReport.collection_rate}%\n`;
+    csv += `Total Students,${totalStudents}\n`;
+    csv += `Total Expected,${totalExpected}\n`;
+    csv += `Total Collected,${totalCollected}\n`;
+    csv += `Outstanding Balance,${outstandingBalance}\n`;
+    csv += `Collection Rate,${collectionRate}%\n`;
     
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -456,6 +804,25 @@ function FeesManagement() {
         .action-btn:hover { background: rgba(51, 65, 85, 0.8); color: #f8fafc; }
         .action-btn.edit:hover { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
         .action-btn.delete:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        
+        /* Receipt icon animations */
+        @keyframes receiptPulse {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.1); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .receipt-icon-pulse {
+          animation: receiptPulse 1.5s ease-in-out infinite;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .receipt-icon-static {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0.5;
+        }
       `}</style>
       
       <div className="page-header">
@@ -467,12 +834,31 @@ function FeesManagement() {
         </h1>
       </div>
       
-      {loading ? (
-        <div className="empty-state">Loading...</div>
-      ) : (
-        <>
-          {/* Payments Section */}
-          <div className="content-grid">
+      {/* Tabs */}
+      <div className="tabs">
+        {canViewPayments && (
+          <button 
+            className={`tab ${activeTab === 'payments' ? 'active' : ''}`}
+            onClick={() => setActiveTab('payments')}
+          >
+            <CreditCard size={16} /> Payments
+          </button>
+        )}
+        <button 
+          className={`tab ${activeTab === 'all-students' ? 'active' : ''}`}
+          onClick={() => setActiveTab('all-students')}
+        >
+          <Users size={16} /> All Students
+        </button>
+      </div>
+
+      {activeTab === 'payments' ? (
+        loading ? (
+          <div className="empty-state">Loading...</div>
+        ) : (
+          <>
+            {/* Payments Section */}
+            <div className="content-grid">
               <div className="panel">
                 <div className="panel-title"><Users size={16} /> Select Student</div>
                 
@@ -488,10 +874,10 @@ function FeesManagement() {
                 </div>
                 
                 <div className="student-list">
-                  {filteredStudents.map(student => (
+                  {filteredStudents.map((student, index) => (
                     <div
-                      key={student.id}
-                      className={`student-item ${selectedStudent?.id === student.id ? 'selected' : ''}`}
+                      key={student.id || student.admission_no || index}
+                      className={`student-item ${(selectedStudent?.id && selectedStudent.id === student.id) || (selectedStudent?.admission_no && selectedStudent.admission_no === student.admission_no) ? 'selected' : ''}`}
                       onClick={() => handleSelectStudent(student)}
                     >
                       <div className="student-avatar">
@@ -660,51 +1046,312 @@ function FeesManagement() {
                       ))}
                     </div>
                     
-                    {studentFeeData.payments?.length > 0 && (
+                        {/* Receipt Images from student_fees level (uploaded from All Students table) */}
+                    {studentFeeData.receipt_images && studentFeeData.receipt_images.length > 0 && (
                       <div className="payment-history">
-                        <h4 style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.5rem' }}>PAYMENT HISTORY</h4>
-                        {studentFeeData.payments.map(p => (
-                          <div key={p.id} className="payment-item">
-                            <div>
-                              <div className="payment-amount">TZS {p.amount?.toLocaleString()}</div>
-                              <div className="payment-date">{p.reference_no} • {p.payment_method}</div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <div className="payment-date">
-                                {new Date(p.created_at).toLocaleDateString()}
-                              </div>
-                              <button 
-                                className="action-btn edit"
-                                onClick={() => handleEditPayment(p)}
-                                title="Edit Payment"
-                                data-testid={`edit-payment-${p.id}`}
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button 
-                                className="action-btn delete"
-                                onClick={() => handleDeletePayment(p.id)}
-                                title="Delete Payment"
-                                data-testid={`delete-payment-${p.id}`}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                        <h4 style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.5rem' }}>RECEIPT IMAGES</h4>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                          <button 
+                            className="action-btn"
+                            onClick={() => setReceiptViewer({ open: true, images: studentFeeData.receipt_images, currentIndex: 0, studentName: `${selectedStudent?.first_name || ''} ${selectedStudent?.last_name || ''}`, studentId: selectedStudent?.id || '' })}
+                            title="View All Receipts"
+                            style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#22c55e', padding: '0.5rem 1rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                          >
+                            <Eye size={16} /> View {studentFeeData.receipt_images.length} Receipt{studentFeeData.receipt_images.length > 1 ? 's' : ''}
+                          </button>
+                          {currentUser?.role === 'secretary' && (
+                            <button 
+                              className="action-btn"
+                              onClick={() => handleUploadStudentReceipt(selectedStudent?.id || selectedStudent?.admission_no)}
+                              title="Upload Another Receipt"
+                              style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', padding: '0.5rem 1rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                            >
+                              <Upload size={16} /> Upload Receipt
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
+
+                    {studentFeeData.payments?.length > 0 && (
+                          <div className="payment-history">
+                            <h4 style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.5rem' }}>PAYMENT HISTORY</h4>
+                            {studentFeeData.payments.map(p => (
+                              <div key={p.id} className="payment-item">
+                                <div>
+                                  <div className="payment-amount">TZS {p.amount?.toLocaleString()}</div>
+                                  <div className="payment-date">{p.reference_no} • {p.payment_method}</div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <div className="payment-date">
+                                    {new Date(p.created_at).toLocaleDateString()}
+                                  </div>
+                                  {/* Receipt Image */}
+                                  {p.receipt_image ? (
+                                    <button 
+                                      className="action-btn"
+                                      onClick={() => setReceiptViewer({ open: true, images: [{ image: p.receipt_image, id: '1' }], currentIndex: 0, studentName: `${selectedStudent?.first_name || ''} ${selectedStudent?.last_name || ''}`, studentId: selectedStudent?.id || '' })}
+                                      title="View Receipt"
+                                      style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}
+                                    >
+                                      <Image size={14} />
+                                    </button>
+                                  ) : currentUser?.role === 'secretary' && (
+                                    <button 
+                                      className="action-btn"
+                                      onClick={() => handleUploadReceipt(p.id)}
+                                      title="Upload Receipt"
+                                      style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6' }}
+                                    >
+                                      <Image size={14} />
+                                    </button>
+                                  )}
+
+                                  <button 
+                                    className="action-btn edit"
+                                    onClick={() => handleEditPayment(p)}
+                                    title="Edit Payment"
+                                    data-testid={`edit-payment-${p.id}`}
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button 
+                                    className="action-btn delete"
+                                    onClick={() => handleDeletePayment(p.id)}
+                                    title="Delete Payment"
+                                    data-testid={`delete-payment-${p.id}`}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                    )}
+                  </div>
+                ) : selectedStudent ? (
+                  <div className="empty-state">
+                    <AlertCircle size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                    <p>No fee data available for this student</p>
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.5rem' }}>
+                      {selectedStudent.admission_no}
+                    </p>
                   </div>
                 ) : (
-                  <div className="empty-state">Loading fee data...</div>
+                  <div className="empty-state">
+                    <DollarSign size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                    <p>Select a student to view their fee status and record payments</p>
+                  </div>
                 )}
               </div>
             </div>
-        </>
+          </>
+        )
+      ) : null}
+
+      {activeTab === 'all-students' && (
+        <div className="panel">
+          <div className="panel-header">
+            <div className="panel-title"><Users size={16} /> All Students Fee Status</div>
+            {allStudentFees.length > 0 && (
+              <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+                {allStudentFees.length} students
+              </span>
+            )}
+          </div>
+          
+          {loadingAllFees ? (
+            <div className="empty-state">Loading student fee data...</div>
+          ) : allStudentFees.length === 0 ? (
+            <div className="empty-state">
+              <Users size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+              <p>No student fee data available</p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.5)' }}>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'left', color: '#94a3b8', fontWeight: 600 }}>Student</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'left', color: '#94a3b8', fontWeight: 600 }}>Class</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}>Total Fee</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}>Paid</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}>Outstanding</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Receipt</th>
+                    {canViewPayments && (
+                      <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Details</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allStudentFees.map((item, index) => (
+                    <tr 
+                      key={item.id || index}
+                      style={{ 
+                        borderBottom: '1px solid rgba(51, 65, 85, 0.3)',
+                        transition: 'background 0.2s',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = 'rgba(51, 65, 85, 0.3)'}
+                      onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      onClick={() => {
+                        if (canViewPayments) {
+                          setActiveTab('payments');
+                          // Find and select this student from local students array
+                          // Try matching by id first, then by admission_no (for DLP chain where IDs may differ)
+                          const student = students.find(s => s.id === item.student_id) || 
+                                          students.find(s => s.admission_no === item.admission_no);
+                          if (student) {
+                            handleSelectStudent(student);
+                          } else {
+                            // Student not found in local array, create a minimal student object from the fee data
+                            // Use admission_no as primary id for DLP students since they may not have a local id
+                            handleSelectStudent({
+                              id: item.student_id || item.admission_no,
+                              first_name: item.first_name,
+                              last_name: item.last_name,
+                              admission_no: item.admission_no,
+                              chain: item.chain || selectedChain
+                            });
+                          }
+                        }
+                      }}
+                    >
+                      <td style={{ padding: '0.75rem 0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div className="student-avatar" style={{ width: '28px', height: '28px', fontSize: '0.7rem' }}>
+                            {item.first_name?.charAt(0)}
+                          </div>
+                          <div>
+                            <div style={{ color: '#f8fafc', fontWeight: 500 }}>{item.first_name} {item.last_name}</div>
+                            <div style={{ color: '#64748b', fontSize: '0.7rem', fontFamily: 'monospace' }}>{item.admission_no}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', color: '#94a3b8' }}>{item.class_name || '-'}</td>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#f8fafc', fontWeight: 600 }}>
+                        TZS {item.total_fees?.toLocaleString() || '0'}
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#22c55e', fontWeight: 600 }}>
+                        TZS {item.total_paid?.toLocaleString() || '0'}
+                      </td>
+                      <td style={{ 
+                        padding: '0.75rem 0.5rem', 
+                        textAlign: 'right', 
+                        color: (item.balance > 0) ? '#ef4444' : '#22c55e', 
+                        fontWeight: 600 
+                      }}>
+                        TZS {item.balance?.toLocaleString() || '0'}
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                        {getStatusBadge(item.status)}
+                      </td>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                        {item.receipt_image ? (
+                          <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center', alignItems: 'center' }}>
+                            <button 
+                              className="receipt-icon-pulse"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const images = (item.receipt_images && item.receipt_images.length > 0) 
+                                  ? item.receipt_images 
+                                  : [{ image: item.receipt_image }];
+                                setReceiptViewer({ open: true, images, currentIndex: 0, studentName: `${item.first_name || ''} ${item.last_name || ''}`, studentId: item.student_id || '' });
+                              }}
+                              title="View Receipt"
+                              style={{ 
+                                background: 'rgba(34, 197, 94, 0.2)', 
+                                color: '#22c55e',
+                                border: 'none',
+                                borderRadius: '0.5rem',
+                                padding: '0.4rem',
+                                cursor: 'pointer',
+                                position: 'relative'
+                              }}
+                            >
+                              <Receipt size={16} />
+                              {item.receipt_images && item.receipt_images.length > 1 && (
+                                <span style={{
+                                  position: 'absolute',
+                                  top: '-4px',
+                                  right: '-4px',
+                                  background: '#22c55e',
+                                  color: 'white',
+                                  borderRadius: '50%',
+                                  width: '16px',
+                                  height: '16px',
+                                  fontSize: '0.6rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 700
+                                }}>
+                                  {item.receipt_images.length}
+                                </span>
+                              )}
+                            </button>
+                          </div>
+                        ) : currentUser?.role === 'secretary' ? (
+                          <button 
+                            className="action-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUploadStudentReceipt(item.student_id || item.admission_no);
+                            }}
+                            title="Upload Receipt"
+                            style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6' }}
+                          >
+                            <Upload size={14} />
+                          </button>
+                        ) : (
+                          <span className="receipt-icon-static" title="No receipt uploaded">
+                            <Receipt size={16} style={{ color: '#ef4444' }} />
+                          </span>
+                        )}
+                      </td>
+
+
+                      {canViewPayments && (
+                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                          <button 
+                            className="action-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveTab('payments');
+                              // Try matching by id first, then by admission_no (for DLP chain where IDs may differ)
+                              const student = students.find(s => s.id === item.student_id) || 
+                                              students.find(s => s.admission_no === item.admission_no);
+                              if (student) {
+                                handleSelectStudent(student);
+                              } else {
+                                handleSelectStudent({
+                                  id: item.student_id || item.admission_no,
+                                  first_name: item.first_name,
+                                  last_name: item.last_name,
+                                  admission_no: item.admission_no,
+                                  chain: item.chain || selectedChain
+                                });
+                              }
+                            }}
+                            title="View Payments"
+                            style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6' }}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
-      
-      {/* Payment Modal */}
-      {showPaymentModal && selectedStudent && (
+
+      {/* Record Payment Modal */}
+      {showPaymentModal && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
@@ -715,75 +1362,40 @@ function FeesManagement() {
             </div>
             <form onSubmit={handleRecordPayment}>
               <div className="modal-body">
-                <p style={{ color: '#94a3b8', marginBottom: '1rem' }}>
-                  Recording payment for: <strong style={{ color: '#f8fafc' }}>
-                    {selectedStudent.first_name} {selectedStudent.last_name}
-                  </strong>
-                </p>
-                
                 <div className="form-group">
-                  <label className="form-label">Fee Type *</label>
+                  <label className="form-label">Fee Type</label>
                   <select
                     className="form-select"
                     value={paymentForm.fee_structure_id}
                     onChange={(e) => {
-                      const selected = FEE_TYPE_OPTIONS.find(f => f.id === e.target.value);
+                      const selectedType = FEE_TYPE_OPTIONS.find(f => f.id === e.target.value);
                       setPaymentForm({
-                        ...paymentForm, 
+                        ...paymentForm,
                         fee_structure_id: e.target.value,
-                        amount: selected && selected.amount > 0 ? selected.amount.toString() : paymentForm.amount
+                        amount: selectedType && selectedType.id !== 'custom' ? selectedType.amount.toString() : paymentForm.amount
                       });
                     }}
-                    required
                   >
-                    <option value="">Select Fee</option>
-                    {FEE_TYPE_OPTIONS.map(feeType => (
-                      <option key={feeType.id} value={feeType.id}>
-                        {feeType.name} {feeType.amount > 0 ? `- TZS ${feeType.amount.toLocaleString()}` : ''}
+                    <option value="">Select Fee Type</option>
+                    {FEE_TYPE_OPTIONS.map(opt => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.name} {opt.amount > 0 ? `(TZS ${opt.amount.toLocaleString()})` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
-                
-                <div className="form-group">
-                  <label className="form-label">Amount (TZS) *</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={paymentForm.amount}
-                    onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})}
-                    required
-                    placeholder="Enter payment amount"
-                  />
-                </div>
-                
-                {/* Uniform Fee Text Area */}
-                <div className="form-group">
-                  <label className="form-label">Uniform Fee Details (Optional)</label>
-                  <textarea
-                    className="form-input"
-                    rows={2}
-                    value={paymentForm.uniform_fee || ''}
-                    onChange={(e) => setPaymentForm({...paymentForm, uniform_fee: e.target.value})}
-                    placeholder="e.g., T-shirt: 25,000, Trouser: 40,000, Sport Wear: 35,000"
-                    style={{ resize: 'vertical', minHeight: '60px' }}
-                  />
-                </div>
-                
-                {/* Admission Fee Text Area */}
-                <div className="form-group">
-                  <label className="form-label">Admission Fee Details (Optional)</label>
-                  <textarea
-                    className="form-input"
-                    rows={2}
-                    value={paymentForm.admission_fee || ''}
-                    onChange={(e) => setPaymentForm({...paymentForm, admission_fee: e.target.value})}
-                    placeholder="e.g., New student admission form fee"
-                    style={{ resize: 'vertical', minHeight: '60px' }}
-                  />
-                </div>
-                
+
                 <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Amount (TZS) *</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={paymentForm.amount}
+                      onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})}
+                      required
+                    />
+                  </div>
                   <div className="form-group">
                     <label className="form-label">Payment Method</label>
                     <select
@@ -796,16 +1408,16 @@ function FeesManagement() {
                       <option value="mobile">Mobile Money</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Reference No.</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={paymentForm.reference_no}
-                      onChange={(e) => setPaymentForm({...paymentForm, reference_no: e.target.value})}
-                      placeholder="Auto-generated if empty"
-                    />
-                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Reference No.</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={paymentForm.reference_no}
+                    onChange={(e) => setPaymentForm({...paymentForm, reference_no: e.target.value})}
+                  />
                 </div>
                 
                 <div className="form-group">
@@ -924,7 +1536,141 @@ function FeesManagement() {
           </div>
         </div>
       )}
+
+      {/* Receipt Viewer Modal - Shows ALL images in a 2-column grid */}
+      {receiptViewer.open && (
+        <div className="modal-overlay" onClick={() => setReceiptViewer({ ...receiptViewer, open: false })}>
+          <div className="modal" style={{ maxWidth: '800px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">
+                <Image size={18} style={{ marginRight: '0.5rem' }} />
+                Receipts - {receiptViewer.studentName}
+                {receiptViewer.images?.length > 0 && (
+                  <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginLeft: '0.5rem', fontWeight: 'normal' }}>
+                    ({receiptViewer.images.length} image{receiptViewer.images.length > 1 ? 's' : ''})
+                  </span>
+                )}
+              </h2>
+              <button className="modal-close" onClick={() => setReceiptViewer({ ...receiptViewer, open: false })}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              {receiptViewer.images && receiptViewer.images.length > 0 ? (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(2, 1fr)', 
+                  gap: '1rem',
+                  maxHeight: '70vh',
+                  overflowY: 'auto',
+                  padding: '0.25rem'
+                }}>
+                  {receiptViewer.images.map((img, idx) => (
+                    img?.image ? (
+                      <div key={idx} style={{
+                        background: 'rgba(51, 65, 85, 0.3)',
+                        borderRadius: '0.5rem',
+                        padding: '0.5rem',
+                        border: '1px solid rgba(71, 85, 105, 0.3)',
+                        position: 'relative'
+                      }}>
+                        <div style={{ 
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '0.35rem'
+                        }}>
+                          {receiptViewer.images.length > 1 && (
+                            <div style={{ 
+                              fontSize: '0.75rem', 
+                              color: '#94a3b8'
+                            }}>
+                              Receipt {idx + 1}
+                            </div>
+                          )}
+                          {currentUser?.role === 'secretary' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteReceiptImage(receiptViewer.studentId, img.id);
+                              }}
+                              title="Delete this receipt image"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.2)',
+                                border: 'none',
+                                borderRadius: '0.25rem',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                padding: '0.2rem 0.4rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.2rem',
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                transition: 'all 0.2s',
+                                lineHeight: 1
+                              }}
+                              onMouseEnter={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.4)'}
+                              onMouseLeave={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.2)'}
+                            >
+                              <X size={12} /> Remove
+                            </button>
+                          )}
+                        </div>
+                        <img 
+                          src={img.image} 
+                          alt={`Receipt ${idx + 1}`}
+                          style={{ 
+                            width: '100%',
+                            height: 'auto',
+                            borderRadius: '0.375rem',
+                            display: 'block'
+                          }} 
+                        />
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: '2rem', color: '#64748b' }}>
+                  <Image size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                  <p>No receipt image available</p>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setReceiptViewer({ ...receiptViewer, open: false })}
+              >
+                Close
+              </button>
+              <button 
+                className="btn btn-success"
+                onClick={handleShareReceiptToWhatsApp}
+                style={{
+                  background: 'linear-gradient(135deg, #25d366 0%, #128c7e 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.5rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontWeight: 500,
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <MessageCircle size={16} /> Share to WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   );
 }
 

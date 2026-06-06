@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { staffService } from '../services/staffService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { 
   ClipboardList, Plus, Search, Edit2, Trash2, X, 
   CheckCircle, Clock, AlertTriangle, User, Download,

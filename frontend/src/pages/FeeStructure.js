@@ -993,11 +993,450 @@ Email: denizprimary@gmail.com`;
   );
 };
 
+// LALE Fee Structure Component
+const LALEFeeStructure = ({ navigate }) => {
+  const shareToWhatsApp = () => {
+    const message = `LALE BUSTANI CHILDREN'S ACADEMY EDUCARE and TRAINING CENTRE
+Everyone is an achiever
+Tel: +255 779 206 080
+Email: lalebustaniacademy@gmail.com
+P.O BOX 2254, Mpendae - Zanzibar
+
+FEE STRUCTURE 2026 (N)
+
+ALL FACILITIES | BABY | PRE | KG 1 | KG 2
+ADMISSION FEE: 150,000 | 150,000 | 150,000 | 150,000
+STATIONERY: 120,000 | 150,000 | 160,000 | 170,000
+ACTIVITIES FULL YEAR: 80,000 | 80,000 | 80,000 | 80,000
+TUITION FEE: 720,000 | 720,000 | 720,000 | 720,000
+MEALS: 720,000 | 720,000 | 720,000 | 720,000
+MADRASA: ___ | 130,000 | 150,000 | 150,000
+UNIFORMS: 100,000 | 100,000 | 100,000 | 100,000
+CAUTION MONEY: 15,000 | 15,000 | 15,000 | 15,000
+TOTAL FEES: 1,905,000 | 2,065,000 | 2,095,000 | 2,105,000
+
+INSTALLMENTS:
+BABY - 1st: 1,185,000 / 2nd: 720,000
+PRE KG - 1st: 1,285,000 / 2nd: 780,000
+KG 1 - 1st: 1,300,000 / 2nd: 795,000
+KG 2 - 1st: 1,310,000 / 2nd: 795,000
+
+BANK DETAILS
+BANK NAME: EXIM BANK
+ACCOUNT NAME: HOLISTIC EDUCATION OF ZANZIBAR
+ACCOUNT NUMBER: 0150020984
+CURRENCY: TANZANIAN SHILLINGS
+
+NOTES:
+APPLICATION FORM = 10,000 TSH
+DISCOUNT 1 FAMILY: 3RD CHILD = 50,000 | 4TH CHILD = 70,000 | 5TH CHILD = 80,000
+UNIFORMS: SKIRT 35,000, PINK T-SHIRT 25,000, TROUSER 35,000, BLUE T-SHIRT 25,000, SPORTS TROUSER 25,000, SPORTS T-SHIRT 15,000`;
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const feeData = {
+    newAdmission: {
+      baby: { admission: 150000, stationery: 120000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 0, uniforms: 100000, caution: 15000, total: 1905000 },
+      pre: { admission: 150000, stationery: 150000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 130000, uniforms: 100000, caution: 15000, total: 2065000 },
+      kg1: { admission: 150000, stationery: 160000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 150000, uniforms: 100000, caution: 15000, total: 2095000 },
+      kg2: { admission: 150000, stationery: 170000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 150000, uniforms: 100000, caution: 15000, total: 2105000 },
+    },
+    oldAdmission: {
+      baby: { stationery: 120000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 0, caution: 15000, total: 1655000 },
+      pre: { stationery: 150000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 130000, caution: 15000, total: 1815000 },
+      kg1: { stationery: 160000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 150000, caution: 15000, total: 1845000 },
+      kg2: { stationery: 170000, activities: 80000, tuition: 720000, meals: 720000, madrasa: 150000, caution: 15000, total: 1855000 },
+    },
+    installments: {
+      new: { baby: { first: 1185000, second: 720000 }, pre: { first: 1285000, second: 780000 }, kg1: { first: 1300000, second: 795000 }, kg2: { first: 1310000, second: 795000 } },
+      old: { baby: { first: 935000, second: 720000 }, pre: { first: 1035000, second: 780000 }, kg1: { first: 1050000, second: 795000 }, kg2: { first: 1060000, second: 795000 } }
+    }
+  };
+
+  const classes = ['baby', 'pre', 'kg1', 'kg2'];
+  const classLabels = { baby: 'BABY', pre: 'PRE', kg1: 'KG 1', kg2: 'KG 2' };
+
+  const formatCurrency = (amount) => {
+    if (amount === 0) return '—';
+    return amount.toLocaleString() + '/=';
+  };
+
+  return (
+    <div className="fee-structure-page">
+      <style>{`
+        .lale-fee-page {
+          padding: 1.5rem;
+          max-width: 1200px;
+          margin: 0 auto;
+          min-height: 100vh;
+        }
+        .lale-header {
+          background: linear-gradient(135deg, #e91e63 0%, #ad1457 100%);
+          color: white;
+          padding: 2rem;
+          border-radius: 1rem;
+          text-align: center;
+          margin-bottom: 2rem;
+          box-shadow: 0 4px 20px rgba(233, 30, 99, 0.3);
+        }
+        .lale-header h1 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          margin: 0 0 0.25rem;
+        }
+        .lale-header .motto {
+          font-style: italic;
+          font-size: 1rem;
+          opacity: 0.9;
+          margin-bottom: 0.75rem;
+        }
+        .lale-header .contact-info {
+          font-size: 0.8rem;
+          opacity: 0.85;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 1rem;
+        }
+        .lale-header .header-actions {
+          display: flex;
+          gap: 1rem;
+          justify-content: center;
+          margin-top: 1.5rem;
+        }
+        .lale-header .header-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1.25rem;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: none;
+        }
+        .lale-header .btn-back {
+          background: rgba(255,255,255,0.2);
+          color: white;
+        }
+        .lale-header .btn-back:hover {
+          background: rgba(255,255,255,0.3);
+        }
+        .lale-header .btn-whatsapp {
+          background: #25d366;
+          color: white;
+        }
+        .lale-header .btn-whatsapp:hover {
+          background: #128c7e;
+        }
+        .lale-section {
+          background: white;
+          border-radius: 1rem;
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+          margin-bottom: 1.5rem;
+        }
+        .lale-section-header {
+          padding: 1rem 1.5rem;
+          color: white;
+          font-weight: 700;
+          font-size: 1.1rem;
+        }
+        .lale-section-header.pink { background: linear-gradient(135deg, #e91e63 0%, #ad1457 100%); }
+        .lale-section-header.teal { background: linear-gradient(135deg, #00897b 0%, #00695c 100%); }
+        .lale-section-header.orange { background: linear-gradient(135deg, #ff8f00 0%, #e65100 100%); }
+        .lale-section-header.blue { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); }
+        .lale-section-content {
+          padding: 1rem 1.5rem;
+          overflow-x: auto;
+        }
+        .lale-fee-table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 600px;
+        }
+        .lale-fee-table th, .lale-fee-table td {
+          padding: 0.75rem;
+          text-align: center;
+          border: 1px solid #e2e8f0;
+        }
+        .lale-fee-table th {
+          background: #f8fafc;
+          font-weight: 600;
+          color: #475569;
+          font-size: 0.85rem;
+        }
+        .lale-fee-table td:first-child {
+          text-align: left;
+          font-weight: 500;
+          color: #1e293b;
+        }
+        .lale-fee-table td {
+          color: #1e293b;
+        }
+        .lale-fee-table .total-row {
+          background: #fce4ec;
+          font-weight: 700;
+        }
+        .lale-fee-table .total-row td {
+          color: #ad1457;
+        }
+        .lale-bank-card {
+          background: linear-gradient(135deg, #1e3a5f 0%, #0f4c81 100%);
+          color: white;
+          border-radius: 1rem;
+          padding: 1.5rem;
+          margin: 1rem 0;
+        }
+        .lale-bank-card h3 {
+          margin: 0 0 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .lale-bank-item {
+          display: flex;
+          justify-content: space-between;
+          padding: 0.5rem 0;
+          border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        .lale-bank-item:last-child {
+          border-bottom: none;
+        }
+        .lale-bank-label {
+          opacity: 0.8;
+        }
+        .lale-bank-value {
+          font-weight: 600;
+        }
+        .lale-notes {
+          background: #fef3c7;
+          border-left: 4px solid #f59e0b;
+          padding: 1rem;
+          margin: 1rem 0;
+          border-radius: 0 0.5rem 0.5rem 0;
+          font-size: 0.9rem;
+          color: #92400e;
+        }
+        .lale-uniform-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 0.75rem;
+          margin: 1rem 0;
+        }
+        .lale-uniform-item {
+          background: #f8fafc;
+          padding: 0.75rem;
+          border-radius: 0.5rem;
+          display: flex;
+          justify-content: space-between;
+        }
+        .lale-uniform-name {
+          color: #475569;
+          font-weight: 500;
+        }
+        .lale-uniform-price {
+          color: #ad1457;
+          font-weight: 600;
+        }
+        @media (max-width: 768px) {
+          .lale-fee-page { padding: 1rem; }
+          .lale-header h1 { font-size: 1.25rem; }
+          .lale-header .header-actions { flex-direction: column; }
+          .lale-fee-table { font-size: 0.8rem; }
+        }
+      `}</style>
+
+      <div className="lale-header">
+        <h1>LALE BUSTANI CHILDREN'S ACADEMY<br/>EDUCARE and TRAINING CENTRE</h1>
+        <div className="motto">"Everyone is an achiever"</div>
+        <div className="contact-info">
+          <span><Phone size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> +255 779 206 080</span>
+          <span><Mail size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> lalebustaniacademy@gmail.com</span>
+          <span><MapPin size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> P.O BOX 2254, Mpendae - Zanzibar</span>
+        </div>
+        <div className="header-actions">
+          <button className="header-btn btn-back" onClick={() => navigate(-1)}>
+            <ArrowLeft size={18} /> Back
+          </button>
+          <button className="header-btn btn-whatsapp" onClick={shareToWhatsApp}>
+            Share to WhatsApp
+          </button>
+        </div>
+      </div>
+
+      {/* NEW ADMISSION FEE STRUCTURE */}
+      <div className="lale-section">
+        <div className="lale-section-header pink">FEE STRUCTURE 2026 (N) - NEW ADMISSION</div>
+        <div className="lale-section-content">
+          <table className="lale-fee-table">
+            <thead>
+              <tr>
+                <th>ALL FACILITIES</th>
+                <th>BABY</th>
+                <th>PRE</th>
+                <th>KG 1</th>
+                <th>KG 2</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>ADMISSION FEE</td><td>150,000/=</td><td>150,000/=</td><td>150,000/=</td><td>150,000/=</td></tr>
+              <tr><td>STATIONERY</td><td>120,000/=</td><td>150,000/=</td><td>160,000/=</td><td>170,000/=</td></tr>
+              <tr><td>ACTIVITIES FULL YEAR</td><td>80,000/=</td><td>80,000/=</td><td>80,000/=</td><td>80,000/=</td></tr>
+              <tr><td>TUITION FEE</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td></tr>
+              <tr><td>MEALS</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td></tr>
+              <tr><td>MADRASA</td><td>—</td><td>130,000/=</td><td>150,000/=</td><td>150,000/=</td></tr>
+              <tr><td>UNIFORMS</td><td>100,000/=</td><td>100,000/=</td><td>100,000/=</td><td>100,000/=</td></tr>
+              <tr><td>CAUTION MONEY</td><td>15,000/=</td><td>15,000/=</td><td>15,000/=</td><td>15,000/=</td></tr>
+              <tr className="total-row"><td>TOTAL FEES</td><td>1,905,000/=</td><td>2,065,000/=</td><td>2,095,000/=</td><td>2,105,000/=</td></tr>
+            </tbody>
+          </table>
+
+          <h4 style={{ margin: '1.5rem 0 0.75rem', color: '#475569' }}>INSTALLMENTS</h4>
+          <table className="lale-fee-table">
+            <thead>
+              <tr>
+                <th>INSTALLMENT</th>
+                <th>BABY</th>
+                <th>PRE KG</th>
+                <th>KG 1</th>
+                <th>KG 2</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>1ST INSTALLMENT</td><td>1,185,000/=</td><td>1,285,000/=</td><td>1,300,000/=</td><td>1,310,000/=</td></tr>
+              <tr><td>2ND INSTALLMENT</td><td>720,000/=</td><td>780,000/=</td><td>795,000/=</td><td>795,000/=</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* OLD ADMISSION FEE STRUCTURE */}
+      <div className="lale-section">
+        <div className="lale-section-header teal">FEE STRUCTURE 2026 (O) - OLD/EXISTING STUDENTS</div>
+        <div className="lale-section-content">
+          <table className="lale-fee-table">
+            <thead>
+              <tr>
+                <th>ALL FACILITIES</th>
+                <th>BABY</th>
+                <th>PRE</th>
+                <th>KG 1</th>
+                <th>KG 2</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>STATIONERY</td><td>120,000/=</td><td>150,000/=</td><td>160,000/=</td><td>170,000/=</td></tr>
+              <tr><td>ACTIVITIES FULL YEAR</td><td>80,000/=</td><td>80,000/=</td><td>80,000/=</td><td>80,000/=</td></tr>
+              <tr><td>TUITION FEE</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td></tr>
+              <tr><td>MEALS</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td><td>720,000/=</td></tr>
+              <tr><td>MADRASA</td><td>—</td><td>130,000/=</td><td>150,000/=</td><td>150,000/=</td></tr>
+              <tr><td>CAUTION MONEY</td><td>15,000/=</td><td>15,000/=</td><td>15,000/=</td><td>15,000/=</td></tr>
+              <tr className="total-row"><td>TOTAL FEES</td><td>1,655,000/=</td><td>1,815,000/=</td><td>1,845,000/=</td><td>1,855,000/=</td></tr>
+            </tbody>
+          </table>
+
+          <h4 style={{ margin: '1.5rem 0 0.75rem', color: '#475569' }}>INSTALLMENTS</h4>
+          <table className="lale-fee-table">
+            <thead>
+              <tr>
+                <th>INSTALLMENT</th>
+                <th>BABY</th>
+                <th>PRE KG</th>
+                <th>KG 1</th>
+                <th>KG 2</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>1ST INSTALLMENT</td><td>935,000/=</td><td>1,035,000/=</td><td>1,050,000/=</td><td>1,060,000/=</td></tr>
+              <tr><td>2ND INSTALLMENT</td><td>720,000/=</td><td>780,000/=</td><td>795,000/=</td><td>795,000/=</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* BANK DETAILS */}
+      <div className="lale-section">
+        <div className="lale-section-header blue">BANK DETAILS</div>
+        <div className="lale-section-content">
+          <div className="lale-bank-card">
+            <h3><CreditCard size={20} /> EXIM BANK</h3>
+            <div className="lale-bank-item">
+              <span className="lale-bank-label">Bank Name</span>
+              <span className="lale-bank-value">EXIM BANK</span>
+            </div>
+            <div className="lale-bank-item">
+              <span className="lale-bank-label">Account Name</span>
+              <span className="lale-bank-value">HOLISTIC EDUCATION OF ZANZIBAR</span>
+            </div>
+            <div className="lale-bank-item">
+              <span className="lale-bank-label">Account Number</span>
+              <span className="lale-bank-value">0150020984</span>
+            </div>
+            <div className="lale-bank-item">
+              <span className="lale-bank-label">Currency</span>
+              <span className="lale-bank-value">TANZANIAN SHILLINGS</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* NOTES & UNIFORMS */}
+      <div className="lale-section">
+        <div className="lale-section-header orange">NOTES & UNIFORMS</div>
+        <div className="lale-section-content">
+          <div className="lale-notes">
+            <strong>APPLICATION FORM:</strong> 10,000 TSH
+          </div>
+          <div className="lale-notes">
+            <strong>DISCOUNT (1 FAMILY):</strong> 3rd Child = 50,000/= | 4th Child = 70,000/= | 5th Child = 80,000/=
+          </div>
+          
+          <h4 style={{ margin: '1.5rem 0 0.75rem', color: '#475569' }}>UNIFORMS</h4>
+          <div className="lale-uniform-grid">
+            <div className="lale-uniform-item">
+              <span className="lale-uniform-name">Skirt</span>
+              <span className="lale-uniform-price">35,000/=</span>
+            </div>
+            <div className="lale-uniform-item">
+              <span className="lale-uniform-name">Pink T-Shirt</span>
+              <span className="lale-uniform-price">25,000/=</span>
+            </div>
+            <div className="lale-uniform-item">
+              <span className="lale-uniform-name">Trouser</span>
+              <span className="lale-uniform-price">35,000/=</span>
+            </div>
+            <div className="lale-uniform-item">
+              <span className="lale-uniform-name">Blue T-Shirt</span>
+              <span className="lale-uniform-price">25,000/=</span>
+            </div>
+            <div className="lale-uniform-item">
+              <span className="lale-uniform-name">Sports Trouser</span>
+              <span className="lale-uniform-price">25,000/=</span>
+            </div>
+            <div className="lale-uniform-item">
+              <span className="lale-uniform-name">Sports T-Shirt</span>
+              <span className="lale-uniform-price">15,000/=</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main FeeStructure Component - Routes to chain-specific structure
 const FeeStructure = () => {
   const navigate = useNavigate();
   const currentUser = useSelector(selectCurrentUser);
   const userChain = currentUser?.chain?.toUpperCase();
+
+  // Show LALE fee structure for LALE chain users
+  if (userChain === 'LALE') {
+    return <LALEFeeStructure navigate={navigate} />;
+  }
 
   // Show DLP fee structure for DLP chain users
   if (userChain === 'DLP') {

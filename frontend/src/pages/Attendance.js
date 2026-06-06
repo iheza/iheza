@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { dataService } from '../services/dataService';
 import { studentService } from '../services/studentService';
-import { toast } from 'sonner';
+import { toast } from '../hooks/useSoundEnabledToast';
 import { Printer, FileText, BookOpen } from 'lucide-react';
 import ChainToggle from '../components/ChainToggle';
 
@@ -26,6 +26,9 @@ function Attendance() {
   const [selectedChain, setSelectedChain] = useState('');
   const userChain = currentUser?.chain;
   const canFilterChains = userChain === 'IHEZA';
+  
+  // Directors and Coordinators (IHEZA roles) cannot record attendance
+  const canRecordAttendance = currentUser?.role !== 'director' && currentUser?.role !== 'coordinator';
 
   // Get days in selected month
   const getDaysInMonth = () => {
@@ -789,14 +792,16 @@ function Attendance() {
             <button className="action-btn" onClick={handleDownloadDoc} title="Download as DOC">
               <FileText size={16} /> Download
             </button>
-            <button 
-              className="action-btn save" 
-              onClick={saveAllAttendance}
-              disabled={saving || !selectedClass}
-              data-testid="save-attendance-btn"
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </button>
+            {canRecordAttendance && (
+              <button 
+                className="action-btn save" 
+                onClick={saveAllAttendance}
+                disabled={saving || !selectedClass}
+                data-testid="save-attendance-btn"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            )}
           </div>
         </div>
         
@@ -841,7 +846,8 @@ function Attendance() {
                         <td 
                           key={day}
                           className={`day-cell ${statusClass}`}
-                          onClick={() => cycleAttendance(student.id, day)}
+                          onClick={() => canRecordAttendance && cycleAttendance(student.id, day)}
+                          style={{ cursor: canRecordAttendance ? 'pointer' : 'default' }}
                           data-testid={`cell-${student.id}-${day}`}
                         >
                           {symbol}
@@ -861,7 +867,7 @@ function Attendance() {
             Days 1–{daysInMonth} 
             <span className="month-hint">{getMonthYearDisplay()}</span>
             <span style={{ marginLeft: '1rem', color: '#94a3b8' }}>
-              (tap cell to cycle: / → \ → . → empty)
+              {canRecordAttendance ? '(tap cell to cycle: / → \ → . → empty)' : '(view only)'}
             </span>
           </p>
           {students.length > 0 && (
