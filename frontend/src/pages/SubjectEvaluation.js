@@ -509,7 +509,13 @@ const SubjectEvaluation = () => {
         type: 'application/msword',
         size: blob.size,
         data: base64Data,
-        source: 'subject_evaluation'
+        source: 'subject_evaluation',
+        metadata: {
+          type: 'subject_evaluation',
+          subject: subject,
+          class: classLevel,
+          teacher: teacherName || 'Unknown'
+        }
       };
 
       // Always save to localStorage first (for Documents component)

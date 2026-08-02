@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config/api';
+import { apiClient } from '../services/authService';
 import './Forms.css';
 import { staffService } from '../services/staffService';
 import { useToast } from '../components/Common/Toast';
@@ -82,28 +83,16 @@ const LessonPlanForm = () => {
     };
     const loadSubjects = async () => {
       try {
-        const token = localStorage.getItem('sessionToken');
-        const response = await fetch(`${API_URL}/api/subjects`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setSubjects(data);
-        }
+        const response = await apiClient.get('/subjects');
+        setSubjects(response.data);
       } catch (error) {
         console.error('Error loading subjects:', error);
       }
     };
     const loadClasses = async () => {
       try {
-        const token = localStorage.getItem('sessionToken');
-        const response = await fetch(`${API_URL}/api/classes`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setClasses(data);
-        }
+        const response = await apiClient.get('/classes');
+        setClasses(response.data);
       } catch (error) {
         console.error('Error loading classes:', error);
       }
@@ -274,7 +263,13 @@ const LessonPlanForm = () => {
         type: 'application/msword',
         size: blob.size,
         data: base64Data,
-        source: 'lesson_plan'
+        source: 'lesson_plan',
+        metadata: {
+          type: 'lesson_plan',
+          teacher: lessonPlan.teacherName,
+          subject: lessonPlan.subject,
+          class: lessonPlan.class
+        }
       };
 
       // Always save to localStorage first (for Documents component)

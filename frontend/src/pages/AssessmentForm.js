@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config/api';
+import { apiClient } from '../services/authService';
 import './Forms.css';
 import { useToast } from '../components/Common/Toast';
 import { staffService } from '../services/staffService';
@@ -21,12 +22,126 @@ const AssessmentForm = () => {
     }
   ]);
 
-  const [subject, setSubject] = useState("MATHEMATICS");
+  const [subject, setSubject] = useState("");
+  const [subjects, setSubjects] = useState([]);
+  const [customSubject, setCustomSubject] = useState("");
+  const [showCustomSubject, setShowCustomSubject] = useState(false);
   const [teacherRemarks, setTeacherRemarks] = useState("");
   const [teacherSignature, setTeacherSignature] = useState("");
   const [teachers, setTeachers] = useState([]);
   const [teacherId, setTeacherId] = useState("");
   const [teacherName, setTeacherName] = useState("");
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  
+  // Class selection state
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState("");
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
+  // Generate a storage key based on teacher + subject
+  const getStorageKey = () => {
+    const teacherKey = teacherName ? teacherName.replace(/\s+/g, '_') : 'default';
+    const subjectKey = subject ? subject.replace(/\s+/g, '_') : 'default';
+    return `assessmentData_${teacherKey}_${subjectKey}`;
+  };
+
+  // Load saved data from localStorage when teacher or subject changes
+  useEffect(() => {
+    if (!dataLoaded && teacherName && subject) {
+      try {
+        const storageKey = getStorageKey();
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.students && parsed.students.length > 0) {
+            setStudents(parsed.students);
+          }
+          if (parsed.teacherRemarks !== undefined) setTeacherRemarks(parsed.teacherRemarks);
+          if (parsed.teacherSignature !== undefined) setTeacherSignature(parsed.teacherSignature);
+          if (parsed.savedAt) setLastSaved(parsed.savedAt);
+        }
+      } catch (error) {
+        console.error('Error loading saved assessment data:', error);
+      }
+      setDataLoaded(true);
+    }
+  }, [teacherName, subject, dataLoaded]);
+
+  // Auto-save to localStorage whenever data changes (with debounce)
+  useEffect(() => {
+    if (teacherName && subject && dataLoaded) {
+      const timer = setTimeout(() => {
+        try {
+          const storageKey = getStorageKey();
+          const saveData = {
+            students,
+            subject,
+            teacherRemarks,
+            teacherSignature,
+            teacherName,
+            teacherId,
+            savedAt: new Date().toISOString()
+          };
+          localStorage.setItem(storageKey, JSON.stringify(saveData));
+          setLastSaved(new Date().toISOString());
+        } catch (error) {
+          console.error('Error auto-saving assessment data:', error);
+        }
+      }, 500); // 500ms debounce to avoid excessive writes
+      return () => clearTimeout(timer);
+    }
+  }, [students, subject, teacherRemarks, teacherSignature, teacherName, teacherId, dataLoaded]);
+
+  // Reset dataLoaded when teacher changes so we load the new teacher's data
+  const handleTeacherChange = (selectedId) => {
+    setTeacherId(selectedId);
+    const selectedTeacher = teachers.find(t => t.id === selectedId);
+    if (selectedTeacher) {
+      const name = selectedTeacher.name || `${selectedTeacher.first_name} ${selectedTeacher.last_name}`;
+      // If teacher changed, reset dataLoaded to trigger loading their saved data
+      if (name !== teacherName) {
+        setDataLoaded(false);
+        setTeacherName(name);
+        setTeacherSignature(name);
+      } else {
+        setTeacherName(name);
+        setTeacherSignature(name);
+      }
+    } else {
+      setTeacherName("");
+      setTeacherSignature("");
+    }
+  };
+
+  // Clear saved data for current teacher+subject
+  const clearSavedData = () => {
+    if (window.confirm('Clear all saved assessment data for this teacher and subject?')) {
+      try {
+        const storageKey = getStorageKey();
+        localStorage.removeItem(storageKey);
+        setStudents([{
+          id: 1,
+          name: "",
+          classwork: Array(10).fill(""),
+          homework: Array(5).fill(""),
+          topicTests: Array(3).fill(""),
+          term40: "",
+          term60: "",
+          total: 0,
+          grade: "",
+          position: 0,
+          teacherRemarks: ""
+        }]);
+        setTeacherRemarks("");
+        setTeacherSignature("");
+        setLastSaved(null);
+        if (addToast) addToast('Saved data cleared.', 'info');
+      } catch (error) {
+        console.error('Error clearing saved data:', error);
+      }
+    }
+  };
 
   const gradingScale = [
     { min: 81, max: 100, grade: 'A' },
@@ -211,6 +326,79 @@ const AssessmentForm = () => {
     setStudents(withPositions);
   };
 
+  // Load classes and subjects on mount
+  useEffect(() => {
+    const loadClasses = async () => {
+      try {
+        const response = await apiClient.get('/classes');
+        setClasses(response.data || []);
+      } catch (error) {
+        console.error('Failed to load classes:', error);
+      }
+    };
+    const loadSubjects = async () => {
+      try {
+        const response = await apiClient.get('/subjects');
+        const subjectList = response.data || [];
+        setSubjects(subjectList);
+        // Auto-select first subject if none selected
+        if (!subject && subjectList.length > 0) {
+          setSubject(subjectList[0].name);
+        }
+      } catch (error) {
+        console.error('Failed to load subjects:', error);
+      }
+    };
+    loadClasses();
+    loadSubjects();
+  }, []);
+
+  // Load students from selected class
+  const loadStudentsFromClass = async () => {
+    if (!selectedClass) {
+      if (addToast) addToast('Please select a class first.', 'warning');
+      return;
+    }
+    
+    setLoadingStudents(true);
+    try {
+      const response = await apiClient.get('/students', {
+        params: { class_name: selectedClass }
+      });
+      
+      const studentData = response.data;
+      
+      if (!studentData || studentData.length === 0) {
+        if (addToast) addToast(`No students found in class "${selectedClass}".`, 'warning');
+        setLoadingStudents(false);
+        return;
+      }
+      
+      // Map students to assessment format
+      const mappedStudents = studentData.map((s, index) => ({
+        id: index + 1,
+        name: `${s.first_name} ${s.last_name}`,
+        classwork: Array(10).fill(""),
+        homework: Array(5).fill(""),
+        topicTests: Array(3).fill(""),
+        term40: "",
+        term60: "",
+        total: 0,
+        grade: "",
+        position: index + 1,
+        teacherRemarks: ""
+      }));
+      
+      setStudents(mappedStudents);
+      if (addToast) addToast(`Loaded ${mappedStudents.length} students from "${selectedClass}".`, 'success');
+    } catch (error) {
+      console.error('Error loading students:', error);
+      if (addToast) addToast('Failed to load students. Check console for details.', 'error');
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
   const saveForm = async () => {
     const saveButton = document.querySelector('.btn-primary');
     const originalButtonText = saveButton.textContent;
@@ -309,7 +497,12 @@ const AssessmentForm = () => {
         type: 'application/msword',
         size: blob.size,
         data: base64Data,
-        source: 'assessment'
+        source: 'assessment',
+        metadata: {
+          type: 'assessment',
+          subject: subject,
+          teacher: teacherName || teacherSignature || 'Unknown'
+        }
       };
 
       // Always save to localStorage first (for Documents component)
@@ -432,19 +625,114 @@ const AssessmentForm = () => {
         <button className="btn btn-success" onClick={calculateAll}>Recalculate All</button>
         <button className="btn btn-primary" onClick={saveForm}>Save as Word Document</button>
         <button className="btn btn-secondary" onClick={printAssessment}>Print</button>
+        <button className="btn btn-warning" onClick={clearSavedData} style={{ background: '#dc3545', color: 'white', border: 'none' }}>Clear Saved Data</button>
+        {lastSaved && (
+          <span style={{ fontSize: '10px', color: '#6b7280', marginLeft: '10px', alignSelf: 'center' }}>
+            Auto-saved: {new Date(lastSaved).toLocaleTimeString()}
+          </span>
+        )}
+      </div>
+
+      {/* Class Selection Section */}
+      <div className="class-selector no-print" style={{ 
+        background: '#f0f4ff', 
+        border: '1px solid #c7d2fe', 
+        borderRadius: '8px', 
+        padding: '12px 16px', 
+        marginBottom: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        flexWrap: 'wrap'
+      }}>
+        <label style={{ fontWeight: 'bold', fontSize: '12px', color: '#4338ca' }}>
+          📋 Select Class:
+        </label>
+        <select
+          value={selectedClass}
+          onChange={(e) => setSelectedClass(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            border: '1px solid #c7d2fe',
+            borderRadius: '6px',
+            fontSize: '12px',
+            minWidth: '200px',
+            background: 'white'
+          }}
+        >
+          <option value="">-- Choose a class --</option>
+          {classes.map(c => (
+            <option key={c.id || c.name} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={loadStudentsFromClass}
+          disabled={loadingStudents || !selectedClass}
+          style={{
+            padding: '8px 16px',
+            background: loadingStudents ? '#9ca3af' : '#4338ca',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            cursor: loadingStudents ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          {loadingStudents ? '⏳ Loading...' : '👥 Load Students'}
+        </button>
+        {students.length > 0 && (
+          <span style={{ fontSize: '11px', color: '#6b7280' }}>
+            {students.length} student{students.length !== 1 ? 's' : ''} loaded
+          </span>
+        )}
       </div>
 
       <div className="assessment-form" style={{ overflowX: 'auto' }}>
         <table className="assessment-table" style={{ fontSize: '8px', minWidth: '1400px' }}>
           <thead>
             <tr>
-              <th rowSpan="2" style={{ width: '120px' }}>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  style={{ width: '100%', background: 'transparent', border: 'none', color: 'white', fontWeight: 'bold', textAlign: 'center' }}
-                />
+              <th rowSpan="2" style={{ width: '160px', padding: '4px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <select
+                    value={showCustomSubject ? '__custom__' : subject}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setShowCustomSubject(true);
+                        setSubject(customSubject || '');
+                      } else {
+                        setShowCustomSubject(false);
+                        setSubject(e.target.value);
+                      }
+                    }}
+                    style={{ width: '100%', background: '#fff', border: '1px solid #ccc', borderRadius: '3px', color: '#333', fontWeight: 'bold', fontSize: '9px', padding: '2px 4px', cursor: 'pointer' }}
+                  >
+                    <option value="">-- Select Subject --</option>
+                    {subjects.map(s => (
+                      <option key={s.id || s.name} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                    <option value="__custom__">✏️ Custom Subject...</option>
+                  </select>
+                  {showCustomSubject && (
+                    <input
+                      type="text"
+                      placeholder="Type custom subject..."
+                      value={subject}
+                      onChange={(e) => {
+                        setSubject(e.target.value);
+                        setCustomSubject(e.target.value);
+                      }}
+                      style={{ width: '100%', background: '#fff', border: '1px solid #aaa', borderRadius: '3px', color: '#333', fontWeight: 'bold', fontSize: '9px', padding: '2px 4px' }}
+                    />
+                  )}
+                </div>
               </th>
               <th colSpan="10">Kazi za darasa (Class Work) = 10</th>
               <th rowSpan="2">AV<br/>10</th>
@@ -582,19 +870,7 @@ const AssessmentForm = () => {
           <label style={{ fontSize: '10px', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Select Teacher:</label>
           <select
             value={teacherId}
-            onChange={(e) => {
-              const selectedId = e.target.value;
-              setTeacherId(selectedId);
-              const selectedTeacher = teachers.find(t => t.id === selectedId);
-              if (selectedTeacher) {
-                const name = selectedTeacher.name || `${selectedTeacher.first_name} ${selectedTeacher.last_name}`;
-                setTeacherName(name);
-                setTeacherSignature(name);
-              } else {
-                setTeacherName("");
-                setTeacherSignature("");
-              }
-            }}
+            onChange={(e) => handleTeacherChange(e.target.value)}
             style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '10px' }}
           >
             <option value="">-- Select Teacher --</option>

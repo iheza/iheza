@@ -31,6 +31,8 @@ import ChainLandingPage from './pages/ChainLandingPage';
 import Documents from './pages/Documents';
 import Bin from './pages/Bin';
 import Expenses from './pages/Expenses';
+import ExaminationReports from './pages/ExaminationReports';
+import EBook from './pages/EBook';
 
 // Components
 import Layout from './components/Layout';
@@ -42,7 +44,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import './App.css';
 
 // Clear all caches on app load to fix stale cache issues (bump version to force clear)
-const CACHE_CLEAR_VERSION = 'v5-20260420a';
+const CACHE_CLEAR_VERSION = 'v6-20260622a';
 if (typeof window !== 'undefined') {
   const cacheCleared = localStorage.getItem('iheza_cache_cleared');
   if (cacheCleared !== CACHE_CLEAR_VERSION && 'caches' in window) {
@@ -72,34 +74,61 @@ if (typeof window !== 'undefined') {
 }
 
 // Register Service Worker with auto-update handling
+// Uses try/catch and multiple strategies to handle deployment environments
+// that may serve sw.js with incorrect MIME types
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('IHEZA SW registered:', registration.scope);
-        
-        // Check for updates immediately and periodically
-        registration.update();
-        setInterval(() => {
-          registration.update();
-        }, 60 * 1000); // Check every minute
-        
-        // Handle updates
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          console.log('New service worker found, installing...');
+    // Helper to attempt SW registration with a specific URL
+    const attemptRegistration = (swUrl) => {
+      return navigator.serviceWorker.register(swUrl)
+        .then((registration) => {
+          console.log('IHEZA SW registered:', registration.scope);
           
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New version available - skip waiting and reload
-              console.log('New version ready, activating...');
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
+          // Check for updates immediately and periodically
+          registration.update();
+          setInterval(() => {
+            registration.update();
+          }, 60 * 1000); // Check every minute
+          
+          // Handle updates
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            if (newWorker) {
+              console.log('New service worker found, installing...');
+              
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New version available - skip waiting and reload
+                  console.log('New version ready, activating...');
+                  newWorker.postMessage({ type: 'SKIP_WAITING' });
+                }
+              });
             }
           });
+          
+          return registration;
         });
-      })
+    };
+
+    // Try primary registration first
+    attemptRegistration('/sw.js')
       .catch((error) => {
-        console.log('IHEZA SW registration failed:', error);
+        console.log('IHEZA SW primary registration failed:', error.message);
+        // Some deployment servers serve sw.js as text/html.
+        // Try with explicit Content-Type workaround: register via blob URL
+        console.log('Attempting SW registration via fetch fallback...');
+        fetch('/sw.js')
+          .then(response => response.text())
+          .then(swContent => {
+            // Create a blob with correct MIME type and register from it
+            const blob = new Blob([swContent], { type: 'application/javascript' });
+            const blobUrl = URL.createObjectURL(blob);
+            return attemptRegistration(blobUrl);
+          })
+          .catch(fallbackError => {
+            console.log('IHEZA SW fallback registration also failed:', fallbackError.message);
+            console.log('App will work without service worker (offline support disabled)');
+          });
       });
     
     // Listen for controller change (new SW took over)
@@ -189,6 +218,8 @@ function App() {
                   <Route path="documents" element={<Documents />} />
                   <Route path="bin" element={<Bin />} />
                   <Route path="expenses" element={<Expenses />} />
+                  <Route path="examination-reports" element={<ExaminationReports />} />
+                  <Route path="ebook" element={<EBook />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>

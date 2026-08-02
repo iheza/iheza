@@ -1,0 +1,720 @@
+RE <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Against the Tides · Grade 5 Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- OCEAN BACKGROUND ----- */
+    body {
+      background: #0a1628;
+      background-image:
+        radial-gradient(ellipse at 30% 20%, #0d2840 0%, #0a1628 60%),
+        radial-gradient(ellipse at 70% 80%, #0a2030 0%, #0a1628 50%),
+        radial-gradient(circle at 50% 0%, #1a3a5a 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- WAVE PARTICLES ----- */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      background-image:
+        radial-gradient(2px 2px at 10% 20%, rgba(100, 180, 255, 0.3), transparent),
+        radial-gradient(2px 2px at 30% 60%, rgba(100, 180, 255, 0.2), transparent),
+        radial-gradient(3px 3px at 50% 10%, rgba(100, 180, 255, 0.3), transparent),
+        radial-gradient(2px 2px at 70% 40%, rgba(100, 180, 255, 0.2), transparent),
+        radial-gradient(3px 3px at 90% 80%, rgba(100, 180, 255, 0.3), transparent),
+        radial-gradient(2px 2px at 15% 85%, rgba(100, 180, 255, 0.2), transparent),
+        radial-gradient(2px 2px at 85% 15%, rgba(100, 180, 255, 0.2), transparent),
+        radial-gradient(3px 3px at 45% 45%, rgba(100, 180, 255, 0.3), transparent),
+        radial-gradient(2px 2px at 60% 90%, rgba(100, 180, 255, 0.2), transparent),
+        radial-gradient(2px 2px at 25% 35%, rgba(100, 180, 255, 0.2), transparent);
+      animation: waveFloat 6s ease-in-out infinite alternate;
+    }
+    body::after {
+      background-image:
+        radial-gradient(1px 1px at 20% 50%, rgba(200, 230, 255, 0.3), transparent),
+        radial-gradient(1px 1px at 60% 30%, rgba(200, 230, 255, 0.2), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(200, 230, 255, 0.2), transparent),
+        radial-gradient(1px 1px at 40% 80%, rgba(200, 230, 255, 0.3), transparent),
+        radial-gradient(2px 2px at 10% 70%, rgba(200, 230, 255, 0.2), transparent);
+      animation: waveFloat 8s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes waveFloat {
+      0% { opacity: 0.2; transform: translateY(0); }
+      50% { opacity: 0.5; transform: translateY(-10px); }
+      100% { opacity: 0.3; transform: translateY(5px); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #f0f8ff;
+      background-image:
+        linear-gradient(to bottom, #f0f8ff 0%, #e8f0f8 50%, #f0f8ff 100%);
+      border-radius: 24px;
+      padding: 3rem 3.5rem;
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(70, 130, 180, 0.2),
+        inset 0 0 40px rgba(70, 130, 180, 0.05);
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(70, 130, 180, 0.15);
+    }
+
+    /* ----- DECORATIVE CORNER ORNAMENTS ----- */
+    .playbook::before {
+      content: '🌊';
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+    .playbook::after {
+      content: '🌊';
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+
+    /* ----- TITLE PAGE ----- */
+    .title-page {
+      text-align: center;
+      padding: 2rem 0 3rem 0;
+      border-bottom: 2px solid rgba(70, 130, 180, 0.2);
+      margin-bottom: 2rem;
+    }
+
+    .title-page h1 {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 42px;
+      color: #0a1628;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 0 rgba(70, 130, 180, 0.15);
+      font-style: normal !important;
+    }
+
+    .title-page .subtitle {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 22px;
+      color: #4a6a8a;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-style: normal !important;
+    }
+
+    .title-page .author {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 18px;
+      color: #6a8aaa;
+      font-weight: 500;
+      font-style: normal !important;
+    }
+
+    .title-page .title-emoji {
+      font-size: 64px;
+      display: block;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    /* ----- CHAPTER HEADERS ----- */
+    .chapter-header {
+      margin: 2.5rem 0 1.5rem 0;
+      padding: 1rem 0;
+      border-top: 2px solid rgba(70, 130, 180, 0.2);
+      border-bottom: 2px solid rgba(70, 130, 180, 0.2);
+      text-align: center;
+    }
+
+    .chapter-number {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 18px;
+      color: #4682b4;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+      font-style: normal !important;
+    }
+
+    .chapter-title {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #0a1628;
+      letter-spacing: 0.03em;
+      font-style: normal !important;
+    }
+
+    /* ----- CHAPTER EMOJI DECORATION ----- */
+    .chapter-emoji {
+      text-align: center;
+      font-size: 48px;
+      margin: 1rem 0;
+      line-height: 1.3;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    .playbook p {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #1a2a3a;
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 8px;
+      transition: background 0.3s ease;
+      font-style: normal !important;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT (ocean blue glow) ----- */
+    .speaking-sentence {
+      background: rgba(70, 130, 180, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(70, 130, 180, 0.15), inset 0 0 20px rgba(70, 130, 180, 0.05);
+      animation: oceanGlow 1.2s ease-in-out;
+      border: 1px solid rgba(70, 130, 180, 0.1);
+      font-style: normal !important;
+    }
+
+    .active-sentence {
+      background: rgba(70, 130, 180, 0.12) !important;
+    }
+
+    @keyframes oceanGlow {
+      0% { box-shadow: 0 0 0 rgba(70, 130, 180, 0); }
+      50% { box-shadow: 0 0 40px rgba(70, 130, 180, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(70, 130, 180, 0.15); }
+    }
+
+    /* ----- THE END ----- */
+    .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #4682b4;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(70, 130, 180, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+
+    .the-end::before {
+      content: '🌊 🌊 🌊 🌊 🌊';
+      display: block;
+      font-size: 18px;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 768px) {
+      .playbook {
+        padding: 1.5rem;
+        font-size: 18px;
+      }
+      .title-page h1 { font-size: 32px; }
+      .chapter-title { font-size: 22px; }
+      .playbook p { font-size: 18px; }
+      .title-page .title-emoji { font-size: 48px; }
+    }
+
+    @media (max-width: 480px) {
+      .playbook {
+        padding: 1rem;
+        font-size: 16px;
+      }
+      .title-page h1 { font-size: 26px; }
+      .chapter-title { font-size: 18px; }
+      .playbook p { font-size: 16px; }
+      .title-page .title-emoji { font-size: 40px; }
+    }
+
+    /* ----- CLICKABLE CURSOR ----- */
+    .playbook p { cursor: pointer; }
+  </style>
+</head>
+<body>
+<div class="playbook">
+
+  <!-- ============================================ -->
+  <!-- TITLE PAGE                                    -->
+  <!-- ============================================ -->
+  <div class="title-page">
+    <span class="title-emoji">🌊🌅🏊‍♂️🌊</span>
+    <h1>Against the Tides</h1>
+    <div class="subtitle">A Story About Courage and Respecting the Sea</div>
+    <div class="author">Grade 5 · IHEZA Education</div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 1                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 1</div>
+    <div class="chapter-title">The Shore</div>
+  </div>
+  <div class="chapter-emoji">🏖️🌊🌅🕊️</div>
+
+  <p>Sixteen-year-old Liam had always been drawn to the ocean. The way the waves crashed against the jagged rocks, the salty breeze that carried the cries of seagulls, and the endless horizon that seemed to promise freedom—it all called to him. But his parents had forbidden him from swimming there. The beach was known for its strong currents and unpredictable tides, and just last year, a local teenager had drowned. His parents' warnings were stern and unyielding: Stay away from the water.</p>
+
+  <p>But Liam was stubborn. He felt invincible, as most teenagers do. He had been swimming since he was a kid, and he was confident in his abilities. The ocean wasn't going to beat him. Besides, his parents were just being overprotective, right?</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 2                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 2</div>
+    <div class="chapter-title">The Decision</div>
+  </div>
+  <div class="chapter-emoji">☀️🏊‍♂️🏖️😎</div>
+
+  <p>It was a hot summer afternoon, and the sun hung high in the sky, casting a golden glow over the water. Liam's parents were out running errands, and he had the house to himself. The ocean's call was too strong to resist. He grabbed his swim trunks, a towel, and his phone, and headed to the beach.</p>
+
+  <p>When he arrived, the shore was deserted. The waves were rougher than usual, but Liam didn't care. He stripped down to his trunks and waded into the water, the coolness a relief from the heat. The waves crashed around him, and he laughed, feeling alive.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 3                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 3</div>
+    <div class="chapter-title">The Current</div>
+  </div>
+  <div class="chapter-emoji">🌊😰💨🌪️</div>
+
+  <p>At first, everything was fine. Liam swam out farther, enjoying the thrill of being in the open water. But then, something changed. The current grew stronger, pulling him away from the shore. He tried to swim back, but the waves were relentless, dragging him deeper and deeper.</p>
+
+  <p>Panic set in. His arms and legs burned as he fought against the water, but it was no use. The ocean was winning. He gasped for air, but a wave crashed over him, filling his lungs with saltwater. He was drowning.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 4                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 4</div>
+    <div class="chapter-title">The Fight</div>
+  </div>
+  <div class="chapter-emoji">💪😤🏊‍♂️🌊</div>
+
+  <p>As he sank beneath the surface, Liam's mind raced. He thought about his parents, their warnings, and how he had ignored them. He thought about all the things he hadn't done yet, all the dreams he hadn't chased. He wasn't ready to die.</p>
+
+  <p>Summoning every ounce of strength, he kicked his legs and clawed at the water, desperate to reach the surface. His lungs screamed for air, and his vision blurred, but he refused to give up. Finally, his head broke through the waves, and he gasped, coughing up water.</p>
+
+  <p>The shore was still far away, but Liam wasn't going to let the ocean take him. He focused on his breathing and swam with slow, deliberate strokes, conserving his energy. The current was still strong, but he was stronger.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 5                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 5</div>
+    <div class="chapter-title">The Shore</div>
+  </div>
+  <div class="chapter-emoji">🏖️😮‍💨🌅🙏</div>
+
+  <p>It felt like an eternity, but eventually, Liam felt sand beneath his feet. He stumbled onto the shore, collapsing onto the beach. His body was exhausted, and his throat burned from the saltwater, but he was alive.</p>
+
+  <p>As he lay there, staring up at the sky, he realized how foolish he had been. The ocean wasn't something to be conquered—it was a force to be respected. His parents hadn't been overprotective; they had been right.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 6                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 6</div>
+    <div class="chapter-title">The Lesson</div>
+  </div>
+  <div class="chapter-emoji">🏠😢🤗💙</div>
+
+  <p>When Liam got home, his parents were frantic. They had found his note about going to the beach and had been searching for him. He told them everything, tears streaming down his face as he apologized for disobeying them.</p>
+
+  <p>To his surprise, they didn't yell. Instead, they hugged him tightly, relieved that he was safe. His dad looked him in the eye and said, "Liam, we're not trying to control you. We just want you to be safe. The ocean is beautiful, but it's also dangerous. Promise us you'll never take that kind of risk again."</p>
+
+  <p>Liam nodded. "I promise."</p>
+
+  <p>From that day on, Liam still visited the beach, but he never swam alone again. He had learned the hard way that sometimes, the people who love you know best. And sometimes, the bravest thing you can do is listen.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 7                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 7</div>
+    <div class="chapter-title">The Forbidden Shore</div>
+  </div>
+  <div class="chapter-emoji">🏖️👦😟🆘</div>
+
+  <p>Every summer, Liam watched enviously as other children splashed in the waves, built sandcastles, and swam out to the floating dock. He longed to join them, but the memory of his parents' stern warnings kept him rooted to the shore. Instead, he spent his days playing in the dunes, collecting seashells, and imagining grand adventures.</p>
+
+  <p>One warm afternoon, Liam was building a fort out of driftwood when his best friend, Max, came running toward him, his face pale and his breath ragged. "Liam! Liam! There's a little boy drowning out there! You have to help!"</p>
+
+  <p>Liam's heart skipped a beat. He turned toward the sea, where he could see a small figure flailing in the water, far from the safety of the shore. The boy's cries for help were faint but desperate, carried by the wind.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 8                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 8</div>
+    <div class="chapter-title">The Weight of Fear</div>
+  </div>
+  <div class="chapter-emoji">😰🤔💪🏊‍♂️</div>
+
+  <p>Liam froze. His parents' words echoed in his mind: "No swimming, Liam. Never go into the sea." He felt torn between his instinct to help and his fear of disobeying his parents. What if he got hurt? What if he couldn't save the boy? What if the ocean swallowed them both?</p>
+
+  <p>Max grabbed his arm, shaking him out of his thoughts. "Liam, you're the closest! You have to do something! No one else is around!"</p>
+
+  <p>Liam's hands trembled as he looked back at the drowning boy. The child's struggles were growing weaker, his head dipping below the surface more frequently. Time was running out.</p>
+
+  <p>Taking a deep breath, Liam made his decision. He kicked off his shoes and sprinted toward the water, his heart pounding in his chest. The cool waves lapped at his ankles, then his knees, as he waded deeper. The ocean seemed vast and endless, its depths unknown and terrifying. But Liam pushed forward, driven by the image of the boy's frightened face.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 9                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 9</div>
+    <div class="chapter-title">Into the Deep</div>
+  </div>
+  <div class="chapter-emoji">🌊🏊‍♂️👦🆘💪</div>
+
+  <p>The water reached Liam's waist, then his chest. He had never been this far out before. The current tugged at him, threatening to pull him under. Panic surged through him, but he forced himself to focus. He could see the boy just a few feet ahead, his small hand breaking the surface one last time before disappearing beneath the waves.</p>
+
+  <p>Liam dove forward, his arms slicing through the water. He reached the spot where the boy had gone under and plunged beneath the surface. The saltwater stung his eyes, but he kept them open, searching desperately. Finally, he saw the boy, sinking slowly, his eyes closed and his body limp.</p>
+
+  <p>Summoning all his strength, Liam grabbed the boy's arm and pulled him upward. Breaking the surface, he gasped for air and wrapped his arm around the boy's chest. The child was unconscious, his face pale and his lips blue. Liam kicked hard, fighting against the current to drag them both back to shore.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 10                                    -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 10</div>
+    <div class="chapter-title">A Hero's Return</div>
+  </div>
+  <div class="chapter-emoji">🏆👏🎉😊</div>
+
+  <p>By the time Liam reached the shallows, his legs felt like jelly, and his lungs burned. Max was waiting anxiously, and together they carried the boy onto the sand. A crowd had gathered, drawn by the commotion. Someone called for an ambulance, while others tried to revive the boy.</p>
+
+  <p>Liam sat on the sand, shivering and exhausted, as the boy's parents arrived, their faces etched with fear and relief. The boy coughed and sputtered, water spilling from his lips as he regained consciousness. His mother hugged him tightly, tears streaming down her face, while his father turned to Liam with gratitude in his eyes.</p>
+
+  <p>"Thank you," the man said, his voice choked with emotion. "You saved our son's life."</p>
+
+  <p>Liam nodded, too overwhelmed to speak. He felt a strange mix of pride and fear—pride for what he had done, but fear of what could have happened if he hadn't been there.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 11                                    -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 11</div>
+    <div class="chapter-title">A Lesson Learned</div>
+  </div>
+  <div class="chapter-emoji">🏠😢🤗📢</div>
+
+  <p>When Liam returned home, his parents were waiting for him. They had heard about the incident from the neighbours. At first, they were angry that he had disobeyed them and gone into the sea. But as they listened to his story, their anger melted into pride and concern.</p>
+
+  <p>"You were brave, Liam," his father said, placing a hand on his shoulder. "But you were also lucky. The ocean is powerful, and it doesn't forgive mistakes."</p>
+
+  <p>Liam nodded, understanding now why his parents had always warned him to stay away. He had seen firsthand how quickly the sea could turn dangerous.</p>
+
+  <p>The next day, Liam stood before the children of Seabreeze, his voice steady but firm. "The ocean is beautiful," he said, "but it's not a playground. It's strong and unpredictable. Please, stay away from the water unless you're with an adult who knows how to swim. I don't want anyone else to get hurt."</p>
+
+  <p>The children listened, their faces serious. They had seen the fear in Liam's eyes and heard the tremor in his voice. They knew he was speaking from experience.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 12                                    -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 12</div>
+    <div class="chapter-title">A New Respect</div>
+  </div>
+  <div class="chapter-emoji">🌅🌊💙👨‍👧‍👦</div>
+
+  <p>From that day on, Liam became a symbol of courage and caution in Seabreeze. He didn't stop visiting the beach—he loved it too much for that—but he always stayed on the shore, watching the waves with a newfound respect. He took swimming lessons, determined to be prepared if he ever needed to help someone again. But he never forgot the lesson he had learned: the ocean was a force to be respected, not conquered.</p>
+
+  <p>Years later, when Liam was grown and had children of his own, he would tell them the story of the day he saved a boy from drowning. And he would always end with the same words: "The sea is a friend, but it can also be a foe. Respect it, and it will respect you."</p>
+
+  <p>And so, the boy who once feared the water became a man who understood its power—and his own.</p>
+
+  <!-- ============================================ -->
+  <!-- THE END                                       -->
+  <!-- ============================================ -->
+  <div class="the-end">The End.</div>
+
+</div>
+
+<script>
+  // ============================================
+  // READ ALOUD FUNCTIONALITY
+  // ============================================
+
+  (function() {
+    'use strict';
+
+    var isReading = false;
+    var isPaused = false;
+    var currentIndex = 0;
+    var sentences = [];
+    var utterance = null;
+    var selectedVoice = null;
+
+    // ----- COLLECT ALL TEXT PARAGRAPHS -----
+    function getTextBlocks() {
+      var blocks = [];
+      var paragraphs = document.querySelectorAll('.playbook p');
+      paragraphs.forEach(function(p) {
+        var text = p.textContent.trim();
+        if (text && text.length > 2) {
+          blocks.push({ text: text, element: p });
+        }
+      });
+      return blocks;
+    }
+
+    // ----- HIGHLIGHT A SENTENCE -----
+    function highlightSentence(index) {
+      document.querySelectorAll('.speaking-sentence').forEach(function(el) {
+        el.classList.remove('speaking-sentence');
+      });
+      document.querySelectorAll('.active-sentence').forEach(function(el) {
+        el.classList.remove('active-sentence');
+      });
+
+      var blocks = getTextBlocks();
+      if (blocks.length > 0 && index >= 0 && index < blocks.length) {
+        blocks[index].element.classList.add('speaking-sentence');
+        blocks[index].element.classList.add('active-sentence');
+        blocks[index].element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+
+    // ----- SPEAK A SENTENCE -----
+    function speakSentence(text, index) {
+      if (!window.speechSynthesis) {
+        alert('Your browser does not support speech synthesis.');
+        return;
+      }
+
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+
+      utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.25;
+      utterance.volume = 1;
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.onstart = function() {
+        isReading = true;
+        isPaused = false;
+        currentIndex = index;
+        highlightSentence(index);
+      };
+
+      utterance.onend = function() {
+        var nextIndex = index + 1;
+        if (nextIndex < sentences.length) {
+          speakSentence(sentences[nextIndex], nextIndex);
+        } else {
+          isReading = false;
+          highlightSentence(-1);
+          showToast('🎉 Finished reading the book!');
+        }
+      };
+
+      utterance.onerror = function(e) {
+        if (e.error === 'canceled' || e.error === 'interrupted') {
+          console.log('Speech was cancelled or interrupted');
+          return;
+        }
+        if (e.error === 'synthesis-failed') {
+          console.warn('Speech synthesis failed, retrying...');
+          setTimeout(function() {
+            if (!isPaused && isReading) {
+              speakSentence(text, index);
+            }
+          }, 500);
+        } else {
+          console.error('Speech error:', e);
+          isReading = false;
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // ----- READ BOOK ALOUD -----
+    function readBookAloud() {
+      var blocks = getTextBlocks();
+      if (blocks.length === 0) {
+        showToast('No readable text found in this book.');
+        return;
+      }
+
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+
+      sentences = blocks.map(function(b) { return b.text; });
+      currentIndex = 0;
+      speakSentence(sentences[0], 0);
+    }
+
+    function pauseReading() {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.pause();
+        isPaused = true;
+      }
+    }
+
+    function resumeReading() {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.resume();
+        isPaused = false;
+      }
+    }
+
+    function stopReading() {
+      try {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          if (utterance) {
+            utterance.onend = null;
+            utterance.onerror = null;
+            utterance = null;
+          }
+        }
+      } catch (e) {
+        console.warn('Stop speech error:', e);
+      }
+      isReading = false;
+      isPaused = false;
+      highlightSentence(-1);
+    }
+
+    function showToast(msg) {
+      var toast = document.createElement('div');
+      toast.textContent = msg;
+      toast.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#0a1628;color:#f0f8ff;padding:12px 24px;border-radius:12px;font-family:Arial,sans-serif;font-size:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:1px solid rgba(70,130,180,0.3);animation:fadeInOut 3s ease forwards;';
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 3000);
+    }
+
+    var styleSheet = document.createElement('style');
+    styleSheet.textContent = '@keyframes fadeInOut{0%{opacity:0;transform:translateX(-50%) translateY(20px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1;transform:translateX(-50%) translateY(0)}100%{opacity:0;transform:translateX(-50%) translateY(-20px)}}';
+    document.head.appendChild(styleSheet);
+
+    // ----- CLICK TO READ -----
+    document.querySelector('.playbook').addEventListener('click', function(e) {
+      var p = e.target.closest('p');
+      if (!p) return;
+      var text = p.textContent.trim();
+      if (!text || text.length < 2) return;
+
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+
+      sentences = [text];
+      currentIndex = 0;
+      speakSentence(text, 0);
+    });
+
+    // ----- KEYBOARD SHORTCUTS -----
+    document.addEventListener('keydown', function(e) {
+      if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+        if (isReading && isPaused) {
+          resumeReading();
+        } else if (isReading && !isPaused) {
+          pauseReading();
+        } else {
+          readBookAloud();
+        }
+      }
+      if (e.key === 'Escape') {
+        stopReading();
+      }
+    });
+
+    // ----- AUTO-SELECT CHILD-LIKE VOICE -----
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = function() {
+        var voices = window.speechSynthesis.getVoices();
+        var childVoice = voices.find(function(v) {
+          var name = v.name.toLowerCase();
+          return name.includes('child') || name.includes('kid') ||
+                 name.includes('samantha') || name.includes('google uk english female') ||
+                 name.includes('moira') || name.includes('siri');
+        });
+        if (childVoice) selectedVoice = childVoice;
+      };
+      setTimeout(function() {
+        var voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          var childVoice = voices.find(function(v) {
+            var name = v.name.toLowerCase();
+            return name.includes('child') || name.includes('kid') ||
+                   name.includes('samantha') || name.includes('google uk english female') ||
+                   name.includes('moira') || name.includes('siri');
+          });
+          if (childVoice) selectedVoice = childVoice;
+        }
+      }, 200);
+    }
+
+    // Expose controls globally for the EBook.js reader
+    window.readBookAloud = readBookAloud;
+    window.pauseReading = pauseReading;
+    window.resumeReading = resumeReading;
+    window.stopReading = stopReading;
+    window.getTextBlocks = getTextBlocks;
+    window.highlightSentence = highlightSentence;
+    window.speakSentence = speakSentence;
+    window.isReading = function() { return isReading; };
+    window.isPaused = function() { return isPaused; };
+    window.getSentences = function() { return sentences; };
+    window.getCurrentIndex = function() { return currentIndex; };
+    window.setSelectedVoice = function(voice) { selectedVoice = voice; };
+
+  })();
+</script>
+</body>
+</html>

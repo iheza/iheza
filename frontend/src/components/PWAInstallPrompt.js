@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Download, X, Smartphone } from 'lucide-react';
 
 function PWAInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
 
@@ -24,46 +23,45 @@ function PWAInstallPrompt() {
       }
     }
 
-    // Listen for beforeinstallprompt event
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowPrompt(true);
+    // Listen for custom event dispatched by App.js when beforeinstallprompt fires
+    const handlePwaInstallReady = () => {
+      if (window.deferredPrompt) {
+        setShowPrompt(true);
+      }
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('pwaInstallReady', handlePwaInstallReady);
+
+    // Also check if prompt is already available
+    if (window.deferredPrompt) {
+      setShowPrompt(true);
+    }
 
     // Listen for app installed event
     window.addEventListener('appinstalled', () => {
       setIsInstalled(true);
       setShowPrompt(false);
-      setDeferredPrompt(null);
+      window.deferredPrompt = null;
     });
 
-    // Show prompt after a delay for better UX
-    const timer = setTimeout(() => {
-      if (deferredPrompt) {
-        setShowPrompt(true);
-      }
-    }, 3000);
-
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      clearTimeout(timer);
+      window.removeEventListener('pwaInstallReady', handlePwaInstallReady);
     };
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
+    const promptEvent = window.deferredPrompt;
+    if (!promptEvent) return;
 
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    // Show the install prompt
+    promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
     
     if (outcome === 'accepted') {
       setIsInstalled(true);
     }
     
-    setDeferredPrompt(null);
+    window.deferredPrompt = null;
     setShowPrompt(false);
   };
 

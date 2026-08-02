@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Weight of Envy · Grade 7 Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- HEARTFELT BACKGROUND ----- */
+    body {
+      background: #2e1a1a;
+      background-image:
+        radial-gradient(ellipse at 30% 20%, #4a2a2a 0%, #2e1a1a 60%),
+        radial-gradient(ellipse at 70% 80%, #3a2222 0%, #2e1a1a 50%),
+        radial-gradient(circle at 50% 0%, #5a3a3a 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- SPARKLE PARTICLES ----- */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      background-image:
+        radial-gradient(2px 2px at 10% 20%, rgba(255, 150, 150, 0.3), transparent),
+        radial-gradient(2px 2px at 30% 60%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(3px 3px at 50% 10%, rgba(255, 150, 150, 0.3), transparent),
+        radial-gradient(2px 2px at 70% 40%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(3px 3px at 90% 80%, rgba(255, 150, 150, 0.3), transparent),
+        radial-gradient(2px 2px at 15% 85%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(2px 2px at 85% 15%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(3px 3px at 45% 45%, rgba(255, 150, 150, 0.3), transparent),
+        radial-gradient(2px 2px at 60% 90%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(2px 2px at 25% 35%, rgba(255, 150, 150, 0.2), transparent);
+      animation: sparkleFloat 6s ease-in-out infinite alternate;
+    }
+    body::after {
+      background-image:
+        radial-gradient(1px 1px at 20% 50%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(1px 1px at 60% 30%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(1px 1px at 40% 80%, rgba(255, 150, 150, 0.2), transparent),
+        radial-gradient(2px 2px at 10% 70%, rgba(255, 150, 150, 0.2), transparent);
+      animation: sparkleFloat 8s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes sparkleFloat {
+      0% { opacity: 0.2; transform: translateY(0); }
+      50% { opacity: 0.5; transform: translateY(-10px); }
+      100% { opacity: 0.3; transform: translateY(5px); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #f8f0f0;
+      background-image:
+        linear-gradient(to bottom, #f8f0f0 0%, #f0e0e0 50%, #f8f0f0 100%);
+      border-radius: 24px;
+      padding: 3rem 3.5rem;
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(180, 100, 100, 0.2),
+        inset 0 0 40px rgba(180, 100, 100, 0.05);
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(180, 100, 100, 0.15);
+    }
+
+    /* ----- DECORATIVE CORNER ORNAMENTS ----- */
+    .playbook::before {
+      content: '💔';
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+    .playbook::after {
+      content: '🤝';
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+
+    /* ----- TITLE PAGE ----- */
+    .title-page {
+      text-align: center;
+      padding: 2rem 0 3rem 0;
+      border-bottom: 2px solid rgba(180, 100, 100, 0.2);
+      margin-bottom: 2rem;
+    }
+    .title-page h1 {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 42px;
+      color: #2e1a1a;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 0 rgba(180, 100, 100, 0.15);
+      font-style: normal !important;
+    }
+    .title-page .subtitle {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 22px;
+      color: #7a4a4a;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-style: normal !important;
+    }
+    .title-page .author {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 18px;
+      color: #9a6a6a;
+      font-weight: 500;
+      font-style: normal !important;
+    }
+    .title-page .title-emoji {
+      font-size: 64px;
+      display: block;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    /* ----- CHAPTER HEADERS ----- */
+    .chapter-header {
+      margin: 2.5rem 0 1.5rem 0;
+      padding: 1rem 0;
+      border-top: 2px solid rgba(180, 100, 100, 0.2);
+      border-bottom: 2px solid rgba(180, 100, 100, 0.2);
+      text-align: center;
+    }
+    .chapter-number {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 18px;
+      color: #8a3a3a;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+      font-style: normal !important;
+    }
+    .chapter-title {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #2e1a1a;
+      letter-spacing: 0.03em;
+      font-style: normal !important;
+    }
+    .chapter-emoji {
+      text-align: center;
+      font-size: 48px;
+      margin: 1rem 0;
+      line-height: 1.3;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    .playbook p {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #2a1a1a;
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 8px;
+      transition: background 0.3s ease;
+      font-style: normal !important;
+      cursor: pointer;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT ----- */
+    .speaking-sentence {
+      background: rgba(180, 100, 100, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(180, 100, 100, 0.15), inset 0 0 20px rgba(180, 100, 100, 0.05);
+      animation: heartGlow 1.2s ease-in-out;
+      border: 1px solid rgba(180, 100, 100, 0.1);
+      font-style: normal !important;
+    }
+    .active-sentence {
+      background: rgba(180, 100, 100, 0.12) !important;
+    }
+
+    @keyframes heartGlow {
+      0% { box-shadow: 0 0 0 rgba(180, 100, 100, 0); }
+      50% { box-shadow: 0 0 40px rgba(180, 100, 100, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(180, 100, 100, 0.15); }
+    }
+
+    /* ----- THE END ----- */
+    .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #8a3a3a;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(180, 100, 100, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+    .the-end::before {
+      content: '💔 🤝 💔 🤝 💔';
+      display: block;
+      font-size: 18px;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    /* ----- EPILOGUE HEADING ----- */
+    .epilogue-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #2e1a1a;
+      text-align: center;
+      margin: 2rem 0 1rem 0;
+      letter-spacing: 0.08em;
+      font-style: normal !important;
+    }
+    .epilogue-heading::after {
+      content: '✦ ✦ ✦';
+      display: block;
+      font-size: 18px;
+      color: #7a4a4a;
+      letter-spacing: 0.5em;
+      margin-top: 0.3rem;
+      opacity: 0.5;
+      font-style: normal !important;
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 768px) {
+      .playbook { padding: 1.5rem; font-size: 18px; }
+      .title-page h1 { font-size: 32px; }
+      .chapter-title { font-size: 22px; }
+      .playbook p { font-size: 18px; }
+      .title-page .title-emoji { font-size: 48px; }
+    }
+    @media (max-width: 480px) {
+      .playbook { padding: 1rem; font-size: 16px; }
+      .title-page h1 { font-size: 26px; }
+      .chapter-title { font-size: 18px; }
+      .playbook p { font-size: 16px; }
+      .title-page .title-emoji { font-size: 40px; }
+    }
+  </style>
+</head>
+<body>
+<div class="playbook">
+
+  <div class="title-page">
+    <span class="title-emoji">💔🤝💙🌟</span>
+    <h1>The Weight of Envy</h1>
+    <div class="subtitle">A Story About Jealousy, Forgiveness, and the Power of Friendship</div>
+    <div class="author">Grade 7 · IHEZA Education</div>
+  </div>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 1</div><div class="chapter-title">The Seeds of Jealousy</div></div>
+  <div class="chapter-emoji">🌱💚👧👧</div>
+
+  <p>In the quiet town of Maplewood, nestled between dense forests and a winding river, lived two girls who were as different as night and day. Emma was the kind of student teachers adored—her grades were impeccable, her essays eloquent, and her participation in class always thoughtful. She was quiet, unassuming, and always willing to help others. Her best friend, Clara, on the other hand, was outgoing, charismatic, and fiercely competitive. Clara was no slouch academically, but no matter how hard she tried, she could never quite match Emma's natural brilliance.</p>
+
+  <p>At first, Clara admired Emma. She loved how Emma's mind worked, how she could solve complex math problems in seconds or write essays that made even the strictest teachers smile. But as the years went by, admiration began to curdle into something darker. Clara started to notice how everyone praised Emma—how her parents bragged about her grades, how teachers held her up as an example, how even their classmates seemed to gravitate toward her. Clara, who had always been the centre of attention, began to feel invisible in Emma's shadow.</p>
+
+  <p>The jealousy grew slowly, like a weed in a garden. Clara tried to push it down, to focus on her own achievements, but it was always there, gnawing at her. She started to resent Emma, though she would never admit it. She told herself that Emma didn't deserve all the praise, that she was just lucky, that she didn't work as hard as Clara did. But deep down, Clara knew the truth: Emma was simply better, and that knowledge ate away at her.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 2</div><div class="chapter-title">The First Strike</div></div>
+  <div class="chapter-emoji">🗣️😤👧💢</div>
+
+  <p>It started with small things. Clara would make snide remarks about Emma's perfect grades, calling her a "teacher's pet" or a "know-it-all." She would roll her eyes when Emma raised her hand in class or mock her for being too quiet. At first, Emma brushed it off. She knew Clara could be sharp-tongued, but she never thought her best friend would intentionally hurt her.</p>
+
+  <p>But Clara's jealousy only grew stronger. One day, after a particularly gruelling math test, the teacher handed back the graded papers. Emma, as usual, had scored the highest in the class. Clara, who had studied for hours, had only managed a B. As the teacher praised Emma's work, Clara felt a surge of anger. She couldn't take it anymore.</p>
+
+  <p>"Of course, Emma got the highest score," Clara muttered loudly enough for the class to hear. "She probably cheated."</p>
+
+  <p>The room fell silent. Emma's face turned red, and she looked at Clara in shock. "I didn't cheat," she said quietly.</p>
+
+  <p>"Sure, you didn't," Clara sneered. "You're just perfect, aren't you?"</p>
+
+  <p>The teacher intervened, but the damage was done. Emma felt a knot form in her stomach. She had always trusted Clara, but now she wasn't so sure.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 3</div><div class="chapter-title">The Bullying Begins</div></div>
+  <div class="chapter-emoji">👧😢📚💔</div>
+
+  <p>From that day on, Clara's behaviour toward Emma grew worse. She started spreading rumours about her, saying she was stuck-up and thought she was better than everyone else. She would exclude Emma from group activities, whispering to their friends that Emma was "no fun" and "too boring." She even started sabotaging Emma's schoolwork, hiding her textbooks or tearing pages out of her notebooks.</p>
+
+  <p>Emma tried to ignore it at first, hoping Clara would stop. But the more Clara bullied her, the more isolated Emma felt. She stopped raising her hand in class, afraid of drawing attention to herself. She stopped eating lunch with their friends, choosing instead to sit alone in the library. Her grades began to slip, and she started to dread going to school.</p>
+
+  <p>Clara, meanwhile, felt a twisted sense of satisfaction. For the first time, she felt like she was in control. She told herself that Emma deserved it, that she needed to be taken down a peg. But deep down, Clara knew she was being cruel. She would lie awake at night, guilt gnawing at her, but she couldn't stop herself. The jealousy had taken root, and it was too strong to ignore.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 4</div><div class="chapter-title">The Breaking Point</div></div>
+  <div class="chapter-emoji">😢💔📄🔥</div>
+
+  <p>One cold winter afternoon, Clara took things too far. Emma had been working on a science project for weeks, pouring all her energy into it. It was her chance to prove to herself that she could still excel, despite everything Clara had done to undermine her. But when she went to present her project to the class, she found that her notes were missing. Panicked, she searched her bag, but they were nowhere to be found.</p>
+
+  <p>"Looking for these?" Clara asked, holding up a stack of papers. She had a smug smile on her face.</p>
+
+  <p>Emma's heart sank. "Clara, please," she whispered. "Don't do this."</p>
+
+  <p>But Clara just shrugged. "Oops. Guess you'll have to wing it."</p>
+
+  <p>Emma stumbled through her presentation, her voice shaking and her mind blank. She could feel the eyes of her classmates on her, and she wanted to disappear. When she finished, the room was silent. The teacher gave her a sympathetic look, but Emma knew she had failed.</p>
+
+  <p>That night, Emma broke down. She cried herself to sleep, feeling more alone than ever. She didn't understand why Clara was doing this to her. She had always thought of Clara as her best friend, but now she wasn't sure if Clara had ever really cared about her at all.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 5</div><div class="chapter-title">The Turning Point</div></div>
+  <div class="chapter-emoji">📝💌😢👧</div>
+
+  <p>The next day, Clara found a note in her locker. It was from Emma, and it was short and to the point:</p>
+
+  <p>"I don't know why you hate me so much, but I can't take it anymore. I hope you're happy."</p>
+
+  <p>Clara felt a pang of guilt, but she pushed it aside. "Good," she thought. "Maybe now she'll leave me alone."</p>
+
+  <p>But as the days went by, Clara couldn't shake the feeling that something was wrong. Emma stopped coming to school altogether, and their friends started to ask questions. Clara tried to act like she didn't care, but the truth was, she missed Emma. She missed their laughter, their inside jokes, the way they used to talk for hours about everything and nothing.</p>
+
+  <p>One afternoon, Clara overheard two teachers talking in the hallway. "I'm really worried about Emma," one of them said. "She's been so withdrawn lately. I think she's struggling with depression."</p>
+
+  <p>Clara's heart sank. She had never meant to hurt Emma this much. She had just wanted to feel better about herself, but now she realized that her jealousy had caused real harm.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 6</div><div class="chapter-title">The Apology</div></div>
+  <div class="chapter-emoji">🚪👧😢🤗</div>
+
+  <p>That night, Clara couldn't sleep. She lay in bed, staring at the ceiling, replaying everything she had done to Emma. She thought about the rumours she had spread, the times she had excluded her, the way she had sabotaged her schoolwork. She thought about the note Emma had left her, and the pain in her words.</p>
+
+  <p>The next morning, Clara went to Emma's house. She knocked on the door, her heart pounding. When Emma's mother answered, Clara could see the worry in her eyes.</p>
+
+  <p>"Is Emma here?" Clara asked. "I need to talk to her."</p>
+
+  <p>Emma's mother hesitated, then nodded. "She's in her room. But be gentle with her, Clara. She's been through a lot."</p>
+
+  <p>Clara climbed the stairs to Emma's room and knocked softly on the door. "Emma? It's me. Can I come in?"</p>
+
+  <p>There was a long pause, and then Emma's voice, quiet and tired, said, "Come in."</p>
+
+  <p>Clara opened the door and saw Emma sitting on her bed, her eyes red from crying. She looked smaller somehow, as if the weight of everything had crushed her spirit.</p>
+
+  <p>"Emma," Clara began, her voice trembling. "I'm so sorry. I've been horrible to you, and I don't know why. I was jealous of you, and I took it out on you, and I... I didn't realize how much I was hurting you."</p>
+
+  <p>Emma looked at her, her eyes filled with tears. "Why, Clara? Why did you do it?"</p>
+
+  <p>Clara shook her head. "I don't know. I just... I felt like I wasn't good enough, and I thought if I could bring you down, I'd feel better. But I was wrong. I was so wrong."</p>
+
+  <p>Emma didn't say anything for a long time. Then, slowly, she nodded. "I forgive you," she said softly. "But things can't go back to the way they were."</p>
+
+  <p>Clara felt a lump in her throat. "I know," she said. "But I want to make it right. However long it takes, I want to be a better friend to you."</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 7</div><div class="chapter-title">The Road to Redemption</div></div>
+  <div class="chapter-emoji">🛤️🤝💪💙</div>
+
+  <p>Over the next few months, Clara worked hard to earn back Emma's trust. She apologized to their friends for the rumours she had spread, and she helped Emma catch up on the schoolwork she had missed. She stopped trying to compete with Emma and instead focused on being a supportive friend.</p>
+
+  <p>It wasn't easy. There were times when Clara's old jealousy threatened to resurface, but she fought it down. She reminded herself of the pain she had caused and the friendship she had almost lost.</p>
+
+  <p>Emma, for her part, slowly began to heal. With Clara's support, she regained her confidence and started to enjoy school again. She even began to raise her hand in class, though she was still quieter than she used to be.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 8</div><div class="chapter-title">A New Beginning</div></div>
+  <div class="chapter-emoji">🌅🤗💙🌟</div>
+
+  <p>By the end of the school year, Emma and Clara's friendship had changed, but it was stronger than ever. They had both learned valuable lessons about jealousy, forgiveness, and the importance of kindness.</p>
+
+  <p>One sunny afternoon, as they sat by the river, Clara turned to Emma and said, "I'm really glad you gave me a second chance."</p>
+
+  <p>Emma smiled. "Me too. But don't think I've forgotten all the times you hid my textbooks."</p>
+
+  <p>Clara laughed. "I promise, no more sabotage. From now on, I'm just going to be the best friend I can be."</p>
+
+  <p>And she was true to her word. Clara and Emma went on to graduate together, their friendship a testament to the power of redemption and the strength of forgiveness.</p>
+
+  <div class="epilogue-heading">Epilogue: The Weight Lifted</div>
+
+  <p>Years later, Clara would look back on that difficult time as a turning point in her life. She had learned that jealousy was a heavy burden, one that could crush not only the person who carried it but also those around them. She had also learned that it was never too late to change, to make amends, and to become a better person.</p>
+
+  <p>As for Emma, she had learned that even the deepest wounds could heal with time and care. She had found her voice again, and she had discovered that true friendship was worth fighting for.</p>
+
+  <p>Together, they had lifted the weight of envy and replaced it with something far more precious: understanding, compassion, and love.</p>
+
+  <div class="the-end">The End.</div>
+
+</div>
+</body>
+</html>

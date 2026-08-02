@@ -97,8 +97,8 @@ async def staff_qr_checkin(data: Dict, current_user: dict = Depends(get_current_
     today = current_time.strftime('%Y-%m-%d')
     time_str = current_time.strftime('%H:%M:%S')
     
-    late_threshold_hour = 8
-    late_threshold_minute = 0
+    late_threshold_hour = 7
+    late_threshold_minute = 30
     
     existing = await db.attendance.find_one({
         "target_id": staff['id'],
@@ -203,8 +203,8 @@ async def manual_qr_checkin(data: Dict, current_user: dict = Depends(get_current
     today = current_time.strftime('%Y-%m-%d')
     time_str = current_time.strftime('%H:%M:%S')
     
-    late_threshold_hour = 8
-    late_threshold_minute = 0
+    late_threshold_hour = 7
+    late_threshold_minute = 30
     
     existing = await db.attendance.find_one({
         "target_id": staff['id'],

@@ -41,6 +41,9 @@ function FeesManagement() {
   // All Students table view state
   const [allStudentFees, setAllStudentFees] = useState([]);
   const [loadingAllFees, setLoadingAllFees] = useState(false);
+  const [pagination, setPagination] = useState({ page: 1, page_size: 50, total: 0, total_pages: 0 });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [activeTab, setActiveTab] = useState(
     ['secretary', 'principal'].includes(currentUser?.role?.toLowerCase()) ? 'payments' : 'all-students'
   ); // 'payments' or 'all-students'
@@ -626,9 +629,17 @@ function FeesManagement() {
     window.open(whatsappUrl, '_blank');
   };
 
+  // Filter for Payments tab student list
   const filteredStudents = students.filter(s => {
     const fullName = `${s.first_name} ${s.last_name}`.toLowerCase();
     const admNo = s.admission_no?.toLowerCase() || '';
+    return fullName.includes(searchTerm.toLowerCase()) || admNo.includes(searchTerm.toLowerCase());
+  });
+
+  // Filter for All Students table (uses allStudentFees data)
+  const filteredAllStudentFees = allStudentFees.filter(s => {
+    const fullName = `${s.first_name || ''} ${s.last_name || ''}`.toLowerCase();
+    const admNo = (s.admission_no || '').toLowerCase();
     return fullName.includes(searchTerm.toLowerCase()) || admNo.includes(searchTerm.toLowerCase());
   });
 
@@ -640,23 +651,35 @@ function FeesManagement() {
     }
   };
 
-  // Load all student fees for the table view
-  const loadAllStudentFees = async () => {
+  // Load all student fees for the table view (paginated)
+  const loadAllStudentFees = async (page = currentPage, size = pageSize) => {
     setLoadingAllFees(true);
     try {
-      let url = `${API_URL}/api/all-student-fees`;
+      const params = new URLSearchParams();
+      params.set('page', page);
+      params.set('page_size', size);
       if (selectedChain) {
-        url += `?chain=${selectedChain}`;
+        params.set('chain', selectedChain);
       }
+      const url = `${API_URL}/api/all-student-fees?${params.toString()}`;
       const response = await fetch(url, { headers: getAuthHeaders() });
       if (!response.ok) {
-        // Don't try to read the body - it may already be consumed by middleware
-        // Just use the status code for the error message
         console.error('Server error response:', response.status, response.statusText);
         throw new Error(`Server returned ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
-      setAllStudentFees(data);
+      // Handle both paginated response { students: [...], pagination: {...} } and flat array fallback
+      if (data && data.students) {
+        setAllStudentFees(data.students);
+        setPagination(data.pagination || { page, page_size: size, total: 0, total_pages: 0 });
+      } else if (Array.isArray(data)) {
+        // Legacy flat array response
+        setAllStudentFees(data);
+        setPagination({ page: 1, page_size: data.length, total: data.length, total_pages: 1 });
+      } else {
+        setAllStudentFees([]);
+        setPagination({ page: 1, page_size: size, total: 0, total_pages: 0 });
+      }
     } catch (error) {
       console.error('Failed to load all student fees:', error);
       toast.error('Failed to load student fee data');
@@ -665,9 +688,24 @@ function FeesManagement() {
     }
   };
 
+  // Handle page change
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.total_pages) return;
+    setCurrentPage(newPage);
+    loadAllStudentFees(newPage, pageSize);
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    loadAllStudentFees(1, newSize);
+  };
+
   useEffect(() => {
     if (activeTab === 'all-students') {
-      loadAllStudentFees();
+      setCurrentPage(1);
+      loadAllStudentFees(1, pageSize);
     }
   }, [activeTab, selectedChain]);
 
@@ -1153,11 +1191,44 @@ function FeesManagement() {
         <div className="panel">
           <div className="panel-header">
             <div className="panel-title"><Users size={16} /> All Students Fee Status</div>
-            {allStudentFees.length > 0 && (
-              <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
-                {allStudentFees.length} students
-              </span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {/* Search input for filtering by name or admission number */}
+              <div style={{ position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                <input
+                  type="text"
+                  placeholder="Search by name or admission..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    border: '1px solid rgba(51, 65, 85, 0.5)',
+                    borderRadius: '0.5rem',
+                    padding: '0.4rem 0.75rem 0.4rem 2rem',
+                    color: '#f8fafc',
+                    fontSize: '0.8rem',
+                    width: '220px',
+                    outline: 'none'
+                  }}
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    style={{
+                      position: 'absolute', right: '0.25rem', top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '0.25rem'
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {allStudentFees.length > 0 && (
+                <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+                  {filteredAllStudentFees.length} of {allStudentFees.length} students
+                </span>
+              )}
+            </div>
           </div>
           
           {loadingAllFees ? (
@@ -1168,6 +1239,7 @@ function FeesManagement() {
               <p>No student fee data available</p>
             </div>
           ) : (
+            <>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
@@ -1185,7 +1257,7 @@ function FeesManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {allStudentFees.map((item, index) => (
+                  {filteredAllStudentFees.map((item, index) => (
                     <tr 
                       key={item.id || index}
                       style={{ 
@@ -1254,10 +1326,25 @@ function FeesManagement() {
                               className="receipt-icon-pulse"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const images = (item.receipt_images && item.receipt_images.length > 0) 
-                                  ? item.receipt_images 
-                                  : [{ image: item.receipt_image }];
-                                setReceiptViewer({ open: true, images, currentIndex: 0, studentName: `${item.first_name || ''} ${item.last_name || ''}`, studentId: item.student_id || '' });
+                                // The list response only includes the latest receipt image
+                                // (receipt_image) plus a receipt_count to keep the payload small.
+                                // Fetch the full set of receipt images on demand when the
+                                // user opens the viewer.
+                                const studentId = item.student_id || item.id || item.admission_no;
+                                const openViewer = (images) => {
+                                  setReceiptViewer({ open: true, images, currentIndex: 0, studentName: `${item.first_name || ''} ${item.last_name || ''}`, studentId });
+                                };
+                                // Start with the latest image immediately for responsiveness
+                                openViewer([{ image: item.receipt_image, id: 'latest' }]);
+                                // Then fetch the full set of images in the background
+                                fetch(`${API_URL}/api/student-fees/${encodeURIComponent(studentId)}`, { headers: getAuthHeaders() })
+                                  .then(res => res.ok ? res.json() : null)
+                                  .then(data => {
+                                    if (data && data.receipt_images && data.receipt_images.length > 0) {
+                                      openViewer(data.receipt_images);
+                                    }
+                                  })
+                                  .catch(() => {});
                               }}
                               title="View Receipt"
                               style={{ 
@@ -1271,7 +1358,7 @@ function FeesManagement() {
                               }}
                             >
                               <Receipt size={16} />
-                              {item.receipt_images && item.receipt_images.length > 1 && (
+                              {item.receipt_count > 1 && (
                                 <span style={{
                                   position: 'absolute',
                                   top: '-4px',
@@ -1287,12 +1374,13 @@ function FeesManagement() {
                                   justifyContent: 'center',
                                   fontWeight: 700
                                 }}>
-                                  {item.receipt_images.length}
+                                  {item.receipt_count}
                                 </span>
                               )}
                             </button>
                           </div>
                         ) : currentUser?.role === 'secretary' ? (
+
                           <button 
                             className="action-btn"
                             onClick={(e) => {
@@ -1346,6 +1434,145 @@ function FeesManagement() {
                 </tbody>
               </table>
             </div>
+            {/* Pagination Controls */}
+            {pagination.total_pages > 1 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '1rem 0.5rem 0',
+                borderTop: '1px solid rgba(51, 65, 85, 0.3)',
+                marginTop: '1rem',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+                    Page {pagination.page} of {pagination.total_pages}
+                    <span style={{ marginLeft: '0.5rem', color: '#64748b' }}>
+                      ({pagination.total} total students)
+                    </span>
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => handlePageSizeChange(parseInt(e.target.value))}
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.6)',
+                      border: '1px solid rgba(51, 65, 85, 0.5)',
+                      borderRadius: '0.375rem',
+                      padding: '0.3rem 0.5rem',
+                      color: '#f8fafc',
+                      fontSize: '0.8rem',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100">100 per page</option>
+                    <option value="200">200 per page</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    disabled={pagination.page <= 1}
+                    style={{
+                      padding: '0.4rem 0.6rem',
+                      background: pagination.page <= 1 ? 'rgba(51, 65, 85, 0.2)' : 'rgba(51, 65, 85, 0.5)',
+                      border: '1px solid rgba(71, 85, 105, 0.3)',
+                      borderRadius: '0.375rem',
+                      color: pagination.page <= 1 ? '#475569' : '#f8fafc',
+                      cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(pagination.page - 1)}
+                    disabled={pagination.page <= 1}
+                    style={{
+                      padding: '0.4rem 0.6rem',
+                      background: pagination.page <= 1 ? 'rgba(51, 65, 85, 0.2)' : 'rgba(51, 65, 85, 0.5)',
+                      border: '1px solid rgba(71, 85, 105, 0.3)',
+                      borderRadius: '0.375rem',
+                      color: pagination.page <= 1 ? '#475569' : '#f8fafc',
+                      cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    Prev
+                  </button>
+                  {/* Page number buttons */}
+                  {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.total_pages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.total_pages - 2) {
+                      pageNum = pagination.total_pages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePageChange(pageNum)}
+                        style={{
+                          padding: '0.4rem 0.7rem',
+                          background: pagination.page === pageNum ? '#22c55e' : 'rgba(51, 65, 85, 0.5)',
+                          border: '1px solid rgba(71, 85, 105, 0.3)',
+                          borderRadius: '0.375rem',
+                          color: pagination.page === pageNum ? 'white' : '#f8fafc',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          fontWeight: pagination.page === pageNum ? 700 : 500
+                        }}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => handlePageChange(pagination.page + 1)}
+                    disabled={pagination.page >= pagination.total_pages}
+                    style={{
+                      padding: '0.4rem 0.6rem',
+                      background: pagination.page >= pagination.total_pages ? 'rgba(51, 65, 85, 0.2)' : 'rgba(51, 65, 85, 0.5)',
+                      border: '1px solid rgba(71, 85, 105, 0.3)',
+                      borderRadius: '0.375rem',
+                      color: pagination.page >= pagination.total_pages ? '#475569' : '#f8fafc',
+                      cursor: pagination.page >= pagination.total_pages ? 'not-allowed' : 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(pagination.total_pages)}
+                    disabled={pagination.page >= pagination.total_pages}
+                    style={{
+                      padding: '0.4rem 0.6rem',
+                      background: pagination.page >= pagination.total_pages ? 'rgba(51, 65, 85, 0.2)' : 'rgba(51, 65, 85, 0.5)',
+                      border: '1px solid rgba(71, 85, 105, 0.3)',
+                      borderRadius: '0.375rem',
+                      color: pagination.page >= pagination.total_pages ? '#475569' : '#f8fafc',
+                      cursor: pagination.page >= pagination.total_pages ? 'not-allowed' : 'pointer',
+                      fontSize: '0.75rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    Last
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       )}

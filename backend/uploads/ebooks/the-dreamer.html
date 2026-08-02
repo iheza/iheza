@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Dreamer · Grade 7 Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- FOOTBALL FIELD BACKGROUND ----- */
+    body {
+      background: #1a2e1a;
+      background-image:
+        radial-gradient(ellipse at 30% 20%, #2a4a2a 0%, #1a2e1a 60%),
+        radial-gradient(ellipse at 70% 80%, #223a22 0%, #1a2e1a 50%),
+        radial-gradient(circle at 50% 0%, #3a5a3a 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- SPARKLE PARTICLES ----- */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      background-image:
+        radial-gradient(2px 2px at 10% 20%, rgba(255, 200, 50, 0.3), transparent),
+        radial-gradient(2px 2px at 30% 60%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(3px 3px at 50% 10%, rgba(255, 200, 50, 0.3), transparent),
+        radial-gradient(2px 2px at 70% 40%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(3px 3px at 90% 80%, rgba(255, 200, 50, 0.3), transparent),
+        radial-gradient(2px 2px at 15% 85%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(2px 2px at 85% 15%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(3px 3px at 45% 45%, rgba(255, 200, 50, 0.3), transparent),
+        radial-gradient(2px 2px at 60% 90%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(2px 2px at 25% 35%, rgba(255, 200, 50, 0.2), transparent);
+      animation: sparkleFloat 6s ease-in-out infinite alternate;
+    }
+    body::after {
+      background-image:
+        radial-gradient(1px 1px at 20% 50%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(1px 1px at 60% 30%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(1px 1px at 40% 80%, rgba(255, 200, 50, 0.2), transparent),
+        radial-gradient(2px 2px at 10% 70%, rgba(255, 200, 50, 0.2), transparent);
+      animation: sparkleFloat 8s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes sparkleFloat {
+      0% { opacity: 0.2; transform: translateY(0); }
+      50% { opacity: 0.5; transform: translateY(-10px); }
+      100% { opacity: 0.3; transform: translateY(5px); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #f5f8f0;
+      background-image:
+        linear-gradient(to bottom, #f5f8f0 0%, #e8f0e0 50%, #f5f8f0 100%);
+      border-radius: 24px;
+      padding: 3rem 3.5rem;
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(60, 120, 60, 0.2),
+        inset 0 0 40px rgba(60, 120, 60, 0.05);
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(60, 120, 60, 0.15);
+    }
+
+    /* ----- DECORATIVE CORNER ORNAMENTS ----- */
+    .playbook::before {
+      content: '⚽';
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+    .playbook::after {
+      content: '🌍';
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+
+    /* ----- TITLE PAGE ----- */
+    .title-page {
+      text-align: center;
+      padding: 2rem 0 3rem 0;
+      border-bottom: 2px solid rgba(60, 120, 60, 0.2);
+      margin-bottom: 2rem;
+    }
+    .title-page h1 {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 42px;
+      color: #1a2e1a;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 0 rgba(60, 120, 60, 0.15);
+      font-style: normal !important;
+    }
+    .title-page .subtitle {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 22px;
+      color: #4a7a4a;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-style: normal !important;
+    }
+    .title-page .author {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 18px;
+      color: #6a9a6a;
+      font-weight: 500;
+      font-style: normal !important;
+    }
+    .title-page .title-emoji {
+      font-size: 64px;
+      display: block;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    /* ----- CHAPTER HEADERS ----- */
+    .chapter-header {
+      margin: 2.5rem 0 1.5rem 0;
+      padding: 1rem 0;
+      border-top: 2px solid rgba(60, 120, 60, 0.2);
+      border-bottom: 2px solid rgba(60, 120, 60, 0.2);
+      text-align: center;
+    }
+    .chapter-number {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 18px;
+      color: #3a8a3a;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+      font-style: normal !important;
+    }
+    .chapter-title {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #1a2e1a;
+      letter-spacing: 0.03em;
+      font-style: normal !important;
+    }
+    .chapter-emoji {
+      text-align: center;
+      font-size: 48px;
+      margin: 1rem 0;
+      line-height: 1.3;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    .playbook p {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #1a2a1a;
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 8px;
+      transition: background 0.3s ease;
+      font-style: normal !important;
+      cursor: pointer;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT ----- */
+    .speaking-sentence {
+      background: rgba(60, 120, 60, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(60, 120, 60, 0.15), inset 0 0 20px rgba(60, 120, 60, 0.05);
+      animation: fieldGlow 1.2s ease-in-out;
+      border: 1px solid rgba(60, 120, 60, 0.1);
+      font-style: normal !important;
+    }
+    .active-sentence {
+      background: rgba(60, 120, 60, 0.12) !important;
+    }
+
+    @keyframes fieldGlow {
+      0% { box-shadow: 0 0 0 rgba(60, 120, 60, 0); }
+      50% { box-shadow: 0 0 40px rgba(60, 120, 60, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(60, 120, 60, 0.15); }
+    }
+
+    /* ----- THE END ----- */
+    .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #3a8a3a;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(60, 120, 60, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+    .the-end::before {
+      content: '⚽ 🌍 ⚽ 🌍 ⚽';
+      display: block;
+      font-size: 18px;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    /* ----- EPILOGUE HEADING ----- */
+    .epilogue-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #1a2e1a;
+      text-align: center;
+      margin: 2rem 0 1rem 0;
+      letter-spacing: 0.08em;
+      font-style: normal !important;
+    }
+    .epilogue-heading::after {
+      content: '✦ ✦ ✦';
+      display: block;
+      font-size: 18px;
+      color: #4a7a4a;
+      letter-spacing: 0.5em;
+      margin-top: 0.3rem;
+      opacity: 0.5;
+      font-style: normal !important;
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 768px) {
+      .playbook { padding: 1.5rem; font-size: 18px; }
+      .title-page h1 { font-size: 32px; }
+      .chapter-title { font-size: 22px; }
+      .playbook p { font-size: 18px; }
+      .title-page .title-emoji { font-size: 48px; }
+    }
+    @media (max-width: 480px) {
+      .playbook { padding: 1rem; font-size: 16px; }
+      .title-page h1 { font-size: 26px; }
+      .chapter-title { font-size: 18px; }
+      .playbook p { font-size: 16px; }
+      .title-page .title-emoji { font-size: 40px; }
+    }
+  </style>
+</head>
+<body>
+<div class="playbook">
+
+  <div class="title-page">
+    <span class="title-emoji">⚽🌍🌟🏆</span>
+    <h1>The Dreamer</h1>
+    <div class="subtitle">A Story About Football, Determination, and Never Giving Up</div>
+    <div class="author">Grade 7 · IHEZA Education</div>
+  </div>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 1</div><div class="chapter-title">The Dreamer</div></div>
+  <div class="chapter-emoji">⚽🌍🌟👦</div>
+
+  <p>In the small, bustling town of Mwanza, Tanzania, nestled along the shores of Lake Victoria, lived a young boy named Fakihi. At just 12 years old, Fakihi had a dream that burned brighter than the African sun—to become a football superstar. Every day, after finishing his chores and schoolwork, Fakihi would rush to the dusty field near his home, where he would practice tirelessly, dribbling an old, tattered ball made of rags and plastic bags.</p>
+
+  <p>Fakihi's family was poor. His father, a fisherman, spent long hours on the lake, while his mother sold vegetables at the local market. They could barely afford to put food on the table, let alone buy Fakihi a proper football. But Fakihi didn't let that stop him. He believed that if he worked hard enough, he could overcome any obstacle.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 2</div><div class="chapter-title">The First Challenge</div></div>
+  <div class="chapter-emoji">👦😤⚽💪</div>
+
+  <p>One day, as Fakihi was practicing his dribbling skills, a group of older boys approached him. They were the local football team, and they had heard about Fakihi's passion for the game. But instead of encouraging him, they mocked him.</p>
+
+  <p>"You think you can play football with that old rag?" one of the boys sneered. "You'll never be good enough to play with us."</p>
+
+  <p>Fakihi's heart sank, but he refused to let their words discourage him. He knew that he had to prove himself. That night, he made a promise to himself: he would work harder than ever before, and one day, he would show everyone that he was destined for greatness.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 3</div><div class="chapter-title">The Mentor</div></div>
+  <div class="chapter-emoji">👴🤝👦⚽</div>
+
+  <p>Weeks turned into months, and Fakihi's determination never wavered. One afternoon, as he was practicing alone on the field, an old man named Mzee Juma approached him. Mzee Juma had once been a talented football player in his youth, but an injury had ended his career prematurely. He had been watching Fakihi from a distance and was impressed by the boy's dedication.</p>
+
+  <p>"Fakihi," Mzee Juma said, "I see something special in you. If you're willing to learn, I can teach you the skills you need to become a great player."</p>
+
+  <p>Fakihi's eyes lit up with excitement. He eagerly accepted Mzee Juma's offer, and from that day forward, the old man became his mentor. Under Mzee Juma's guidance, Fakihi's skills improved rapidly. He learned how to control the ball with precision, how to read the game, and how to outsmart his opponents.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 4</div><div class="chapter-title">The Tournament</div></div>
+  <div class="chapter-emoji">🏆👀⚽😰</div>
+
+  <p>One day, Mzee Juma told Fakihi about an upcoming football tournament in Dar es Salaam, the largest city in Tanzania. The tournament would feature some of the best young players in the country, and the winner would receive a scholarship to a prestigious football academy.</p>
+
+  <p>"This is your chance, Fakihi," Mzee Juma said. "If you can impress the scouts at the tournament, you could be one step closer to achieving your dream."</p>
+
+  <p>Fakihi knew that this was the opportunity he had been waiting for. But there was one problem: he didn't have the money to travel to Dar es Salaam. Determined not to let this setback stop him, Fakihi went door to door in his village, asking for donations. At first, many people turned him away, but Fakihi's persistence paid off. With the help of his family, friends, and even some of the boys who had once mocked him, Fakihi managed to raise enough money for the trip.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 5</div><div class="chapter-title">The Journey</div></div>
+  <div class="chapter-emoji">🚌🌅🏙️😤</div>
+
+  <p>The journey to Dar es Salaam was long and arduous. Fakihi traveled by bus, enduring hours of bumpy roads and sweltering heat. But he didn't mind. He was focused on the goal ahead.</p>
+
+  <p>When he finally arrived in the city, Fakihi was overwhelmed by its size and noise. But he didn't have time to be intimidated. The tournament was about to begin, and he needed to be at his best.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 6</div><div class="chapter-title">The Tournament Begins</div></div>
+  <div class="chapter-emoji">⚽🏃‍♂️💨🎯</div>
+
+  <p>The tournament was fierce, with teams from all over Tanzania competing for the top prize. Fakihi's team, made up of players from his village, was the underdog. But Fakihi was determined to prove that they belonged on the same field as the best.</p>
+
+  <p>In the first match, Fakihi's team faced a highly skilled opponent. The game was tough, but Fakihi's speed and agility helped his team secure a narrow victory. As the tournament progressed, Fakihi's confidence grew. He scored goal after goal, dazzling the crowd with his skill and determination.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 7</div><div class="chapter-title">The Final Match</div></div>
+  <div class="chapter-emoji">🏆⚽🔥🥅</div>
+
+  <p>The final match was against the defending champions, a team from Dar es Salaam. They were bigger, stronger, and more experienced than Fakihi's team. But Fakihi refused to be intimidated. He knew that this was his moment to shine.</p>
+
+  <p>The game was intense, with both teams fighting tooth and nail for every ball. As the minutes ticked by, the score remained tied. Then, in the final moments of the game, Fakihi received a pass just outside the penalty box. With a burst of speed, he dribbled past two defenders and unleashed a powerful shot that sailed into the top corner of the net.</p>
+
+  <p>The crowd erupted in cheers as Fakihi's team celebrated their victory. Fakihi had done it. He had led his team to victory and proven that he had what it took to be a football superstar.</p>
+
+  <div class="chapter-header"><div class="chapter-number">Chapter 8</div><div class="chapter-title">The Dream Realized</div></div>
+  <div class="chapter-emoji">🌟⚽🏆🎉</div>
+
+  <p>After the tournament, Fakihi was approached by several scouts from top football academies. They were impressed by his performance and offered him a chance to join their programs. Fakihi's dream was finally within reach.</p>
+
+  <p>With the support of his family and Mzee Juma, Fakihi accepted a scholarship to one of the best football academies in the country. He worked harder than ever before, honing his skills and learning from some of the best coaches in the game.</p>
+
+  <p>Years later, Fakihi's hard work paid off. He signed a contract with a top European football club, becoming the first player from his village to play professionally. Fakihi had achieved his dream, but he never forgot where he came from. He returned to Mwanza often, using his success to inspire other young boys and girls to chase their dreams, no matter how impossible they seemed.</p>
+
+  <div class="epilogue-heading">Epilogue: The Legend of Fakihi</div>
+
+  <p>Fakihi's story became legend in Mwanza and beyond. He was proof that with hard work, determination, and a little bit of luck, anything was possible. And though he had achieved fame and fortune, Fakihi remained humble, always remembering the dusty field where his journey began.</p>
+
+  <p>As he stood on the pitch, wearing the jersey of his beloved club, Fakihi looked up at the roaring crowd and smiled. He had come a long way from the boy with the tattered ball, but he knew that his journey was far from over. For Fakihi, this was just the beginning.</p>
+
+  <div class="the-end">The End.</div>
+
+</div>
+</body>
+</html>

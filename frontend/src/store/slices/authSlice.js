@@ -58,6 +58,25 @@ const authSlice = createSlice({
       const storedUser = localStorage.getItem('currentUser');
       const storedPortal = localStorage.getItem('currentPortal');
       const isLoggedIn = localStorage.getItem('isLoggedIn');
+      const expiresAt = localStorage.getItem('sessionExpiresAt');
+      
+      // Check if token has expired
+      if (isLoggedIn === 'true' && expiresAt) {
+        const expiryDate = new Date(expiresAt);
+        if (new Date() >= expiryDate) {
+          // Token expired - clear auth state
+          localStorage.removeItem('sessionToken');
+          localStorage.removeItem('currentPortal');
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('isLoggedIn');
+          localStorage.removeItem('sessionExpiresAt');
+          state.currentUser = null;
+          state.isAuthenticated = false;
+          state.portal = null;
+          state.authChecked = true;
+          return;
+        }
+      }
       
       if (storedUser && isLoggedIn === 'true') {
         try {

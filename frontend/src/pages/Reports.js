@@ -745,13 +745,27 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
       setLoading(true);
       const params = new URLSearchParams();
       if (selectedChain) params.append('chain', selectedChain);
-      const url = `${API_URL}/api/all-student-fees${params.toString() ? '?' + params.toString() : ''}`;
+      // Use the dedicated lightweight financial-report-students endpoint.
+      // This returns the summary totals AND the per-student table rows in ONE
+      // fast response WITHOUT any receipt images. Previously this tab called
+      // /api/all-student-fees?page_size=1000 which was heavy and caused Nginx
+      // upstream timeouts (Cloudflare 520) because it had to process and strip
+      // receipt images for every student.
+      const url = `${API_URL}/api/financial-report-students${params.toString() ? '?' + params.toString() : ''}`;
       const response = await fetch(url, {
         headers: getAuthHeaders()
       });
       if (response.ok) {
         const data = await response.json();
-        setStudents(data);
+        // New endpoint returns { summary: {...}, students: [...] }.
+        // Fall back to the old shapes for safety.
+        if (data && data.students) {
+          setStudents(data.students);
+        } else if (Array.isArray(data)) {
+          setStudents(data);
+        } else {
+          setStudents([]);
+        }
       }
     } catch (error) {
       console.error('Failed to load student fees:', error);
@@ -759,6 +773,7 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
       setLoading(false);
     }
   };
+
 
   const applyFilters = () => {
     let result = [...students];

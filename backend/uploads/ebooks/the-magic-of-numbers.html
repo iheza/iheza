@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Magic of Numbers · Grade 5 Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- SCHOOL THEME BACKGROUND ----- */
+    body {
+      background: #1a1a2e;
+      background-image:
+        radial-gradient(ellipse at 30% 20%, #2a2a4a 0%, #1a1a2e 60%),
+        radial-gradient(ellipse at 70% 80%, #22223a 0%, #1a1a2e 50%),
+        radial-gradient(circle at 50% 0%, #3a3a5a 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- SPARKLE PARTICLES ----- */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      background-image:
+        radial-gradient(2px 2px at 10% 20%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(2px 2px at 30% 60%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(3px 3px at 50% 10%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(2px 2px at 70% 40%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(3px 3px at 90% 80%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(2px 2px at 15% 85%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(2px 2px at 85% 15%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(3px 3px at 45% 45%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(2px 2px at 60% 90%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(2px 2px at 25% 35%, rgba(255, 215, 0, 0.2), transparent);
+      animation: sparkleFloat 6s ease-in-out infinite alternate;
+    }
+    body::after {
+      background-image:
+        radial-gradient(1px 1px at 20% 50%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(1px 1px at 60% 30%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(1px 1px at 40% 80%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(2px 2px at 10% 70%, rgba(255, 215, 0, 0.2), transparent);
+      animation: sparkleFloat 8s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes sparkleFloat {
+      0% { opacity: 0.2; transform: translateY(0); }
+      50% { opacity: 0.5; transform: translateY(-10px); }
+      100% { opacity: 0.3; transform: translateY(5px); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #faf8f5;
+      background-image:
+        linear-gradient(to bottom, #faf8f5 0%, #f0ede8 50%, #faf8f5 100%);
+      border-radius: 24px;
+      padding: 3rem 3.5rem;
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(100, 100, 180, 0.2),
+        inset 0 0 40px rgba(100, 100, 180, 0.05);
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(100, 100, 180, 0.15);
+    }
+
+    /* ----- DECORATIVE CORNER ORNAMENTS ----- */
+    .playbook::before {
+      content: '🔢';
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+    .playbook::after {
+      content: '✨';
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-size: 24px;
+      opacity: 0.3;
+    }
+
+    /* ----- TITLE PAGE ----- */
+    .title-page {
+      text-align: center;
+      padding: 2rem 0 3rem 0;
+      border-bottom: 2px solid rgba(100, 100, 180, 0.2);
+      margin-bottom: 2rem;
+    }
+
+    .title-page h1 {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 42px;
+      color: #1a1a2e;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 0 rgba(100, 100, 180, 0.15);
+      font-style: normal !important;
+    }
+
+    .title-page .subtitle {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 22px;
+      color: #5a5a7a;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-style: normal !important;
+    }
+
+    .title-page .author {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 18px;
+      color: #7a7a9a;
+      font-weight: 500;
+      font-style: normal !important;
+    }
+
+    .title-page .title-emoji {
+      font-size: 64px;
+      display: block;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    /* ----- ACT HEADINGS ----- */
+    .act-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      color: #1a1a2e;
+      text-align: center;
+      margin: 2.5rem 0 0.5rem 0;
+      padding: 0.8rem 0;
+      letter-spacing: 0.08em;
+      text-shadow: 2px 2px 0 rgba(100, 100, 180, 0.15);
+      position: relative;
+      text-transform: uppercase;
+      font-style: normal !important;
+    }
+
+    .act-heading::after {
+      content: '✦ ✦ ✦';
+      display: block;
+      font-size: 20px;
+      color: #6a6a9a;
+      letter-spacing: 0.5em;
+      margin-top: 0.2rem;
+      opacity: 0.5;
+      font-style: normal !important;
+    }
+
+    /* ----- SCENE HEADINGS ----- */
+    .scene-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 700;
+      font-size: 24px;
+      color: #4a4a7a;
+      margin: 1.8rem 0 0.8rem 0;
+      padding: 0.4rem 1.2rem;
+      background: linear-gradient(to right, transparent, #e8e6f0, transparent);
+      border-left: 6px solid #6a6a9a;
+      border-radius: 0 12px 12px 0;
+      letter-spacing: 0.04em;
+      display: inline-block;
+      font-style: normal !important;
+    }
+
+    /* ----- STAGE DIRECTIONS ----- */
+    .stage-dir {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      color: #6a5a4a;
+      background: rgba(240, 237, 232, 0.5);
+      padding: 0.2rem 1rem;
+      border-radius: 16px 4px 16px 4px;
+      display: inline-block;
+      margin: 0.2rem 0;
+      font-size: 18px;
+      border-left: 3px solid #c0b8a8;
+      font-style: normal !important;
+      font-weight: 400;
+    }
+
+    /* ----- CHARACTER NAMES ----- */
+    .character {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 22px;
+      color: #3a3a6a;
+      display: inline;
+      margin-right: 0.2rem;
+      padding: 0.1rem 0.4rem;
+      background: linear-gradient(to right, transparent, rgba(100, 100, 180, 0.08), transparent);
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .character::after {
+      content: ': ';
+      color: #6a6a9a;
+      font-weight: 900;
+    }
+
+    /* ----- DIALOGUE ----- */
+    .dialogue {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      color: #1a1a2e;
+      font-weight: 600;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .dialogue::before {
+      content: '"';
+      color: #6a6a9a;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.6;
+    }
+
+    .dialogue::after {
+      content: '"';
+      color: #6a6a9a;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.6;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    .playbook p {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #1a1a2e;
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 8px;
+      transition: background 0.3s ease;
+      display: flow-root;
+      clear: both;
+      font-style: normal !important;
+    }
+
+    .playbook p::after {
+      content: '';
+      display: table;
+      clear: both;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT (purple glow) ----- */
+    .speaking-sentence {
+      background: rgba(100, 100, 180, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(100, 100, 180, 0.15), inset 0 0 20px rgba(100, 100, 180, 0.05);
+      animation: magicGlow 1.2s ease-in-out;
+      border: 1px solid rgba(100, 100, 180, 0.1);
+      font-style: normal !important;
+    }
+
+    .active-sentence {
+      background: rgba(100, 100, 180, 0.12) !important;
+    }
+
+    @keyframes magicGlow {
+      0% { box-shadow: 0 0 0 rgba(100, 100, 180, 0); }
+      50% { box-shadow: 0 0 40px rgba(100, 100, 180, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(100, 100, 180, 0.15); }
+    }
+
+    /* ----- THE END ----- */
+    .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #6a6a9a;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(100, 100, 180, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+
+    .the-end::before {
+      content: '✨ 🔢 ✨ 🔢 ✨';
+      display: block;
+      font-size: 18px;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    /* ----- EPILOGUE HEADING ----- */
+    .epilogue-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #1a1a2e;
+      text-align: center;
+      margin: 2rem 0 1rem 0;
+      letter-spacing: 0.08em;
+      font-style: normal !important;
+    }
+
+    .epilogue-heading::after {
+      content: '✦ ✦ ✦';
+      display: block;
+      font-size: 18px;
+      color: #6a6a9a;
+      letter-spacing: 0.5em;
+      margin-top: 0.3rem;
+      opacity: 0.5;
+      font-style: normal !important;
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 768px) {
+      .playbook {
+        padding: 1.5rem;
+        font-size: 18px;
+      }
+      .title-page h1 { font-size: 32px; }
+      .act-heading { font-size: 26px; }
+      .scene-heading { font-size: 20px; }
+      .character { font-size: 18px; }
+      .dialogue { font-size: 18px; }
+      .playbook p { font-size: 18px; }
+      .title-page .title-emoji { font-size: 48px; }
+    }
+
+    @media (max-width: 480px) {
+      .playbook {
+        padding: 1rem;
+        font-size: 16px;
+      }
+      .title-page h1 { font-size: 26px; }
+      .act-heading { font-size: 22px; }
+      .scene-heading { font-size: 17px; }
+      .character { font-size: 16px; }
+      .dialogue { font-size: 16px; }
+      .playbook p { font-size: 16px; }
+      .title-page .title-emoji { font-size: 40px; }
+    }
+
+    /* ----- CLICKABLE CURSOR ----- */
+    .playbook p { cursor: pointer; }
+  </style>
+</head>
+<body>
+<div class="playbook">
+
+  <!-- ============================================ -->
+  <!-- TITLE PAGE                                    -->
+  <!-- ============================================ -->
+  <div class="title-page">
+    <span class="title-emoji">🔢✨📚🎭</span>
+    <h1>The Magic of Numbers</h1>
+    <div class="subtitle">A Play in Three Acts</div>
+    <div class="author">Grade 5 · IHEZA Education</div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- ACT 1                                         -->
+  <!-- ============================================ -->
+  <div class="act-heading">Act 1: The Struggle</div>
+
+  <div class="scene-heading">Scene 1: The Classroom</div>
+
+  <p class="stage-dir">The stage is set as a typical classroom. Desks are arranged neatly, and a chalkboard is at the front. A group of students is seated, chatting before class begins. Among them is JASON, a 12-year-old boy who looks visibly frustrated. He's slouched in his seat, staring at a math textbook with a look of defeat.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(to himself)</span> <span class="dialogue">Why is math so hard? Why can't it just make sense?</span></p>
+
+  <p class="stage-dir">Enter SAM, the math teacher. SAM is in his late 30s, energetic, and approachable. He carries a stack of papers and a small box of props.</p>
+
+  <p><span class="character">Sam</span> <span class="dialogue">Good morning, class! Today, we're going to dive into the world of fractions. I know some of you might find it tricky, but I promise, by the end of this lesson, you'll see how fun math can be!</span></p>
+
+  <p class="stage-dir">The class groans, except for Jason, who just sighs deeply.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(whispering to his friend, LUCY)</span> <span class="dialogue">Fun? Yeah, right. Math is like a puzzle I can't solve.</span></p>
+
+  <p><span class="character">Lucy</span> <span class="stage-dir">(whispering back)</span> <span class="dialogue">Maybe you just need to look at it differently.</span></p>
+
+  <p><span class="character">Sam</span> <span class="stage-dir">(noticing Jason's frustration)</span> <span class="dialogue">Jason, I see you're not too excited about fractions. How about we work on this together after class?</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(reluctantly)</span> <span class="dialogue">Sure, Mr. Sam. But I don't think it'll help.</span></p>
+
+  <div class="scene-heading">Scene 2: After Class</div>
+
+  <p class="stage-dir">The classroom is empty except for Jason and Sam. Sam pulls up a chair next to Jason.</p>
+
+  <p><span class="character">Sam</span> <span class="dialogue">So, Jason, what's been giving you trouble?</span></p>
+
+  <p><span class="character">Jason</span> <span class="dialogue">Everything! Numbers just don't make sense to me. I try to understand, but it's like my brain just shuts down.</span></p>
+
+  <p><span class="character">Sam</span> <span class="stage-dir">(smiling)</span> <span class="dialogue">You know, math is like a language. At first, it seems confusing, but once you learn the rules, it starts to make sense. Let's try something different today. Forget about numbers for a second. Let's talk about pizza.</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(confused)</span> <span class="dialogue">Pizza?</span></p>
+
+  <p><span class="character">Sam</span> <span class="dialogue">Exactly. Imagine you have a whole pizza. If you cut it into four equal slices, each slice is one-fourth of the pizza. If you eat two slices, you've eaten two-fourths, which is the same as one-half. See? Fractions are just parts of a whole.</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(thinking)</span> <span class="dialogue">Hmm... I guess that makes sense. But what about all the other stuff? Like, what's the point of algebra?</span></p>
+
+  <p><span class="character">Sam</span> <span class="stage-dir">(laughing)</span> <span class="dialogue">Algebra is like solving a mystery. You're given clues, and you have to figure out the missing piece. It's like being a detective!</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(smiling slightly)</span> <span class="dialogue">I never thought of it that way.</span></p>
+
+  <p><span class="character">Sam</span> <span class="dialogue">Math is everywhere, Jason. It's in the games you play, the music you listen to, even in the way plants grow. Once you start seeing it, you'll realize how amazing it is.</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(nodding)</span> <span class="dialogue">Maybe... I'll try to look at it differently.</span></p>
+
+  <!-- ============================================ -->
+  <!-- ACT 2                                         -->
+  <!-- ============================================ -->
+  <div class="act-heading">Act 2: The Turning Point</div>
+
+  <div class="scene-heading">Scene 1: The Math Fair</div>
+
+  <p class="stage-dir">The stage is set up as a school gymnasium decorated with math-themed posters and tables filled with math games and activities. Students are milling around, playing games and solving puzzles. Jason is standing near a table, looking at a puzzle with a confused expression.</p>
+
+  <p><span class="character">Lucy</span> <span class="stage-dir">(approaching Jason)</span> <span class="dialogue">Hey, Jason! Want to try the fraction matching game with me?</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(hesitant)</span> <span class="dialogue">I don't know... I'm not good at fractions.</span></p>
+
+  <p><span class="character">Lucy</span> <span class="dialogue">Come on, it's fun! You just match the picture of the pizza slice to the right fraction.</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(sighs)</span> <span class="dialogue">Okay, I'll try.</span></p>
+
+  <p class="stage-dir">Jason and Lucy start playing the game. At first, Jason struggles, but as they continue, he starts to get the hang of it.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(excited)</span> <span class="dialogue">Hey, I think I'm getting it! This slice is one-third, right?</span></p>
+
+  <p><span class="character">Lucy</span> <span class="stage-dir">(smiling)</span> <span class="dialogue">Yes! See, you're better at this than you think.</span></p>
+
+  <p class="stage-dir">Sam approaches, watching Jason with a proud smile.</p>
+
+  <p><span class="character">Sam</span> <span class="stage-dir">(to Jason)</span> <span class="dialogue">Looks like you're having fun!</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(grinning)</span> <span class="dialogue">Yeah, I guess math isn't so bad when it's a game.</span></p>
+
+  <p><span class="character">Sam</span> <span class="dialogue">That's the spirit! Remember, math is all around us. You just have to find the fun in it.</span></p>
+
+  <div class="scene-heading">Scene 2: The Homework Breakthrough</div>
+
+  <p class="stage-dir">Jason is at home, sitting at his desk with his math homework. He's working on a problem, but this time, he's more confident. He's using the pizza analogy Sam taught him.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(to himself)</span> <span class="dialogue">Okay, if I have three-fourths of a pizza and I eat one-fourth, that leaves me with... two-fourths, which is the same as one-half. Got it!</span></p>
+
+  <p class="stage-dir">He writes down the answer and moves on to the next problem. This time, it's an algebra problem. He remembers what Sam said about being a detective.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(thinking)</span> <span class="dialogue">If 2x + 3 = 7, then I need to find out what x is. So, if I subtract 3 from both sides, I get 2x = 4. Then, I divide both sides by 2, so x = 2. I did it!</span></p>
+
+  <p class="stage-dir">He looks up, surprised and proud of himself.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(smiling)</span> <span class="dialogue">I actually did it. Math isn't so scary after all.</span></p>
+
+  <!-- ============================================ -->
+  <!-- ACT 3                                         -->
+  <!-- ============================================ -->
+  <div class="act-heading">Act 3: The Triumph</div>
+
+  <div class="scene-heading">Scene 1: The Math Competition</div>
+
+  <p class="stage-dir">The stage is set up as a school auditorium. There's a banner that reads "Annual Math Challenge." Students are seated, and a few are on stage, competing in a math quiz. Jason is one of the contestants. He looks nervous but determined.</p>
+
+  <p><span class="character">Host</span> <span class="stage-dir">(to the contestants)</span> <span class="dialogue">Alright, final question! If a train leaves Station A at 60 miles per hour and another train leaves Station B at 40 miles per hour, and the distance between them is 300 miles, how long will it take for them to meet?</span></p>
+
+  <p class="stage-dir">The other contestants look puzzled, but Jason starts writing on his paper. He remembers Sam's lessons about solving real-world problems with math.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(thinking)</span> <span class="dialogue">If I add their speeds together, that's 100 miles per hour. Then, I divide the total distance by their combined speed. So, 300 divided by 100 is... 3 hours!</span></p>
+
+  <p class="stage-dir">He raises his hand confidently.</p>
+
+  <p><span class="character">Host</span> <span class="dialogue">Jason, what's your answer?</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(confidently)</span> <span class="dialogue">3 hours.</span></p>
+
+  <p><span class="character">Host</span> <span class="stage-dir">(smiling)</span> <span class="dialogue">That's correct! Jason wins the Math Challenge!</span></p>
+
+  <p class="stage-dir">The audience erupts in applause. Jason looks around, surprised and thrilled. Sam is in the audience, clapping proudly.</p>
+
+  <div class="scene-heading">Scene 2: The Celebration</div>
+
+  <p class="stage-dir">After the competition, Jason and Sam are standing outside the auditorium.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(excited)</span> <span class="dialogue">I can't believe I won! I never thought I could do something like this.</span></p>
+
+  <p><span class="character">Sam</span> <span class="stage-dir">(proudly)</span> <span class="dialogue">I always knew you had it in you, Jason. You just needed to see math in a different way.</span></p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(grateful)</span> <span class="dialogue">Thanks, Mr. Sam. You made math make sense. I used to think it was impossible, but now... I think it's kind of fun.</span></p>
+
+  <p><span class="character">Sam</span> <span class="stage-dir">(smiling)</span> <span class="dialogue">That's the magic of numbers, Jason. Once you understand them, they can take you anywhere.</span></p>
+
+  <p class="stage-dir">Jason looks up at the sky, as if imagining all the possibilities. The stage lights dim, leaving a spotlight on Jason as he smiles, full of confidence and hope.</p>
+
+  <p class="stage-dir">Curtain falls.</p>
+
+  <!-- ============================================ -->
+  <!-- EPILOGUE                                      -->
+  <!-- ============================================ -->
+  <div class="epilogue-heading">Epilogue: The Future</div>
+
+  <p class="stage-dir">The stage is set as a college graduation ceremony. Jason, now a young man, is wearing a cap and gown. He's receiving his diploma in mathematics. In the audience, Sam is watching with tears of pride in his eyes.</p>
+
+  <p><span class="character">Jason</span> <span class="stage-dir">(to the audience)</span> <span class="dialogue">Math used to be my biggest challenge, but with the right guidance, I discovered its beauty. Now, I'm ready to take on the world, one equation at a time.</span></p>
+
+  <p class="stage-dir">The audience applauds as Jason walks off the stage, ready to embark on his future, thanks to the magic of numbers and the teacher who believed in him.</p>
+
+  <p class="stage-dir">End of Play.</p>
+
+  <!-- ============================================ -->
+  <!-- THE END                                       -->
+  <!-- ============================================ -->
+  <div class="the-end">The End.</div>
+
+</div>
+
+<script>
+  (function() {
+    'use strict';
+    var isReading = false, isPaused = false, currentIndex = 0, sentences = [], utterance = null, selectedVoice = null;
+
+    function getTextBlocks() {
+      var blocks = [];
+      document.querySelectorAll('.playbook p').forEach(function(p) {
+        var text = p.textContent.trim();
+        if (text && text.length > 2) blocks.push({ text: text, element: p });
+      });
+      return blocks;
+    }
+
+    function highlightSentence(index) {
+      document.querySelectorAll('.speaking-sentence').forEach(function(el) { el.classList.remove('speaking-sentence'); });
+      document.querySelectorAll('.active-sentence').forEach(function(el) { el.classList.remove('active-sentence'); });
+      var blocks = getTextBlocks();
+      if (blocks.length > 0 && index >= 0 && index < blocks.length) {
+        blocks[index].element.classList.add('speaking-sentence');
+        blocks[index].element.classList.add('active-sentence');
+        blocks[index].element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+
+    function speakSentence(text, index) {
+      if (!window.speechSynthesis) { alert('Your browser does not support speech synthesis.'); return; }
+      if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+      utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9; utterance.pitch = 1.25; utterance.volume = 1;
+      if (selectedVoice) utterance.voice = selectedVoice;
+      utterance.onstart = function() { isReading = true; isPaused = false; currentIndex = index; highlightSentence(index); };
+      utterance.onend = function() {
+        var nextIndex = index + 1;
+        if (nextIndex < sentences.length) speakSentence(sentences[nextIndex], nextIndex);
+        else { isReading = false; highlightSentence(-1); showToast('🎉 Finished reading the book!'); }
+      };
+      utterance.onerror = function(e) {
+        if (e.error === 'canceled' || e.error === 'interrupted') return;
+        if (e.error === 'synthesis-failed') { setTimeout(function() { if (!isPaused && isReading) speakSentence(text, index); }, 500); }
+        else { console.error('Speech error:', e); isReading = false; }
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function readBookAloud() {
+      var blocks = getTextBlocks();
+      if (blocks.length === 0) { showToast('No readable text found in this book.'); return; }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      sentences = blocks.map(function(b) { return b.text; });
+      currentIndex = 0;
+      speakSentence(sentences[0], 0);
+    }
+
+    function pauseReading() { if (window.speechSynthesis) { window.speechSynthesis.pause(); isPaused = true; } }
+    function resumeReading() { if (window.speechSynthesis) { window.speechSynthesis.resume(); isPaused = false; } }
+
+    function stopReading() {
+      try {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          if (utterance) { utterance.onend = null; utterance.onerror = null; utterance = null; }
+        }
+      } catch (e) { console.warn('Stop speech error:', e); }
+      isReading = false; isPaused = false; highlightSentence(-1);
+    }
+
+    function showToast(msg) {
+      var toast = document.createElement('div');
+      toast.textContent = msg;
+      toast.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#faf8f5;padding:12px 24px;border-radius:12px;font-family:Arial,sans-serif;font-size:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:1px solid rgba(100,100,180,0.3);animation:fadeInOut 3s ease forwards;';
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 3000);
+    }
+
+    var styleSheet = document.createElement('style');
+    styleSheet.textContent = '@keyframes fadeInOut{0%{opacity:0;transform:translateX(-50%) translateY(20px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1;transform:translateX(-50%) translateY(0)}100%{opacity:0;transform:translateX(-50%) translateY(-20px)}}';
+    document.head.appendChild(styleSheet);
+
+    document.querySelector('.playbook').addEventListener('click', function(e) {
+      var p = e.target.closest('p');
+      if (!p) return;
+      var text = p.textContent.trim();
+      if (!text || text.length < 2) return;
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      sentences = [text];
+      currentIndex = 0;
+      speakSentence(text, 0);
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+        if (isReading && isPaused) resumeReading();
+        else if (isReading && !isPaused) pauseReading();
+        else readBookAloud();
+      }
+      if (e.key === 'Escape') stopReading();
+    });
+
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = function() {
+        var voices = window.speechSynthesis.getVoices();
+        var childVoice = voices.find(function(v) {
+          var name = v.name.toLowerCase();
+          return name.includes('child') || name.includes('kid') || name.includes('samantha') || name.includes('google uk english female') || name.includes('moira') || name.includes('siri');
+        });
+        if (childVoice) selectedVoice = childVoice;
+      };
+      setTimeout(function() {
+        var voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          var childVoice = voices.find(function(v) {
+            var name = v.name.toLowerCase();
+            return name.includes('child') || name.includes('kid') || name.includes('samantha') || name.includes('google uk english female') || name.includes('moira') || name.includes('siri');
+          });
+          if (childVoice) selectedVoice = childVoice;
+        }
+      }, 200);
+    }
+
+    window.readBookAloud = readBookAloud;
+    window.pauseReading = pauseReading;
+    window.resumeReading = resumeReading;
+    window.stopReading = stopReading;
+    window.getTextBlocks = getTextBlocks;
+    window.highlightSentence = highlightSentence;
+    window.speakSentence = speakSentence;
+    window.isReading = function() { return isReading; };
+    window.isPaused = function() { return isPaused; };
+    window.getSentences = function() { return sentences; };
+    window.getCurrentIndex = function() { return currentIndex; };
+    window.setSelectedVoice = function(voice) { selectedVoice = voice; };
+
+  })();
+</script>
+</body>
+</html>

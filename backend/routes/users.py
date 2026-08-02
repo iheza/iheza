@@ -322,7 +322,9 @@ async def get_chains(current_user: dict = Depends(get_current_user)):
 @router.get("/chains/{chain_code}", response_model=Dict)
 async def get_chain(chain_code: str):
     """Get a specific chain by code - Public endpoint for landing pages"""
-    chain = await db.chains.find_one({"code": chain_code.upper()}, {"_id": 0})
+    # Strip any suffix like ":1" from chain value (e.g., "DUP:1" -> "DUP")
+    clean_code = chain_code.upper().split(':')[0]
+    chain = await db.chains.find_one({"code": clean_code}, {"_id": 0})
     if not chain:
         raise HTTPException(status_code=404, detail="Chain not found")
     

@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Magical Paintbrush · Emoji Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- WARM SUNSET BACKGROUND ----- */
+    body {
+      background: #1a0f0a;
+      background-image:
+        radial-gradient(ellipse at 30% 20%, #3a1a0a 0%, #1a0f0a 60%),
+        radial-gradient(ellipse at 70% 80%, #2a1a0f 0%, #1a0f0a 50%),
+        radial-gradient(circle at 50% 0%, #5a2a0a 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- FLOATING SPARKLE PARTICLES ----- */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      background-image:
+        radial-gradient(2px 2px at 10% 20%, rgba(255, 183, 77, 0.6), transparent),
+        radial-gradient(2px 2px at 30% 60%, rgba(255, 138, 101, 0.4), transparent),
+        radial-gradient(3px 3px at 50% 10%, rgba(255, 183, 77, 0.5), transparent),
+        radial-gradient(2px 2px at 70% 40%, rgba(255, 138, 101, 0.3), transparent),
+        radial-gradient(3px 3px at 90% 80%, rgba(255, 183, 77, 0.5), transparent),
+        radial-gradient(2px 2px at 15% 85%, rgba(255, 138, 101, 0.4), transparent),
+        radial-gradient(2px 2px at 85% 15%, rgba(255, 183, 77, 0.3), transparent),
+        radial-gradient(3px 3px at 45% 45%, rgba(255, 138, 101, 0.4), transparent),
+        radial-gradient(2px 2px at 60% 90%, rgba(255, 183, 77, 0.5), transparent),
+        radial-gradient(2px 2px at 25% 35%, rgba(255, 138, 101, 0.3), transparent);
+      animation: sparkle 4s ease-in-out infinite alternate;
+    }
+    body::after {
+      background-image:
+        radial-gradient(1px 1px at 20% 50%, rgba(255, 213, 128, 0.5), transparent),
+        radial-gradient(1px 1px at 60% 30%, rgba(255, 213, 128, 0.4), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(255, 213, 128, 0.3), transparent),
+        radial-gradient(1px 1px at 40% 80%, rgba(255, 213, 128, 0.5), transparent),
+        radial-gradient(2px 2px at 10% 70%, rgba(255, 213, 128, 0.3), transparent);
+      animation: sparkle 5s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes sparkle {
+      0% { opacity: 0.3; transform: translateY(0); }
+      50% { opacity: 0.7; transform: translateY(-10px); }
+      100% { opacity: 0.4; transform: translateY(5px); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #fef9f0;
+      border-radius: 32px;
+      box-shadow:
+        0 30px 50px -20px rgba(0,0,0,0.8),
+        0 0 0 1px #c9955a,
+        0 0 0 4px #ffb74d,
+        0 0 0 6px #5a2a0a,
+        0 8px 32px rgba(0,0,0,0.4);
+      padding: 2.5rem 2.5rem 2rem;
+      position: relative;
+      z-index: 1;
+      background-image:
+        linear-gradient(135deg, transparent 0%, rgba(255, 183, 77, 0.03) 50%, transparent 100%);
+    }
+
+    /* Decorative inner border */
+    .playbook::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      bottom: 20px;
+      border: 1px solid rgba(255, 183, 77, 0.15);
+      border-radius: 24px;
+      pointer-events: none;
+    }
+
+    /* Corner ornament */
+    .playbook::after {
+      content: '\u2726';
+      position: absolute;
+      top: 12px;
+      right: 24px;
+      font-size: 1.2rem;
+      color: #ffb74d;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    /* ----- HEADER ----- */
+    .play-header {
+      text-align: center;
+      border-bottom: 3px double #d4a373;
+      padding-bottom: 1.2rem;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+    .play-header::after {
+      content: '\u2766';
+      position: absolute;
+      bottom: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.2rem;
+      color: #ffb74d;
+      background: #fef9f0;
+      padding: 0 12px;
+    }
+    .play-title {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #c94c1a, #ffb74d);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 2px 2px 20px rgba(255, 183, 77, 0.2);
+      letter-spacing: 1px;
+    }
+    .play-title .icon {
+      font-size: 2.6rem;
+      -webkit-text-fill-color: initial;
+      display: inline-block;
+      animation: float 3s ease-in-out infinite;
+    }
+    .play-sub {
+      font-size: 1rem;
+      color: #5a3a1a;
+      background: linear-gradient(135deg, #f5e6d3, #e8d5c4);
+      display: inline-block;
+      padding: 0.3rem 2.5rem;
+      border-radius: 40px;
+      margin-top: 0.5rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      border: 1px solid #ffb74d;
+      box-shadow: 0 2px 8px rgba(255, 183, 77, 0.15);
+      font-style: normal !important;
+    }
+
+    /* ----- AUDIO CONTROLS ----- */
+    .audio-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      align-items: center;
+      background: linear-gradient(135deg, #f5e6d3, #e8d5c4, #f5e6d3);
+      padding: 0.8rem 1.2rem;
+      border-radius: 60px;
+      border: 1px solid #ffb74d;
+      margin-bottom: 1.5rem;
+      box-shadow:
+        inset 0 1px 4px #fffcf7,
+        0 4px 12px rgba(255, 183, 77, 0.15);
+    }
+    .audio-controls button {
+      background: linear-gradient(135deg, #fef9f0, #f5e6d3);
+      border: none;
+      border-radius: 50px;
+      padding: 0.5rem 1.5rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #3a1a0a;
+      box-shadow: 0 3px 0 #d4a373, 0 4px 12px rgba(0,0,0,0.08);
+      cursor: pointer;
+      transition: all 0.12s ease;
+      border: 1px solid #ffb74d;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      letter-spacing: 0.3px;
+    }
+    .audio-controls button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 0 #d4a373, 0 6px 16px rgba(255, 183, 77, 0.25);
+      background: linear-gradient(135deg, #fffcf7, #f5e6d3);
+    }
+    .audio-controls button:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #d4a373;
+    }
+    .audio-controls button:disabled {
+      opacity: 0.4;
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #d4a373;
+      cursor: default;
+    }
+    .voice-selector {
+      flex: 1;
+      min-width: 160px;
+      padding: 0.4rem 0.8rem;
+      border-radius: 40px;
+      border: 1px solid #ffb74d;
+      background: #fef9f0;
+      font-size: 0.85rem;
+      color: #3a1a0a;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .voice-selector:focus {
+      outline: none;
+      border-color: #c9955a;
+      box-shadow: 0 0 0 2px rgba(255, 183, 77, 0.2);
+    }
+    .status-badge {
+      font-size: 0.8rem;
+      background: linear-gradient(135deg, #f5e6d3, #e8d5c4);
+      padding: 0.3rem 1.2rem;
+      border-radius: 40px;
+      color: #3a1a0a;
+      border: 1px solid #ffb74d;
+      white-space: nowrap;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-style: normal !important;
+    }
+
+    /* ============================================
+       READER CONTENT CONTAINER
+       ============================================ */
+    .reader-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 3rem 4rem;
+      background: #fef9f0;
+      margin: 1rem 2rem;
+      border-radius: 1.5rem;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08), inset 0 0 0 1px rgba(255, 183, 77, 0.15);
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #2c1810;
+      position: relative;
+    }
+
+    /* ----- DECORATIVE BOOK SPINE EFFECT ----- */
+    .reader-content::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 5%;
+      height: 90%;
+      width: 6px;
+      background: linear-gradient(to bottom, #ffb74d, #c94c1a, #ffb74d);
+      border-radius: 0 4px 4px 0;
+      opacity: 0.4;
+    }
+
+    /* ----- CHAPTER HEADINGS (BOLD & STYLISH) ----- */
+    .reader-content .chapter-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      color: #c94c1a;
+      text-align: center;
+      margin: 2.5rem 0 0.5rem 0;
+      padding: 0.8rem 0;
+      letter-spacing: 0.08em;
+      text-shadow: 2px 2px 0 rgba(255, 183, 77, 0.2);
+      position: relative;
+      text-transform: uppercase;
+      font-style: normal !important;
+    }
+
+    /* Decorative line under chapter headings */
+    .reader-content .chapter-heading::after {
+      content: '\u2726 \u2726 \u2726';
+      display: block;
+      font-size: 20px;
+      color: #ffb74d;
+      letter-spacing: 0.5em;
+      margin-top: 0.2rem;
+      opacity: 0.6;
+      font-style: normal !important;
+    }
+
+    /* ----- SCENE HEADINGS ----- */
+    .reader-content .scene-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 700;
+      font-size: 24px;
+      color: #c94c1a;
+      margin: 1.8rem 0 0.8rem 0;
+      padding: 0.4rem 1.2rem;
+      background: linear-gradient(to right, transparent, #f5ede0, transparent);
+      border-left: 6px solid #ffb74d;
+      border-radius: 0 12px 12px 0;
+      letter-spacing: 0.04em;
+      display: inline-block;
+      font-style: normal !important;
+    }
+
+    /* ----- EMOJI SCENE BLOCKS (BIG & BEAUTIFUL) ----- */
+    .reader-content .emoji-scene {
+      display: inline-block;
+      font-size: 52px !important;
+      line-height: 1.2;
+      margin: 0.5rem 1.2rem 0.5rem 0;
+      padding: 0.4rem 1rem;
+      background: linear-gradient(145deg, #fef9f0, #f5e6d3);
+      border-radius: 28px 12px 28px 12px;
+      box-shadow: 
+        0 6px 24px rgba(255, 183, 77, 0.25),
+        0 0 0 3px #fef9f0,
+        0 0 0 5px #ffcc80;
+      float: left;
+      transform: perspective(800px) rotateY(-3deg) rotateX(2deg);
+      transition: transform 0.3s ease, box-shadow 0.3s;
+      min-width: 100px;
+      text-align: center;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));
+      font-style: normal !important;
+    }
+
+    .reader-content .emoji-scene.right {
+      float: right;
+      margin: 0.5rem 0 0.5rem 1.2rem;
+      transform: perspective(800px) rotateY(3deg) rotateX(2deg);
+    }
+
+    .reader-content .emoji-scene:hover {
+      transform: perspective(800px) rotateY(0deg) rotateX(0deg) scale(1.04);
+      box-shadow: 
+        0 10px 32px rgba(255, 183, 77, 0.35),
+        0 0 0 3px #fef9f0,
+        0 0 0 5px #ffb74d;
+    }
+
+    .reader-content .emoji-scene .label {
+      display: block;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 12px !important;
+      font-weight: 700;
+      color: #5a2a0a;
+      letter-spacing: 0.06em;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 40px;
+      padding: 0.1rem 0.6rem;
+      margin-top: 0.1rem;
+      text-transform: uppercase;
+      backdrop-filter: blur(4px);
+      font-style: normal !important;
+    }
+
+    /* ----- CHARACTER NAMES (BOLD & COLORFUL) ----- */
+    .reader-content .character {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 22px;
+      color: #c94c1a;
+      display: inline;
+      margin-right: 0.2rem;
+      padding: 0.1rem 0.4rem;
+      background: linear-gradient(to right, transparent, rgba(255, 183, 77, 0.1), transparent);
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .reader-content .character::after {
+      content: ': ';
+      color: #ffb74d;
+      font-weight: 900;
+    }
+
+    /* ----- DIALOGUE ----- */
+    .reader-content .dialogue {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      color: #2c1810;
+      font-weight: 600;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .reader-content .dialogue::before {
+      content: '\201c';
+      color: #ffb74d;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    .reader-content .dialogue::after {
+      content: '\201d';
+      color: #ffb74d;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    /* ----- STAGE DIRECTIONS (no italics) ----- */
+    .reader-content .stage-dir {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      color: #6b5a4a;
+      background: rgba(245, 237, 224, 0.5);
+      padding: 0.2rem 1rem;
+      border-radius: 16px 4px 16px 4px;
+      display: inline-block;
+      margin: 0.2rem 0;
+      font-size: 18px;
+      border-left: 3px solid #ffcc80;
+      font-style: normal !important;
+      font-weight: 400;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    .reader-content p {
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 12px;
+      transition: background 0.3s ease;
+      display: flow-root;
+      clear: both;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      font-style: normal !important;
+    }
+
+    .reader-content p::after {
+      content: '';
+      display: table;
+      clear: both;
+    }
+
+    /* ----- NARRATOR SPECIAL STYLING (no italics) ----- */
+    .reader-content .narrator-text {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      color: #3d2a1a;
+      padding: 0.8rem 1.5rem;
+      background: linear-gradient(to right, rgba(255, 183, 77, 0.05), rgba(255, 183, 77, 0.1), rgba(255, 183, 77, 0.05));
+      border-radius: 24px 4px 24px 4px;
+      border: 1px solid rgba(255, 183, 77, 0.15);
+      line-height: 1.8;
+      font-style: normal !important;
+      font-weight: 500;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT (warm golden glow) ----- */
+    .reader-content .speaking-sentence {
+      background: rgba(255, 183, 77, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(255, 183, 77, 0.15), inset 0 0 20px rgba(255, 183, 77, 0.05);
+      animation: bookGlow 1.2s ease-in-out;
+      border: 1px solid rgba(255, 183, 77, 0.1);
+      font-style: normal !important;
+    }
+
+    @keyframes bookGlow {
+      0% { box-shadow: 0 0 0 rgba(255, 183, 77, 0); }
+      50% { box-shadow: 0 0 40px rgba(255, 183, 77, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(255, 183, 77, 0.15); }
+    }
+
+    /* ----- PARAGRAPH SPEAKING HIGHLIGHT ----- */
+    .reader-content p.speaking {
+      background: rgba(255, 183, 77, 0.04);
+      border-radius: 16px;
+      padding: 0.3rem 0.8rem;
+      box-shadow: inset 0 0 40px rgba(255, 183, 77, 0.04);
+    }
+
+    /* ----- THE END (beautiful, no italics) ----- */
+    .reader-content .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #ffb74d;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(255, 183, 77, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+
+    .reader-content .the-end::before {
+      content: '\u2726 \u2726 \u2726 \u2726 \u2726';
+      display: block;
+      font-size: 18px;
+      color: #ffcc80;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    /* ----- CHAPTER SEPARATION LINES ----- */
+    .reader-content .chapter-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin: 2rem 0 1.5rem 0;
+      font-style: normal !important;
+    }
+
+    .reader-content .chapter-divider::before,
+    .reader-content .chapter-divider::after {
+      content: '';
+      flex: 1;
+      height: 2px;
+      background: linear-gradient(to right, transparent, #ffb74d, transparent);
+      opacity: 0.3;
+    }
+
+    /* ===== TEXT BLOCK INTERACTIONS ===== */
+    .text-block {
+      transition: all 0.2s ease;
+      padding: 0.05rem 0.15rem;
+      border-radius: 4px;
+      cursor: pointer;
+      position: relative;
+    }
+    .text-block:hover {
+      background: rgba(255, 183, 77, 0.12);
+      text-decoration: underline;
+      text-decoration-color: #ffb74d;
+      text-underline-offset: 3px;
+      text-decoration-thickness: 1px;
+    }
+    .text-block.active-sentence {
+      background: rgba(255, 183, 77, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(255, 183, 77, 0.15), inset 0 0 20px rgba(255, 183, 77, 0.05);
+      animation: bookGlow 1.2s ease-in-out;
+      border: 1px solid rgba(255, 183, 77, 0.1);
+    }
+
+    @keyframes glow {
+      0% { box-shadow: 0 0 10px rgba(255, 183, 77, 0.3), 0 0 0 2px #ffb74d; }
+      100% { box-shadow: 0 0 25px rgba(255, 183, 77, 0.6), 0 0 0 2px #ffb74d; }
+    }
+
+    /* ===== FOOTER ===== */
+    .footer-note {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #7a6a55;
+      border-top: 1px solid #ffb74d;
+      padding-top: 1.2rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      position: relative;
+      font-style: normal !important;
+    }
+    .footer-note::before {
+      content: '\u2726 \u2726 \u2726';
+      position: absolute;
+      top: -9px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: #ffb74d;
+      background: #fef9f0;
+      padding: 0 12px;
+      letter-spacing: 6px;
+    }
+    .voice-badge {
+      background: linear-gradient(135deg, #ffb74d, #c9955a);
+      padding: 0.15rem 1rem;
+      border-radius: 40px;
+      color: #fef9f0;
+      font-size: 0.7rem;
+      margin-left: 8px;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      letter-spacing: 0.3px;
+      font-style: normal !important;
+    }
+
+    /* ===== READING PROGRESS BAR ===== */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #c94c1a, #ffb74d);
+      z-index: 1000;
+      transition: width 0.3s ease;
+      border-radius: 0 2px 2px 0;
+      box-shadow: 0 0 8px rgba(255, 183, 77, 0.4);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .reader-content {
+        padding: 1.5rem;
+        margin: 0.5rem;
+        font-size: 18px;
+      }
+      
+      .reader-content .chapter-heading {
+        font-size: 26px;
+      }
+      
+      .reader-content .scene-heading {
+        font-size: 20px;
+      }
+      
+      .reader-content .emoji-scene {
+        font-size: 40px !important;
+        float: none !important;
+        display: block;
+        margin: 0.8rem auto !important;
+        width: fit-content;
+        transform: none !important;
+      }
+      
+      .reader-content .emoji-scene:hover {
+        transform: scale(1.04) !important;
+      }
+      
+      .reader-content .character {
+        font-size: 18px;
+      }
+      
+      .reader-content .dialogue {
+        font-size: 18px;
+      }
+      
+      .reader-content .the-end {
+        font-size: 26px;
+      }
+      
+      .reader-content .stage-dir {
+        font-size: 16px;
+      }
+      
+      .playbook {
+        padding: 1.2rem;
+        border-radius: 20px;
+      }
+      .playbook::before { display: none; }
+      .play-title {
+        font-size: 2rem;
+      }
+      .play-title .icon { font-size: 1.8rem; }
+      .play-sub { font-size: 0.85rem; padding: 0.2rem 1.5rem; }
+      .audio-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 0.6rem 1rem;
+      }
+      .audio-controls button {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+        min-height: 44px;
+      }
+      .voice-selector {
+        flex: 1 1 100%;
+        min-height: 44px;
+      }
+      .status-badge {
+        margin-left: 0;
+        width: 100%;
+        text-align: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .reader-content {
+        padding: 1rem;
+        margin: 0.25rem;
+        font-size: 16px;
+        border-radius: 0.75rem;
+      }
+      
+      .reader-content .chapter-heading {
+        font-size: 22px;
+      }
+      
+      .reader-content .scene-heading {
+        font-size: 17px;
+      }
+      
+      .reader-content .emoji-scene {
+        font-size: 34px !important;
+      }
+      
+      .reader-content .character {
+        font-size: 16px;
+      }
+      
+      .reader-content .dialogue {
+        font-size: 16px;
+      }
+      
+      .reader-content .the-end {
+        font-size: 22px;
+      }
+      
+      .playbook { padding: 0.8rem; }
+      .play-title { font-size: 1.5rem; }
+      .emoji-scene { font-size: 3.5rem; min-width: 90px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="playbook">
+
+  <div class="play-header">
+    <div class="play-title"><span class="icon">🎨</span> The Magical Paintbrush</div>
+    <div class="play-sub">A Story for Children · Bloomfield</div>
+  </div>
+
+  <!-- AUDIO CONTROLS -->
+  <div class="audio-controls">
+    <button id="readBtn">▶ Read Aloud</button>
+    <button id="pauseBtn" disabled>⏸ Pause</button>
+    <select id="voiceSelect" class="voice-selector" title="Choose a voice">
+      <option value="">🔊 Select voice...</option>
+    </select>
+    <span class="status-badge" id="statusLabel">🔊 Ready</span>
+  </div>
+
+  <!-- STORY with EMOJI ART -->
+  <div class="reader-content" id="scriptContainer">
+
+    <div class="chapter-heading">🎨 Chapter 1: The Discovery</div>
+    <div class="scene-heading">Scene 1: Bloomfield Village</div>
+
+    <p>
+      <span class="emoji-scene">🌻☀️🏘️<span class="label">Bloomfield Village</span></span>
+      <span class="stage-dir" data-text="Once upon a time, in a small, sunny village called Bloomfield, there lived a kind and curious boy named Leo. The sun shines warmly over the colorful houses and blooming gardens.">(Once upon a time, in a small, sunny village called Bloomfield, there lived a kind and curious boy named Leo. The sun shines warmly over the colorful houses and blooming gardens.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='Leo loved to draw and paint. Every day after school, he would sit by the riverbank with his sketchpad and a box of crayons, creating pictures of the world around him. But Leo had a secret wish—he wanted his drawings to come to life!'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"Leo loved to draw and paint. Every day after school, he would sit by the riverbank with his sketchpad and a box of crayons, creating pictures of the world around him. But Leo had a secret wish—he wanted his drawings to come to life!"</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🎨✏️📒<span class="label">Leo's Sketchpad</span></span>
+      <span class="stage-dir" data-text="Leo sits by the river, sketching flowers, trees, and butterflies. He sighs, wishing his drawings could move and play.">(Leo sits by the river, sketching flowers, trees, and butterflies. He sighs, wishing his drawings could move and play.)</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene">🌲🔍📦<span class="label">The Hidden Box</span></span>
+      <span class="stage-dir" data-text="One afternoon, while exploring the forest near his home, Leo stumbled upon an old, wooden box hidden under a pile of leaves.">(One afternoon, while exploring the forest near his home, Leo stumbled upon an old, wooden box hidden under a pile of leaves.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='Inside the box was a shimmering golden paintbrush. The brush sparkled in the sunlight, and when Leo picked it up, he felt a warm, tingly sensation in his hand. A tiny voice whispered, "This is no ordinary paintbrush, Leo. Use it wisely."'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"Inside the box was a shimmering golden paintbrush. The brush sparkled in the sunlight, and when Leo picked it up, he felt a warm, tingly sensation in his hand. A tiny voice whispered, 'This is no ordinary paintbrush, Leo. Use it wisely.'"</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">✨🖌️🌟<span class="label">The Magic Brush</span></span>
+      <span class="stage-dir" data-text="The golden paintbrush glows with a warm, magical light. Leo holds it up, amazed.">(The golden paintbrush glows with a warm, magical light. Leo holds it up, amazed.)</span>
+    </p>
+
+    <div class="chapter-heading">🎨 Chapter 2: The First Test</div>
+    <div class="scene-heading">Scene 2: Leo's Home</div>
+
+    <p>
+      <span class="emoji-scene">🏠🎨🍎<span class="label">The First Painting</span></span>
+      <span class="stage-dir" data-text="Excited, Leo ran home and decided to test the brush. He dipped it into his jar of water and painted a bright red apple on a piece of paper.">(Excited, Leo ran home and decided to test the brush. He dipped it into his jar of water and painted a bright red apple on a piece of paper.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='To his amazement, the apple popped right off the page and landed in his hand! It was juicy, sweet, and perfectly real. Leo could not believe his eyes!'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"To his amazement, the apple popped right off the page and landed in his hand! It was juicy, sweet, and perfectly real. Leo couldn't believe his eyes!"</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🍎✨😲<span class="label">Real Apple!</span></span>
+      <span class="stage-dir" data-text="Leo holds the real apple in his hand, his eyes wide with wonder. He takes a bite and it tastes delicious.">(Leo holds the real apple in his hand, his eyes wide with wonder. He takes a bite and it tastes delicious.)</span>
+    </p>
+
+    <div class="chapter-heading">🎨 Chapter 3: Sharing the Magic</div>
+    <div class="scene-heading">Scene 3: Bloomfield School</div>
+
+    <p>
+      <span class="emoji-scene">🏫🎒📚<span class="label">Bloomfield School</span></span>
+      <span class="stage-dir" data-text="The next day, Leo took the magical paintbrush to school. During art class, he painted a flock of colourful butterflies.">(The next day, Leo took the magical paintbrush to school. During art class, he painted a flock of colourful butterflies.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='They fluttered off the paper and danced around the classroom, making everyone laugh and cheer. His teacher, Mrs. Willow, was so impressed that she asked Leo to share his talent with the whole school.'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"They fluttered off the paper and danced around the classroom, making everyone laugh and cheer. His teacher, Mrs. Willow, was so impressed that she asked Leo to share his talent with the whole school."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🦋🌈🎉<span class="label">Butterflies in Class</span></span>
+      <span class="stage-dir" data-text="Colourful butterflies flutter around the classroom. Children laugh and reach out to touch them.">(Colourful butterflies flutter around the classroom. Children laugh and reach out to touch them.)</span>
+    </p>
+
+    <p data-character="Mrs. Willow" data-dialogue='Leo, this is incredible! Would you like to show the whole school what you can do?'>
+      <span class="character">Mrs. Willow (Teacher)</span> 
+      <span class="dialogue">"Leo, this is incredible! Would you like to show the whole school what you can do?"</span>
+    </p>
+
+    <p data-character="Leo" data-dialogue='Yes, Mrs. Willow! I would love to!'>
+      <span class="character">Leo (Boy)</span> 
+      <span class="dialogue">"Yes, Mrs. Willow! I would love to!"</span>
+    </p>
+
+    <div class="chapter-heading">🎨 Chapter 4: The Lesson</div>
+    <div class="scene-heading">Scene 4: Leo's Room</div>
+
+    <p>
+      <span class="emoji-scene">🧸🛏️🎮<span class="label">Leo's Room</span></span>
+      <span class="stage-dir" data-text="But Leo soon realized that the paintbrush had rules. If he used it for selfish reasons, the magic would not work.">(But Leo soon realized that the paintbrush had rules. If he used it for selfish reasons, the magic wouldn't work.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='One day, he tried to paint a pile of toys for himself, but they stayed flat and lifeless on the paper. The tiny voice whispered again, "The magic only works when you use it to help others."'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"One day, he tried to paint a pile of toys for himself, but they stayed flat and lifeless on the paper. The tiny voice whispered again, 'The magic only works when you use it to help others.'"</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🧸❌😢<span class="label">Selfish Painting</span></span>
+      <span class="stage-dir" data-text="Leo tries to paint toys for himself, but they remain flat on the paper. He looks sad and confused.">(Leo tries to paint toys for himself, but they remain flat on the paper. He looks sad and confused.)</span>
+    </p>
+
+    <div class="chapter-heading">🎨 Chapter 5: Helping Others</div>
+    <div class="scene-heading">Scene 5: Bloomfield Village</div>
+
+    <p>
+      <span class="emoji-scene">🌻🏘️❤️<span class="label">Helping the Village</span></span>
+      <span class="stage-dir" data-text="Leo decided to use the brush to make his village a happier place. He painted warm blankets for the stray animals.">(Leo decided to use the brush to make his village a happier place. He painted warm blankets for the stray animals.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='He painted fresh fruit for the hungry, and even a rainbow to cheer up his friend Mia, who had been feeling sad. The villagers were amazed by Leo kindness and creativity.'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"He painted fresh fruit for the hungry, and even a rainbow to cheer up his friend Mia, who had been feeling sad. The villagers were amazed by Leo's kindness and creativity."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🌈🍎🧣<span class="label">Rainbow for Mia</span></span>
+      <span class="stage-dir" data-text="A beautiful rainbow appears over the village. Mia smiles as she looks up at it. Leo stands beside her, happy.">(A beautiful rainbow appears over the village. Mia smiles as she looks up at it. Leo stands beside her, happy.)</span>
+    </p>
+
+    <p data-character="Mia" data-dialogue='Thank you, Leo! You made the whole village smile!'>
+      <span class="character">Mia (Friend)</span> 
+      <span class="dialogue">"Thank you, Leo! You made the whole village smile!"</span>
+    </p>
+
+    <p data-character="Leo" data-dialogue='The paintbrush taught me something important. Magic is best when you share it with others.'>
+      <span class="character">Leo (Boy)</span> 
+      <span class="dialogue">"The paintbrush taught me something important. Magic is best when you share it with others."</span>
+    </p>
+
+    <div class="chapter-heading">🎨 Chapter 6: The Farewell</div>
+    <div class="scene-heading">Scene 6: The Forest Edge</div>
+
+    <p>
+      <span class="emoji-scene">🌅✨🖌️<span class="label">Sunset Goodbye</span></span>
+      <span class="stage-dir" data-text="One evening, as the sun set, the paintbrush began to glow brighter than ever. The tiny voice spoke one last time.">(One evening, as the sun set, the paintbrush began to glow brighter than ever. The tiny voice spoke one last time.)</span>
+    </p>
+
+    <p data-character="Tiny Voice" data-dialogue='You have used the magic well, Leo. Now it is time for the brush to find a new home.'>
+      <span class="character">Tiny Voice (Whisper)</span> 
+      <span class="dialogue">"You've used the magic well, Leo. Now it's time for the brush to find a new home."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">✨🌟💫<span class="label">The Brush Departs</span></span>
+      <span class="stage-dir" data-text="Before Leo could say goodbye, the brush floated into the air and disappeared in a shower of golden sparkles.">(Before Leo could say goodbye, the brush floated into the air and disappeared in a shower of golden sparkles.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='Though he was sad to see it go, Leo knew he did not need magic to make the world a better place. From that day on, he used his own creativity and kindness to help others, and the village of Bloomfield became the happiest place of all.'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"Though he was sad to see it go, Leo knew he didn't need magic to make the world a better place. From that day on, he used his own creativity and kindness to help others, and the village of Bloomfield became the happiest place of all."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene">🌻🏘️🌟<span class="label">Happiest Village</span></span>
+      <span class="stage-dir" data-text="The village of Bloomfield is shown in all its beauty. Children play, flowers bloom, and everyone is happy. Leo smiles, knowing he made a difference.">(The village of Bloomfield is shown in all its beauty. Children play, flowers bloom, and everyone is happy. Leo smiles, knowing he made a difference.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='And so, Leo adventures with the magical paintbrush became a legend, reminding everyone that the greatest magic of all is a kind heart.'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"And so, Leo's adventures with the magical paintbrush became a legend, reminding everyone that the greatest magic of all is a kind heart."</span>
+    </p>
+
+    <div class="the-end">The End</div>
+
+  </div>
+
+  <div class="footer-note">
+    🎨 The Magical Paintbrush · A Story for Children
+  </div>
+
+</div>
+
+<script>
+(function() {
+  "use strict";
+
+  const scriptContainer = document.getElementById('scriptContainer');
+  const readBtn = document.getElementById('readBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const statusLabel = document.getElementById('statusLabel');
+  const voiceSelect = document.getElementById('voiceSelect');
+
+  // ----- BUILD TEXT BLOCKS -----
+  const textBlocks = [];
+  const textElements = [];
+
+  // 1. Stage directions (with data-text attribute)
+  document.querySelectorAll('.stage-dir').forEach(dir => {
+    const text = dir.getAttribute('data-text') || dir.textContent.trim();
+    if (text && text.length > 2) {
+      textBlocks.push(text);
+      textElements.push(dir);
+    }
+  });
+
+  // 2. Paragraphs with character data
+  document.querySelectorAll('p[data-character]').forEach(p => {
+    const charName = p.getAttribute('data-character') || '';
+    const dialogue = p.getAttribute('data-dialogue') || p.textContent.trim();
+    const fullText = charName ? charName + ': ' + dialogue : dialogue;
+    if (fullText && fullText.length > 2) {
+      textBlocks.push(fullText);
+      textElements.push(p);
+    }
+  });
+
+  // ----- POPULATE VOICE SELECTOR -----
+  function populateVoices() {
+    const voices = window.speechSynthesis.getVoices();
+    voiceSelect.innerHTML = '<option value="">🔊 Select voice...</option>';
+    voices.forEach(voice => {
+      const opt = document.createElement('option');
+      opt.value = voice.name;
+      // Use innerHTML to avoid Emergent's <span> wrapping bug
+      opt.innerHTML = voice.name + ' (' + voice.lang + ')';
+      voiceSelect.appendChild(opt);
+    });
+    
+    // Auto-select child-like voice
+    const childVoice = voices.find(v => 
+      v.name.toLowerCase().includes('child') || 
+      v.name.toLowerCase().includes('kid') ||
+      v.name.toLowerCase().includes('samantha') ||
+      v.name.toLowerCase().includes('google uk english female') ||
+      v.name.toLowerCase().includes('moira') ||
+      v.name.toLowerCase().includes('siri')
+    );
+    if (childVoice) {
+      voiceSelect.value = childVoice.name;
+    }
+  }
+
+  if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = populateVoices;
+    setTimeout(populateVoices, 200);
+  }
+
+  // ----- SPEECH SYNTHESIS -----
+  let currentUtterance = null;
+  let currentIndex = 0;
+  let isReading = false;
+  let isPaused = false;
+
+  function speakBlock(text, index) {
+    if (!window.speechSynthesis) return;
+    
+    // Cancel any ongoing speech
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1.25;
+    utterance.volume = 1;
+    
+    const selectedVoice = voiceSelect.value;
+    if (selectedVoice) {
+      const voice = window.speechSynthesis.getVoices().find(v => v.name === selectedVoice);
+      if (voice) utterance.voice = voice;
+    }
+    
+    utterance.onstart = () => {
+      isReading = true;
+      isPaused = false;
+      currentIndex = index;
+      readBtn.textContent = '▶ Reading...';
+      readBtn.disabled = true;
+      pauseBtn.disabled = false;
+      statusLabel.textContent = '🔊 Reading (' + (index + 1) + '/' + textBlocks.length + ')';
+      
+      // Highlight current text element
+      textElements.forEach(el => el.classList.remove('active-sentence'));
+      if (textElements[index]) {
+        textElements[index].classList.add('active-sentence');
+        textElements[index].scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    };
+    
+    utterance.onend = () => {
+      const nextIndex = index + 1;
+      if (nextIndex < textBlocks.length) {
+        speakBlock(textBlocks[nextIndex], nextIndex);
+      } else {
+        isReading = false;
+        readBtn.textContent = '▶ Read Aloud';
+        readBtn.disabled = false;
+        pauseBtn.disabled = true;
+        statusLabel.textContent = '🎉 Finished!';
+        textElements.forEach(el => el.classList.remove('active-sentence'));
+      }
+    };
+    
+    utterance.onerror = (e) => {
+      // Ignore "canceled" and "interrupted" errors (they are intentional)
+      if (e.error === 'canceled' || e.error === 'interrupted') {
+        console.log('Speech was cancelled or interrupted');
+        return;
+      }
+      
+      // Only show error for actual failures
+      if (e.error === 'synthesis-failed') {
+        console.warn('Speech synthesis failed, retrying...');
+        setTimeout(() => {
+          if (!isPaused && isReading) {
+            speakBlock(text, index);
+          }
+        }, 500);
+      } else {
+        console.error('Speech error:', e);
+        isReading = false;
+        readBtn.textContent = '▶ Read Aloud';
+        readBtn.disabled = false;
+        pauseBtn.disabled = true;
+        statusLabel.textContent = '⚠️ Error';
+      }
+    };
+    
+    currentUtterance = utterance;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  // ----- READ BUTTON -----
+  readBtn.addEventListener('click', () => {
+    if (isReading) return;
+    
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    
+    if (textBlocks.length === 0) {
+      statusLabel.textContent = '⚠️ No text found';
+      return;
+    }
+    
+    currentIndex = 0;
+    speakBlock(textBlocks[0], 0);
+  });
+
+  // ----- PAUSE BUTTON -----
+  pauseBtn.addEventListener('click', () => {
+    if (!isReading) return;
+    
+    if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+      window.speechSynthesis.pause();
+      isPaused = true;
+      pauseBtn.textContent = '▶ Resume';
+      statusLabel.textContent = '⏸ Paused';
+    } else if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+      isPaused = false;
+      pauseBtn.textContent = '⏸ Pause';
+      statusLabel.textContent = '🔊 Reading (' + (currentIndex + 1) + '/' + textBlocks.length + ')';
+    }
+  });
+
+  // ----- CLICK TO READ ALOUD -----
+  textElements.forEach((el, idx) => {
+    el.style.cursor = 'pointer';
+    el.title = 'Click to read aloud';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      
+      isReading = true;
+      isPaused = false;
+      pauseBtn.textContent = '⏸ Pause';
+      pauseBtn.disabled = false;
+      
+      speakBlock(textBlocks[idx], idx);
+    });
+  });
+
+  // ----- KEYBOARD SHORTCUTS -----
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ' && e.target === document.body) {
+      e.preventDefault();
+      if (isReading && !isPaused) {
+        pauseBtn.click();
+      } else if (isReading && isPaused) {
+        pauseBtn.click();
+      } else {
+        readBtn.click();
+      }
+    }
+    if (e.key === 'Escape' && isReading) {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      isReading = false;
+      readBtn.textContent = '▶ Read Aloud';
+      readBtn.disabled = false;
+      pauseBtn.disabled = true;
+      pauseBtn.textContent = '⏸ Pause';
+      statusLabel.textContent = '⏹ Stopped';
+      textElements.forEach(el => el.classList.remove('active-sentence'));
+    }
+  });
+
+  // ----- STOP ON PAGE HIDE -----
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

@@ -233,7 +233,10 @@ function QRAttendance() {
 
         if (resultAction === 'check_in') {
           if (response.data.is_late) {
-            toast.warning(`Checked in LATE (${response.data.late_duration} after 8:00 AM)`);
+            // Determine late threshold based on user's chain (DLP, DUP, LALE start at 7:30 AM, others at 8:00 AM)
+            const userChain = (currentUser?.chain || '').toUpperCase();
+            const lateThreshold = ['DLP', 'DUP', 'LALE'].includes(userChain) ? '7:30 AM' : '8:00 AM';
+            toast.warning(`Checked in LATE (${response.data.late_duration} after ${lateThreshold})`);
           } else {
             toast.success(`Checked in successfully at ${response.data.check_in_time}`);
           }
@@ -1127,7 +1130,7 @@ function QRAttendance() {
                 {availableAction === 'check_in' && (
                   <div className="late-warning">
                     <AlertTriangle size={14} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                    Check-in after 8:00 AM will be marked as LATE
+                    Check-in after {['DLP', 'DUP', 'LALE'].includes((currentUser?.chain || '').toUpperCase()) ? '7:30 AM' : '8:00 AM'} will be marked as LATE
                   </div>
                 )}
                 

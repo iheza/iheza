@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Whispering Woods · Emoji Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- MAGICAL FOREST BACKGROUND ----- */
+    body {
+      background: #0f1a0f;
+      background-image:
+        radial-gradient(ellipse at 20% 30%, #1a3a1a 0%, #0f1a0f 60%),
+        radial-gradient(ellipse at 80% 70%, #1a2a1f 0%, #0f1a0f 50%),
+        radial-gradient(circle at 50% 0%, #2d5a27 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- FLOATING SPARKLE PARTICLES ----- */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      background-image:
+        radial-gradient(2px 2px at 10% 20%, rgba(201, 168, 76, 0.6), transparent),
+        radial-gradient(2px 2px at 30% 60%, rgba(201, 168, 76, 0.4), transparent),
+        radial-gradient(3px 3px at 50% 10%, rgba(201, 168, 76, 0.5), transparent),
+        radial-gradient(2px 2px at 70% 40%, rgba(201, 168, 76, 0.3), transparent),
+        radial-gradient(3px 3px at 90% 80%, rgba(201, 168, 76, 0.5), transparent),
+        radial-gradient(2px 2px at 15% 85%, rgba(201, 168, 76, 0.4), transparent),
+        radial-gradient(2px 2px at 85% 15%, rgba(201, 168, 76, 0.3), transparent),
+        radial-gradient(3px 3px at 45% 45%, rgba(201, 168, 76, 0.4), transparent),
+        radial-gradient(2px 2px at 60% 90%, rgba(201, 168, 76, 0.5), transparent),
+        radial-gradient(2px 2px at 25% 35%, rgba(201, 168, 76, 0.3), transparent);
+      animation: sparkle 4s ease-in-out infinite alternate;
+    }
+    body::after {
+      background-image:
+        radial-gradient(1px 1px at 20% 50%, rgba(232, 201, 122, 0.5), transparent),
+        radial-gradient(1px 1px at 60% 30%, rgba(232, 201, 122, 0.4), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(232, 201, 122, 0.3), transparent),
+        radial-gradient(1px 1px at 40% 80%, rgba(232, 201, 122, 0.5), transparent),
+        radial-gradient(2px 2px at 10% 70%, rgba(232, 201, 122, 0.3), transparent);
+      animation: sparkle 5s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes sparkle {
+      0% { opacity: 0.3; transform: translateY(0); }
+      50% { opacity: 0.7; transform: translateY(-10px); }
+      100% { opacity: 0.4; transform: translateY(5px); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #fbf6ed;
+      border-radius: 32px;
+      box-shadow:
+        0 30px 50px -20px rgba(0,0,0,0.8),
+        0 0 0 1px #8f7a5a,
+        0 0 0 4px #c9a84c,
+        0 0 0 6px #5a3a1a,
+        0 8px 32px rgba(0,0,0,0.4);
+      padding: 2.5rem 2.5rem 2rem;
+      position: relative;
+      z-index: 1;
+      background-image:
+        linear-gradient(135deg, transparent 0%, rgba(201, 168, 76, 0.03) 50%, transparent 100%);
+    }
+
+    /* Decorative inner border */
+    .playbook::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      bottom: 20px;
+      border: 1px solid rgba(201, 168, 76, 0.15);
+      border-radius: 24px;
+      pointer-events: none;
+    }
+
+    /* Corner ornament */
+    .playbook::after {
+      content: '\u2726';
+      position: absolute;
+      top: 12px;
+      right: 24px;
+      font-size: 1.2rem;
+      color: #c9a84c;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    /* ----- HEADER ----- */
+    .play-header {
+      text-align: center;
+      border-bottom: 3px double #b8a78b;
+      padding-bottom: 1.2rem;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+    .play-header::after {
+      content: '\u2766';
+      position: absolute;
+      bottom: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.2rem;
+      color: #c9a84c;
+      background: #fbf6ed;
+      padding: 0 12px;
+    }
+    .play-title {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #2d5a27, #c9a84c);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 2px 2px 20px rgba(201, 168, 76, 0.2);
+      letter-spacing: 1px;
+    }
+    .play-title .icon {
+      font-size: 2.6rem;
+      -webkit-text-fill-color: initial;
+      display: inline-block;
+      animation: float 3s ease-in-out infinite;
+    }
+    .play-sub {
+      font-size: 1rem;
+      color: #5a4a38;
+      background: linear-gradient(135deg, #e8dccc, #dccdb8);
+      display: inline-block;
+      padding: 0.3rem 2.5rem;
+      border-radius: 40px;
+      margin-top: 0.5rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      border: 1px solid #c9a84c;
+      box-shadow: 0 2px 8px rgba(201, 168, 76, 0.15);
+      font-style: normal !important;
+    }
+
+    /* ----- AUDIO CONTROLS ----- */
+    .audio-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      align-items: center;
+      background: linear-gradient(135deg, #e8dccc, #dccdb8, #e8dccc);
+      padding: 0.8rem 1.2rem;
+      border-radius: 60px;
+      border: 1px solid #c9a84c;
+      margin-bottom: 1.5rem;
+      box-shadow:
+        inset 0 1px 4px #fffcf7,
+        0 4px 12px rgba(201, 168, 76, 0.15);
+    }
+    .audio-controls button {
+      background: linear-gradient(135deg, #fcf7f0, #f0e6d3);
+      border: none;
+      border-radius: 50px;
+      padding: 0.5rem 1.5rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #2d3a22;
+      box-shadow: 0 3px 0 #b8a78b, 0 4px 12px rgba(0,0,0,0.08);
+      cursor: pointer;
+      transition: all 0.12s ease;
+      border: 1px solid #c9a84c;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      letter-spacing: 0.3px;
+    }
+    .audio-controls button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 0 #b8a78b, 0 6px 16px rgba(201, 168, 76, 0.25);
+      background: linear-gradient(135deg, #fffcf7, #f0e6d3);
+    }
+    .audio-controls button:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #b8a78b;
+    }
+    .audio-controls button:disabled {
+      opacity: 0.4;
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #b8a78b;
+      cursor: default;
+    }
+    .voice-selector {
+      flex: 1;
+      min-width: 160px;
+      padding: 0.4rem 0.8rem;
+      border-radius: 40px;
+      border: 1px solid #c9a84c;
+      background: #fcf7f0;
+      font-size: 0.85rem;
+      color: #2d3a22;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .voice-selector:focus {
+      outline: none;
+      border-color: #8f7a5a;
+      box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.2);
+    }
+    .status-badge {
+      font-size: 0.8rem;
+      background: linear-gradient(135deg, #f0e6d3, #e8dccc);
+      padding: 0.3rem 1.2rem;
+      border-radius: 40px;
+      color: #2d3a22;
+      border: 1px solid #c9a84c;
+      white-space: nowrap;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-style: normal !important;
+    }
+
+    /* ============================================
+       READER CONTENT CONTAINER
+       ============================================ */
+    .reader-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 3rem 4rem;
+      background: #fcf8f0;
+      margin: 1rem 2rem;
+      border-radius: 1.5rem;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08), inset 0 0 0 1px rgba(201, 168, 76, 0.15);
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #2c1810;
+      position: relative;
+    }
+
+    /* ----- DECORATIVE BOOK SPINE EFFECT ----- */
+    .reader-content::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 5%;
+      height: 90%;
+      width: 6px;
+      background: linear-gradient(to bottom, #c9a84c, #1a3a1a, #c9a84c);
+      border-radius: 0 4px 4px 0;
+      opacity: 0.4;
+    }
+
+    /* ----- ACT HEADINGS (BOLD & STYLISH) ----- */
+    .reader-content .act-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      color: #1a3a1a;
+      text-align: center;
+      margin: 2.5rem 0 0.5rem 0;
+      padding: 0.8rem 0;
+      letter-spacing: 0.08em;
+      text-shadow: 2px 2px 0 rgba(201, 168, 76, 0.2);
+      position: relative;
+      text-transform: uppercase;
+      font-style: normal !important;
+    }
+
+    /* Decorative line under act headings */
+    .reader-content .act-heading::after {
+      content: '\u2726 \u2726 \u2726';
+      display: block;
+      font-size: 20px;
+      color: #c9a84c;
+      letter-spacing: 0.5em;
+      margin-top: 0.2rem;
+      opacity: 0.6;
+      font-style: normal !important;
+    }
+
+    /* ----- SCENE HEADINGS ----- */
+    .reader-content .scene-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 700;
+      font-size: 24px;
+      color: #2d5a27;
+      margin: 1.8rem 0 0.8rem 0;
+      padding: 0.4rem 1.2rem;
+      background: linear-gradient(to right, transparent, #f5ede0, transparent);
+      border-left: 6px solid #c9a84c;
+      border-radius: 0 12px 12px 0;
+      letter-spacing: 0.04em;
+      display: inline-block;
+      font-style: normal !important;
+    }
+
+    /* ----- EMOJI SCENE BLOCKS (BIG & BEAUTIFUL) ----- */
+    .reader-content .emoji-scene {
+      display: inline-block;
+      font-size: 52px !important;
+      line-height: 1.2;
+      margin: 0.5rem 1.2rem 0.5rem 0;
+      padding: 0.4rem 1rem;
+      background: linear-gradient(145deg, #f5ede0, #e8dccc);
+      border-radius: 28px 12px 28px 12px;
+      box-shadow: 
+        0 6px 24px rgba(201, 168, 76, 0.25),
+        0 0 0 3px #fcf8f0,
+        0 0 0 5px #e8d5a3;
+      float: left;
+      transform: perspective(800px) rotateY(-3deg) rotateX(2deg);
+      transition: transform 0.3s ease, box-shadow 0.3s;
+      min-width: 100px;
+      text-align: center;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));
+      font-style: normal !important;
+    }
+
+    .reader-content .emoji-scene.right {
+      float: right;
+      margin: 0.5rem 0 0.5rem 1.2rem;
+      transform: perspective(800px) rotateY(3deg) rotateX(2deg);
+    }
+
+    .reader-content .emoji-scene:hover {
+      transform: perspective(800px) rotateY(0deg) rotateX(0deg) scale(1.04);
+      box-shadow: 
+        0 10px 32px rgba(201, 168, 76, 0.35),
+        0 0 0 3px #fcf8f0,
+        0 0 0 5px #c9a84c;
+    }
+
+    .reader-content .emoji-scene .label {
+      display: block;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 12px !important;
+      font-weight: 700;
+      color: #1a3a1a;
+      letter-spacing: 0.06em;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 40px;
+      padding: 0.1rem 0.6rem;
+      margin-top: 0.1rem;
+      text-transform: uppercase;
+      backdrop-filter: blur(4px);
+      font-style: normal !important;
+    }
+
+    /* ----- CHARACTER NAMES (BOLD & COLORFUL) ----- */
+    .reader-content .character {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 22px;
+      color: #2d5a27;
+      display: inline;
+      margin-right: 0.2rem;
+      padding: 0.1rem 0.4rem;
+      background: linear-gradient(to right, transparent, rgba(201, 168, 76, 0.1), transparent);
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .reader-content .character::after {
+      content: ': ';
+      color: #c9a84c;
+      font-weight: 900;
+    }
+
+    /* ----- DIALOGUE ----- */
+    .reader-content .dialogue {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      color: #2c1810;
+      font-weight: 600;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .reader-content .dialogue::before {
+      content: '"';
+      color: #c9a84c;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    .reader-content .dialogue::after {
+      content: '"';
+      color: #c9a84c;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    /* ----- STAGE DIRECTIONS (no italics) ----- */
+    .reader-content .stage-dir {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      color: #6b5a4a;
+      background: rgba(245, 237, 224, 0.5);
+      padding: 0.2rem 1rem;
+      border-radius: 16px 4px 16px 4px;
+      display: inline-block;
+      margin: 0.2rem 0;
+      font-size: 18px;
+      border-left: 3px solid #e8d5a3;
+      font-style: normal !important;
+      font-weight: 400;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    .reader-content p {
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 12px;
+      transition: background 0.3s ease;
+      display: flow-root;
+      clear: both;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      font-style: normal !important;
+    }
+
+    .reader-content p::after {
+      content: '';
+      display: table;
+      clear: both;
+    }
+
+    /* ----- NARRATOR SPECIAL STYLING (no italics) ----- */
+    .reader-content .narrator-text {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      color: #3d2a1a;
+      padding: 0.8rem 1.5rem;
+      background: linear-gradient(to right, rgba(201, 168, 76, 0.05), rgba(201, 168, 76, 0.1), rgba(201, 168, 76, 0.05));
+      border-radius: 24px 4px 24px 4px;
+      border: 1px solid rgba(201, 168, 76, 0.15);
+      line-height: 1.8;
+      font-style: normal !important;
+      font-weight: 500;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT (golden glow) ----- */
+    .reader-content .speaking-sentence {
+      background: rgba(201, 168, 76, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(201, 168, 76, 0.15), inset 0 0 20px rgba(201, 168, 76, 0.05);
+      animation: bookGlow 1.2s ease-in-out;
+      border: 1px solid rgba(201, 168, 76, 0.1);
+      font-style: normal !important;
+    }
+
+    @keyframes bookGlow {
+      0% { box-shadow: 0 0 0 rgba(201, 168, 76, 0); }
+      50% { box-shadow: 0 0 40px rgba(201, 168, 76, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(201, 168, 76, 0.15); }
+    }
+
+    /* ----- PARAGRAPH SPEAKING HIGHLIGHT ----- */
+    .reader-content p.speaking {
+      background: rgba(201, 168, 76, 0.04);
+      border-radius: 16px;
+      padding: 0.3rem 0.8rem;
+      box-shadow: inset 0 0 40px rgba(201, 168, 76, 0.04);
+    }
+
+    /* ----- THE END (beautiful, no italics) ----- */
+    .reader-content .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #c9a84c;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(201, 168, 76, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+
+    .reader-content .the-end::before {
+      content: '\u2726 \u2726 \u2726 \u2726 \u2726';
+      display: block;
+      font-size: 18px;
+      color: #e8d5a3;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    /* ----- ACT SEPARATION LINES ----- */
+    .reader-content .act-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin: 2rem 0 1.5rem 0;
+      font-style: normal !important;
+    }
+
+    .reader-content .act-divider::before,
+    .reader-content .act-divider::after {
+      content: '';
+      flex: 1;
+      height: 2px;
+      background: linear-gradient(to right, transparent, #c9a84c, transparent);
+      opacity: 0.3;
+    }
+
+    /* ===== TEXT BLOCK INTERACTIONS ===== */
+    .text-block {
+      transition: all 0.2s ease;
+      padding: 0.05rem 0.15rem;
+      border-radius: 4px;
+      cursor: pointer;
+      position: relative;
+    }
+    .text-block:hover {
+      background: rgba(201, 168, 76, 0.12);
+      text-decoration: underline;
+      text-decoration-color: #c9a84c;
+      text-underline-offset: 3px;
+      text-decoration-thickness: 1px;
+    }
+    .text-block.active-sentence {
+      background: rgba(201, 168, 76, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(201, 168, 76, 0.15), inset 0 0 20px rgba(201, 168, 76, 0.05);
+      animation: bookGlow 1.2s ease-in-out;
+      border: 1px solid rgba(201, 168, 76, 0.1);
+    }
+
+    @keyframes glow {
+      0% { box-shadow: 0 0 10px rgba(201, 168, 76, 0.3), 0 0 0 2px #c9a84c; }
+      100% { box-shadow: 0 0 25px rgba(201, 168, 76, 0.6), 0 0 0 2px #c9a84c; }
+    }
+
+    /* ===== FOOTER ===== */
+    .footer-note {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #7a6a55;
+      border-top: 1px solid #c9a84c;
+      padding-top: 1.2rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      position: relative;
+      font-style: normal !important;
+    }
+    .footer-note::before {
+      content: '\u2726 \u2726 \u2726';
+      position: absolute;
+      top: -9px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: #c9a84c;
+      background: #fbf6ed;
+      padding: 0 12px;
+      letter-spacing: 6px;
+    }
+    .voice-badge {
+      background: linear-gradient(135deg, #c9a84c, #b8a78b);
+      padding: 0.15rem 1rem;
+      border-radius: 40px;
+      color: #fbf6ed;
+      font-size: 0.7rem;
+      margin-left: 8px;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      letter-spacing: 0.3px;
+      font-style: normal !important;
+    }
+
+    /* ===== READING PROGRESS BAR ===== */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #2d5a27, #c9a84c);
+      z-index: 1000;
+      transition: width 0.3s ease;
+      border-radius: 0 2px 2px 0;
+      box-shadow: 0 0 8px rgba(201, 168, 76, 0.4);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .reader-content {
+        padding: 1.5rem;
+        margin: 0.5rem;
+        font-size: 18px;
+      }
+      
+      .reader-content .act-heading {
+        font-size: 26px;
+      }
+      
+      .reader-content .scene-heading {
+        font-size: 20px;
+      }
+      
+      .reader-content .emoji-scene {
+        font-size: 40px !important;
+        float: none !important;
+        display: block;
+        margin: 0.8rem auto !important;
+        width: fit-content;
+        transform: none !important;
+      }
+      
+      .reader-content .emoji-scene:hover {
+        transform: scale(1.04) !important;
+      }
+      
+      .reader-content .character {
+        font-size: 18px;
+      }
+      
+      .reader-content .dialogue {
+        font-size: 18px;
+      }
+      
+      .reader-content .the-end {
+        font-size: 26px;
+      }
+      
+      .reader-content .stage-dir {
+        font-size: 16px;
+      }
+      
+      .playbook {
+        padding: 1.2rem;
+        border-radius: 20px;
+      }
+      .playbook::before { display: none; }
+      .play-title {
+        font-size: 2rem;
+      }
+      .play-title .icon { font-size: 1.8rem; }
+      .play-sub { font-size: 0.85rem; padding: 0.2rem 1.5rem; }
+      .audio-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 0.6rem 1rem;
+      }
+      .audio-controls button {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+        min-height: 44px;
+      }
+      .voice-selector {
+        flex: 1 1 100%;
+        min-height: 44px;
+      }
+      .status-badge {
+        margin-left: 0;
+        width: 100%;
+        text-align: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .reader-content {
+        padding: 1rem;
+        margin: 0.25rem;
+        font-size: 16px;
+        border-radius: 0.75rem;
+      }
+      
+      .reader-content .act-heading {
+        font-size: 22px;
+      }
+      
+      .reader-content .scene-heading {
+        font-size: 17px;
+      }
+      
+      .reader-content .emoji-scene {
+        font-size: 34px !important;
+      }
+      
+      .reader-content .character {
+        font-size: 16px;
+      }
+      
+      .reader-content .dialogue {
+        font-size: 16px;
+      }
+      
+      .reader-content .the-end {
+        font-size: 22px;
+      }
+      
+      .playbook { padding: 0.8rem; }
+      .play-title { font-size: 1.5rem; }
+      .emoji-scene { font-size: 3.5rem; min-width: 90px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="playbook">
+
+  <div class="play-header">
+    <div class="play-title"><span class="icon">🌳</span> The Whispering Woods</div>
+    <div class="play-sub">A Play for Grade 4 · Kampala</div>
+  </div>
+
+  <!-- AUDIO CONTROLS -->
+  <div class="audio-controls">
+    <button id="readBtn">▶ Read Aloud</button>
+    <button id="pauseBtn" disabled>⏸ Pause</button>
+    <select id="voiceSelect" class="voice-selector" title="Choose a voice">
+      <option value="">🔊 Select voice...</option>
+    </select>
+    <span class="status-badge" id="statusLabel">🔊 Ready</span>
+  </div>
+
+  <!-- SCRIPT with EMOJI ART -->
+  <div class="reader-content" id="scriptContainer">
+
+    <div class="act-heading">🌿 Act 1: The Awakening</div>
+    <div class="scene-heading">Scene 1: The Enchanted Forest</div>
+
+    <p>
+      <span class="emoji-scene">🌳🌲✨<span class="label">Enchanted Forest</span></span>
+      <span class="stage-dir" data-text="The stage is set with towering trees, lush greenery, and a soft, ethereal glow. The audience hears the gentle rustling of leaves and the distant chirping of birds.">(The stage is set with towering trees, lush greenery, and a soft, ethereal glow. The audience hears the gentle rustling of leaves and the distant chirping of birds.)</span>
+    </p>
+
+    <p data-character="Narrator" data-dialogue='Deep within the heart of the world lies a forest unlike any other. Here, the trees whisper ancient secrets, and the animals speak in tongues long forgotten by mankind. This is the Whispering Woods, a place where magic is as real as the earth beneath your feet.'>
+      <span class="character">Narrator (Voiceover)</span> 
+      <span class="dialogue">"Deep within the heart of the world lies a forest unlike any other. Here, the trees whisper ancient secrets, and the animals speak in tongues long forgotten by mankind. This is the Whispering Woods, a place where magic is as real as the earth beneath your feet."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🦊🍃<span class="label">Fern the Fox</span></span>
+      <span class="stage-dir" data-text="A young fox, named Fern, cautiously steps into the clearing. She looks around, her ears twitching as she listens to the whispers of the trees.">(A young fox, named Fern, cautiously steps into the clearing. She looks around, her ears twitching as she listens to the whispers of the trees.)</span>
+    </p>
+
+    <p data-character="Fern the Fox" data-dialogue='Who there? I can hear you... but I cant see you.'>
+      <span class="character">Fern (Fox)</span> 
+      <span class="dialogue">"Who's there? I can hear you... but I can't see you."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene">🌳👑<span class="label">Elder Oak</span></span>
+      <span class="stage-dir" data-text="The trees rustle, and a deep, gentle voice emerges from the oldest oak in the forest.">(The trees rustle, and a deep, gentle voice emerges from the oldest oak in the forest.)</span>
+    </p>
+
+    <p data-character="Elder Oak the Tree" data-dialogue='Fear not, little one. We are the guardians of this forest. We have watched over these lands for centuries, and we have chosen you, Fern, to be our voice.'>
+      <span class="character">Elder Oak (Tree)</span> 
+      <span class="dialogue">"Fear not, little one. We are the guardians of this forest. We have watched over these lands for centuries, and we have chosen you, Fern, to be our voice."</span>
+    </p>
+
+    <p data-character="Fern the Fox" data-dialogue='Me? But Im just a fox. What could I possibly do?'>
+      <span class="character">Fern (Fox)</span> 
+      <span class="dialogue">"Me? But I'm just a fox. What could I possibly do?"</span>
+    </p>
+
+    <p data-character="Elder Oak the Tree" data-dialogue='You are more than you know, Fern. The forest is in danger, and only you can save it. Listen closely, for the animals will guide you.'>
+      <span class="character">Elder Oak (Tree)</span> 
+      <span class="dialogue">"You are more than you know, Fern. The forest is in danger, and only you can save it. Listen closely, for the animals will guide you."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🦉🌙<span class="label">Orin the Owl</span></span>
+      <span class="stage-dir" data-text="Suddenly, a wise old owl, named Orin, swoops down from the branches above.">(Suddenly, a wise old owl, named Orin, swoops down from the branches above.)</span>
+    </p>
+
+    <p data-character="Orin the Owl" data-dialogue='Fern, the time has come. The humans are encroaching on our home, and if we do not act soon, the Whispering Woods will be lost forever.'>
+      <span class="character">Orin (Owl)</span> 
+      <span class="dialogue">"Fern, the time has come. The humans are encroaching on our home, and if we do not act soon, the Whispering Woods will be lost forever."</span>
+    </p>
+
+    <p data-character="Fern the Fox" data-dialogue='But what can I do? Im just one fox.'>
+      <span class="character">Fern (Fox)</span> 
+      <span class="dialogue">"But what can I do? I'm just one fox."</span>
+    </p>
+
+    <p data-character="Orin the Owl" data-dialogue='You are not alone, Fern. The forest is alive, and it will fight with you. But you must unite the animals. Only together can we protect our home.'>
+      <span class="character">Orin (Owl)</span> 
+      <span class="dialogue">"You are not alone, Fern. The forest is alive, and it will fight with you. But you must unite the animals. Only together can we protect our home."</span>
+    </p>
+
+    <p>
+      <span class="stage-dir" data-text="Fern nods, determination in her eyes. The camera zooms in on her face as she sets off on her journey.">(Fern nods, determination in her eyes. The camera zooms in on her face as she sets off on her journey.)</span>
+    </p>
+
+    <div class="act-heading">🌿 Act 2: The Gathering</div>
+    <div class="scene-heading">Scene 2: The Meadow of Unity</div>
+
+    <p>
+      <span class="emoji-scene">🌾🌼🌈<span class="label">Meadow of Unity</span></span>
+      <span class="stage-dir" data-text="Fern travels through the forest, meeting various animals who each have their own unique abilities. The first animal she encounters is a brave wolf named Larka.">(Fern travels through the forest, meeting various animals who each have their own unique abilities. The first animal she encounters is a brave wolf named Larka.)</span>
+    </p>
+
+    <p data-character="Larka the Wolf" data-dialogue='Fern, I have been waiting for you. The forest has spoken, and I will stand by your side.'>
+      <span class="character">Larka (Wolf)</span> 
+      <span class="dialogue">"Fern, I've been waiting for you. The forest has spoken, and I will stand by your side."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🦝🌙<span class="label">Riff the Raccoon</span></span>
+      <span class="stage-dir" data-text="Next, Fern meets a clever raccoon named Riff, who is known for his cunning and resourcefulness.">(Next, Fern meets a clever raccoon named Riff, who is known for his cunning and resourcefulness.)</span>
+    </p>
+
+    <p data-character="Riff the Raccoon" data-dialogue='Count me in, Fern. I may not be the strongest, but I know every inch of this forest. I can help us navigate through the darkest paths.'>
+      <span class="character">Riff (Raccoon)</span> 
+      <span class="dialogue">"Count me in, Fern. I may not be the strongest, but I know every inch of this forest. I can help us navigate through the darkest paths."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene">🦌🌿<span class="label">Elara the Deer</span></span>
+      <span class="stage-dir" data-text="As Fern continues her journey, she encounters a gentle deer named Elara, who possesses the ability to heal wounds with her touch.">(As Fern continues her journey, she encounters a gentle deer named Elara, who possesses the ability to heal wounds with her touch.)</span>
+    </p>
+
+    <p data-character="Elara the Deer" data-dialogue='I may not be a fighter, Fern, but I can mend the wounds of those who are. The forest needs all of us to survive.'>
+      <span class="character">Elara (Deer)</span> 
+      <span class="dialogue">"I may not be a fighter, Fern, but I can mend the wounds of those who are. The forest needs all of us to survive."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🐿️⚡<span class="label">Pippin the Squirrel</span></span>
+      <span class="stage-dir" data-text="Finally, Fern meets a mischievous squirrel named Pippin, who is quick and agile, able to scout ahead and gather information.">(Finally, Fern meets a mischievous squirrel named Pippin, who is quick and agile, able to scout ahead and gather information.)</span>
+    </p>
+
+    <p data-character="Pippin the Squirrel" data-dialogue='Do not worry, Fern! I will be your eyes and ears. No human will get past me!'>
+      <span class="character">Pippin (Squirrel)</span> 
+      <span class="dialogue">"Don't worry, Fern! I'll be your eyes and ears. No human will get past me!"</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene">🌳🦊🐺🦉🦌🐿️<span class="label">The Gathering</span></span>
+      <span class="stage-dir" data-text="The group gathers in the Meadow of Unity, where the Elder Oak stands tall, overseeing the assembly.">(The group gathers in the Meadow of Unity, where the Elder Oak stands tall, overseeing the assembly.)</span>
+    </p>
+
+    <p data-character="Elder Oak the Tree" data-dialogue="Together, you are strong. But remember, the humans are not your enemies. They have simply forgotten the magic of the forest. It is your task to remind them.">
+      <span class="character">Elder Oak (Tree)</span> 
+      <span class="dialogue">"Together, you are strong. But remember, the humans are not your enemies. They have simply forgotten the magic of the forest. It is your task to remind them."</span>
+    </p>
+
+    <p>
+      <span class="stage-dir" data-text="The animals nod in agreement, and the camera pans out to show the diverse group standing together, ready to face the challenges ahead.">(The animals nod in agreement, and the camera pans out to show the diverse group standing together, ready to face the challenges ahead.)</span>
+    </p>
+
+    <div class="act-heading">🌿 Act 3: The Battle for the Forest</div>
+    <div class="scene-heading">Scene 3: The Edge of the Woods</div>
+
+    <p>
+      <span class="emoji-scene">🏕️🔥<span class="label">Humans at the Edge</span></span>
+      <span class="stage-dir" data-text="The animals reach the edge of the forest, where they see a group of humans setting up camp. The humans are clearing the land, unaware of the magical world they are destroying.">(The animals reach the edge of the forest, where they see a group of humans setting up camp. The humans are clearing the land, unaware of the magical world they are destroying.)</span>
+    </p>
+
+    <p data-character="Fern the Fox" data-dialogue="We must stop them, but we cannot harm them. The Elder Oak said they are not our enemies.">
+      <span class="character">Fern (Fox)</span> 
+      <span class="dialogue">"We must stop them, but we cannot harm them. The Elder Oak said they are not our enemies."</span>
+    </p>
+
+    <p data-character="Orin the Owl" data-dialogue="Then we must show them the beauty of the forest. We must make them see what they are destroying.">
+      <span class="character">Orin (Owl)</span> 
+      <span class="dialogue">"Then we must show them the beauty of the forest. We must make them see what they are destroying."</span>
+    </p>
+
+    <p>
+      <span class="stage-dir" data-text="The animals work together, using their unique abilities to create a spectacle that will capture the humans attention. Larka howls, summoning the spirits of the forest, while Elara uses her healing touch to make the flowers bloom. Riff and Pippin create a dazzling display of lights, and Fern steps forward, her voice carrying the wisdom of the Elder Oak.">(The animals work together, using their unique abilities to create a spectacle that will capture the humans' attention. Larka howls, summoning the spirits of the forest, while Elara uses her healing touch to make the flowers bloom. Riff and Pippin create a dazzling display of lights, and Fern steps forward, her voice carrying the wisdom of the Elder Oak.)</span>
+    </p>
+
+    <p data-character="Fern the Fox" data-dialogue="Humans, hear me! This forest is alive, and it is a part of you. If you destroy it, you destroy a part of yourselves.">
+      <span class="character">Fern (Fox)</span> 
+      <span class="dialogue">"Humans, hear me! This forest is alive, and it is a part of you. If you destroy it, you destroy a part of yourselves."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">👧🌿<span class="label">Lily the Human</span></span>
+      <span class="stage-dir" data-text="The humans, awestruck by the display, lower their tools and listen. One of them, a young girl named Lily, steps forward.">(The humans, awestruck by the display, lower their tools and listen. One of them, a young girl named Lily, steps forward.)</span>
+    </p>
+
+    <p data-character="Lily the Human" data-dialogue="I... I can hear them. The trees, the animals... they are speaking to me.">
+      <span class="character">Lily (Human)</span> 
+      <span class="dialogue">"I... I can hear them. The trees, the animals... they're speaking to me."</span>
+    </p>
+
+    <p>
+      <span class="stage-dir" data-text="The other humans begin to hear the whispers of the forest as well, and they realize the error of their ways.">(The other humans begin to hear the whispers of the forest as well, and they realize the error of their ways.)</span>
+    </p>
+
+    <p data-character="Human Leader" data-dialogue="We did not know... we did not understand. We will leave this place and protect it, as you have asked.">
+      <span class="character">Human Leader</span> 
+      <span class="dialogue">"We didn't know... we didn't understand. We will leave this place and protect it, as you have asked."</span>
+    </p>
+
+    <p>
+      <span class="stage-dir" data-text="The humans pack up their camp and leave, promising to never return. The animals cheer, and the forest sighs in relief.">(The humans pack up their camp and leave, promising to never return. The animals cheer, and the forest sighs in relief.)</span>
+    </p>
+
+    <div class="act-heading">🌿 Act 4: The New Dawn</div>
+    <div class="scene-heading">Scene 4: The Heart of the Forest</div>
+
+    <p>
+      <span class="emoji-scene">🌳✨🌟<span class="label">Heart of the Forest</span></span>
+      <span class="stage-dir" data-text="The animals return to the heart of the forest, where the Elder Oak stands, proud and strong.">(The animals return to the heart of the forest, where the Elder Oak stands, proud and strong.)</span>
+    </p>
+
+    <p data-character="Elder Oak the Tree" data-dialogue="You have done well, Fern. The forest is safe, and the humans have learned to respect it once more. But remember, this is only the beginning. The Whispering Woods will always need protectors, and you have proven yourself worthy.">
+      <span class="character">Elder Oak (Tree)</span> 
+      <span class="dialogue">"You have done well, Fern. The forest is safe, and the humans have learned to respect it once more. But remember, this is only the beginning. The Whispering Woods will always need protectors, and you have proven yourself worthy."</span>
+    </p>
+
+    <p data-character="Fern the Fox" data-dialogue="I will always protect the forest, Elder Oak. It is my home, and it is a part of me.">
+      <span class="character">Fern (Fox)</span> 
+      <span class="dialogue">"I will always protect the forest, Elder Oak. It is my home, and it is a part of me."</span>
+    </p>
+
+    <p>
+      <span class="emoji-scene right">🦊🐺🦉🦌🐿️🌳<span class="label">Forever Protected</span></span>
+      <span class="stage-dir" data-text="The camera zooms out, showing the animals gathered around the Elder Oak, the forest alive and thriving around them. The whispers of the trees grow louder, and the audience hears the final words of the Elder Oak.">(The camera zooms out, showing the animals gathered around the Elder Oak, the forest alive and thriving around them. The whispers of the trees grow louder, and the audience hears the final words of the Elder Oak.)</span>
+    </p>
+
+    <p data-character="Elder Oak the Tree" data-dialogue="The forest is eternal, and so are those who protect it. Remember this, and the Whispering Woods will never fade.">
+      <span class="character">Elder Oak (Tree)</span> 
+      <span class="dialogue">"The forest is eternal, and so are those who protect it. Remember this, and the Whispering Woods will never fade."</span>
+    </p>
+
+    <p>
+      <span class="stage-dir" data-text="The screen fades to black, and the credits roll, accompanied by the sounds of the forest and the gentle whispers of the trees.">(The screen fades to black, and the credits roll, accompanied by the sounds of the forest and the gentle whispers of the trees.)</span>
+    </p>
+
+    <div class="the-end">The End</div>
+
+  </div>
+
+  <div class="footer-note">
+    🌳 The Whispering Woods · A Play for Grade 4
+  </div>
+
+</div>
+
+<script>
+(function() {
+  "use strict";
+
+  const scriptContainer = document.getElementById('scriptContainer');
+  const readBtn = document.getElementById('readBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const statusLabel = document.getElementById('statusLabel');
+  const voiceSelect = document.getElementById('voiceSelect');
+
+  // ----- BUILD TEXT BLOCKS -----
+  const textBlocks = [];
+  const textElements = [];
+
+  // 1. Stage directions (with data-text attribute)
+  document.querySelectorAll('.stage-dir').forEach((dir) => {
+    const text = dir.getAttribute('data-text') || dir.textContent.trim();
+    if (text) {
+      const wrapper = document.createElement('span');
+      wrapper.className = 'text-block';
+      wrapper.textContent = text;
+      wrapper.dataset.textIndex = textBlocks.length;
+      textBlocks.push(text);
+      textElements.push(wrapper);
+      dir.innerHTML = '';
+      dir.appendChild(wrapper);
+    }
+  });
+
+  // 2. Character + Dialogue (combined)
+  document.querySelectorAll('p[data-character]').forEach((p) => {
+    const charName = p.getAttribute('data-character');
+    const dialogue = p.getAttribute('data-dialogue');
+    if (charName && dialogue) {
+      const fullText = charName + ' says: ' + dialogue;
+      const wrapper = document.createElement('span');
+      wrapper.className = 'text-block dialogue-block';
+      wrapper.textContent = fullText;
+      wrapper.dataset.textIndex = textBlocks.length;
+      textBlocks.push(fullText);
+      textElements.push(wrapper);
+      const charSpan = p.querySelector('.character');
+      if (charSpan) {
+        charSpan.parentNode.insertBefore(wrapper, charSpan.nextSibling);
+        const dialogueSpan = p.querySelector('.dialogue');
+        if (dialogueSpan) dialogueSpan.style.display = 'none';
+      }
+    }
+  });
+
+  // 3. Any remaining standalone dialogue
+  document.querySelectorAll('.dialogue:not([style*="display"])').forEach((d) => {
+    if (d.closest('p') && d.closest('p').getAttribute('data-character')) return;
+    const text = d.textContent.trim();
+    if (text) {
+      const wrapper = document.createElement('span');
+      wrapper.className = 'text-block';
+      wrapper.textContent = text;
+      wrapper.dataset.textIndex = textBlocks.length;
+      textBlocks.push(text);
+      textElements.push(wrapper);
+      d.parentNode.insertBefore(wrapper, d);
+      d.style.display = 'none';
+    }
+  });
+
+  // Fallback: if no blocks, use paragraphs
+  if (textBlocks.length === 0) {
+    document.querySelectorAll('.reader-content p').forEach((p) => {
+      const text = p.textContent.trim();
+      if (text && !p.querySelector('.stage-dir')) {
+        const wrapper = document.createElement('span');
+        wrapper.className = 'text-block';
+        wrapper.textContent = text;
+        wrapper.dataset.textIndex = textBlocks.length;
+        textBlocks.push(text);
+        textElements.push(wrapper);
+        p.appendChild(wrapper);
+      }
+    });
+  }
+
+  // ----- POPULATE VOICE SELECTOR -----
+  function populateVoices() {
+    if (!window.speechSynthesis) return;
+    const voices = window.speechSynthesis.getVoices();
+    voiceSelect.innerHTML = '<option value="">🔊 Choose voice...</option>';
+    voices.forEach((v) => {
+      const option = document.createElement('option');
+      option.value = v.name;
+      option.textContent = v.name + ' (' + v.lang + ')';
+      if (v.name.toLowerCase().includes('child') || v.name.toLowerCase().includes('kid') || v.name.toLowerCase().includes('samantha')) {
+        option.selected = true;
+      }
+      voiceSelect.appendChild(option);
+    });
+  }
+
+  if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = populateVoices;
+    setTimeout(populateVoices, 100);
+  }
+
+  // ----- SPEECH SYNTHESIS -----
+  let utterance = null;
+  let isPlaying = false;
+  let isPaused = false;
+  let currentTextIndex = 0;
+
+  function getSelectedVoice() {
+    const voiceName = voiceSelect.value;
+    if (!voiceName || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find(v => v.name === voiceName) || null;
+  }
+
+  function cancelSpeech() {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    utterance = null;
+    isPlaying = false;
+    isPaused = false;
+    clearHighlights();
+    updateButtons();
+    statusLabel.textContent = '⏸ stopped';
+  }
+
+  function clearHighlights() {
+    textElements.forEach(el => el.classList.remove('active-sentence'));
+    document.querySelectorAll('.reader-content p').forEach(p => p.classList.remove('speaking'));
+  }
+
+  function highlightText(index) {
+    clearHighlights();
+    if (index >= 0 && index < textElements.length) {
+      textElements[index].classList.add('active-sentence');
+      const p = textElements[index].closest('p');
+      if (p) p.classList.add('speaking');
+    }
+  }
+
+  function speakFrom(index) {
+    if (!window.speechSynthesis) {
+      alert('Your browser does not support speech synthesis.');
+      return;
+    }
+    if (index < 0 || index >= textBlocks.length) {
+      cancelSpeech();
+      return;
+    }
+
+    cancelSpeech();
+
+    let textToSpeak = textBlocks[index];
+    if (!textToSpeak) {
+      cancelSpeech();
+      return;
+    }
+
+    textToSpeak = textToSpeak.replace(/[\(\)]/g, '');
+    textToSpeak = textToSpeak.replace(/\s+/g, ' ').trim();
+
+    utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.25;
+    utterance.volume = 1;
+
+    const selectedVoice = getSelectedVoice();
+    if (selectedVoice) utterance.voice = selectedVoice;
+
+    utterance.onstart = function() {
+      isPlaying = true;
+      isPaused = false;
+      currentTextIndex = index;
+      highlightText(index);
+      statusLabel.textContent = '🔊 reading ' + (index+1) + '/' + textBlocks.length;
+      updateButtons();
+    };
+
+    utterance.onend = function() {
+      if (isPaused) return;
+      const nextIdx = currentTextIndex + 1;
+      if (nextIdx < textBlocks.length) {
+        setTimeout(function() {
+          if (!isPaused && isPlaying) {
+            speakFrom(nextIdx);
+          }
+        }, 150);
+      } else {
+        isPlaying = false;
+        clearHighlights();
+        statusLabel.textContent = '✅ play finished';
+        updateButtons();
+        utterance = null;
+      }
+    };
+
+    utterance.onerror = function(e) {
+      // Ignore "canceled" and "interrupted" errors (they're intentional)
+      if (e.error === 'canceled' || e.error === 'interrupted') {
+        console.log('Speech was cancelled or interrupted');
+        return;
+      }
+      
+      // Only show warning for actual failures
+      if (e.error === 'synthesis-failed') {
+        console.warn('Speech synthesis failed, retrying...');
+        // Retry after a short delay
+        setTimeout(function() {
+          if (!isPaused && isPlaying) {
+            speakFrom(currentTextIndex);
+          }
+        }, 500);
+      } else {
+        console.warn('Speech error:', e);
+        isPlaying = false;
+        clearHighlights();
+        updateButtons();
+      }
+    };
+
+    window.speechSynthesis.speak(utterance);
+    isPlaying = true;
+    isPaused = false;
+    updateButtons();
+  }
+
+  function resumeSpeech() {
+    if (isPaused && currentTextIndex < textBlocks.length) {
+      isPaused = false;
+      speakFrom(currentTextIndex);
+    }
+  }
+
+  function pauseSpeech() {
+    if (window.speechSynthesis && isPlaying && !isPaused) {
+      window.speechSynthesis.pause();
+      isPaused = true;
+      statusLabel.textContent = '⏸ paused at ' + (currentTextIndex+1) + '/' + textBlocks.length;
+      updateButtons();
+    }
+  }
+
+  function updateButtons() {
+    readBtn.disabled = isPlaying && !isPaused;
+    pauseBtn.disabled = !isPlaying || isPaused;
+    if (!isPlaying && !isPaused) {
+      pauseBtn.disabled = true;
+      readBtn.disabled = false;
+      if (textBlocks.length === 0) readBtn.disabled = true;
+    }
+    if (isPaused) {
+      readBtn.innerHTML = '▶ Resume';
+      readBtn.disabled = false;
+      pauseBtn.innerHTML = '⏸ Paused';
+    } else {
+      readBtn.innerHTML = '▶ Read Aloud';
+      if (isPlaying) readBtn.disabled = true;
+      else readBtn.disabled = false;
+      pauseBtn.innerHTML = '⏸ Pause';
+    }
+  }
+
+  readBtn.addEventListener('click', function() {
+    if (isPaused) {
+      resumeSpeech();
+      return;
+    }
+    cancelSpeech();
+    currentTextIndex = 0;
+    speakFrom(0);
+  });
+
+  pauseBtn.addEventListener('click', function() {
+    if (isPlaying && !isPaused) {
+      pauseSpeech();
+    } else if (isPaused) {
+      resumeSpeech();
+    }
+  });
+
+  textElements.forEach(function(el, idx) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      cancelSpeech();
+      currentTextIndex = idx;
+      speakFrom(idx);
+      statusLabel.textContent = '🔊 reading item ' + (idx+1);
+    });
+  });
+
+  document.querySelectorAll('.reader-content p').forEach(function(p) {
+    p.addEventListener('click', function(e) {
+      if (e.target === p || e.target.tagName === 'P') {
+        const firstText = p.querySelector('.text-block');
+        if (firstText) {
+          const idx = parseInt(firstText.dataset.textIndex, 10);
+          if (!isNaN(idx)) {
+            cancelSpeech();
+            currentTextIndex = idx;
+            speakFrom(idx);
+            statusLabel.textContent = '🔊 reading from paragraph';
+          }
+        }
+      }
+    });
+  });
+
+  voiceSelect.addEventListener('change', function() {
+    if (isPlaying || isPaused) {
+      const currentIdx = currentTextIndex;
+      cancelSpeech();
+      currentTextIndex = currentIdx;
+      speakFrom(currentIdx);
+    }
+  });
+
+  window.addEventListener('beforeunload', function() {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  });
+
+  updateButtons();
+  statusLabel.textContent = '🔊 Ready';
+
+})();
+</script>
+</body>
+</html>

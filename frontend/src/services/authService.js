@@ -97,5 +97,22 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Response interceptor to handle 401 errors (expired tokens)
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Token expired or invalid - log out
+      console.warn('Session expired or invalid. Logging out...');
+      AuthService.logout();
+      // Redirect to login page
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const authService = AuthService;
 export default AuthService;

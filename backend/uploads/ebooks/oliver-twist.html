@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Oliver Twist · Grade 6 Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- VICTORIAN LONDON BACKGROUND ----- */
+    body {
+      background: #1a1210;
+      background-image:
+        radial-gradient(ellipse at 30% 20%, #2a1a15 0%, #1a1210 60%),
+        radial-gradient(ellipse at 70% 80%, #221814 0%, #1a1210 50%),
+        radial-gradient(circle at 50% 0%, #3a2218 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- FOG EFFECT ----- */
+    body::before {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(180, 160, 140, 0.08), transparent 50%),
+        radial-gradient(ellipse at 80% 30%, rgba(180, 160, 140, 0.06), transparent 40%),
+        radial-gradient(ellipse at 50% 80%, rgba(180, 160, 140, 0.05), transparent 45%);
+      animation: fogDrift 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes fogDrift {
+      0% { opacity: 0.3; transform: translateX(-20px); }
+      50% { opacity: 0.6; transform: translateX(10px); }
+      100% { opacity: 0.4; transform: translateX(-5px); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #fcf8f0;
+      border-radius: 24px 8px 24px 8px;
+      padding: 3rem 3.5rem;
+      box-shadow:
+        0 20px 60px rgba(0,0,0,0.5),
+        0 0 0 2px #8b7355,
+        0 0 0 6px #5c4a32,
+        inset 0 0 40px rgba(139, 115, 85, 0.08);
+      position: relative;
+      z-index: 1;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #2c1810;
+    }
+
+    /* ----- DECORATIVE CORNER ORNAMENTS ----- */
+    .playbook::before {
+      content: '❖';
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      font-size: 24px;
+      color: #8b7355;
+      opacity: 0.3;
+    }
+    .playbook::after {
+      content: '❖';
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-size: 24px;
+      color: #8b7355;
+      opacity: 0.3;
+    }
+
+    /* ----- TITLE PAGE ----- */
+    .title-page {
+      text-align: center;
+      padding: 2rem 0 3rem 0;
+      border-bottom: 3px double #8b7355;
+      margin-bottom: 2rem;
+    }
+
+    .title-page h1 {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 42px;
+      color: #3a2218;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 0 rgba(139, 115, 85, 0.15);
+      font-style: normal !important;
+    }
+
+    .title-page .subtitle {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 22px;
+      color: #8b7355;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+      font-style: normal !important;
+    }
+
+    .title-page .author {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 18px;
+      color: #6b5a4a;
+      font-weight: 400;
+      font-style: normal !important;
+    }
+
+    .title-page .grade-badge {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.4rem 1.5rem;
+      background: #3a2218;
+      color: #fcf8f0;
+      border-radius: 40px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ----- CHAPTER HEADINGS ----- */
+    .chapter-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 30px;
+      color: #3a2218;
+      text-align: center;
+      margin: 2.5rem 0 1.5rem 0;
+      padding: 0.8rem 0;
+      letter-spacing: 0.06em;
+      text-shadow: 1px 1px 0 rgba(139, 115, 85, 0.15);
+      position: relative;
+      text-transform: uppercase;
+      font-style: normal !important;
+    }
+
+    .chapter-heading::after {
+      content: '✦ ✦ ✦';
+      display: block;
+      font-size: 18px;
+      color: #8b7355;
+      letter-spacing: 0.5em;
+      margin-top: 0.3rem;
+      opacity: 0.5;
+      font-style: normal !important;
+    }
+
+    /* ----- EMOJI SCENE BLOCKS ----- */
+    .emoji-scene {
+      display: inline-block;
+      font-size: 52px !important;
+      line-height: 1.2;
+      margin: 0.5rem 1.2rem 0.5rem 0;
+      padding: 0.4rem 1rem;
+      background: linear-gradient(145deg, #f5ede0, #e8dccc);
+      border-radius: 28px 12px 28px 12px;
+      box-shadow: 
+        0 6px 24px rgba(139, 115, 85, 0.25),
+        0 0 0 3px #fcf8f0,
+        0 0 0 5px #d4c5a9;
+      float: left;
+      transform: perspective(800px) rotateY(-3deg) rotateX(2deg);
+      transition: transform 0.3s ease, box-shadow 0.3s;
+      min-width: 100px;
+      text-align: center;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));
+      font-style: normal !important;
+    }
+
+    .emoji-scene.right {
+      float: right;
+      margin: 0.5rem 0 0.5rem 1.2rem;
+      transform: perspective(800px) rotateY(3deg) rotateX(2deg);
+    }
+
+    .emoji-scene:hover {
+      transform: perspective(800px) rotateY(0deg) rotateX(0deg) scale(1.04);
+      box-shadow: 
+        0 10px 32px rgba(139, 115, 85, 0.35),
+        0 0 0 3px #fcf8f0,
+        0 0 0 5px #c9b896;
+    }
+
+    .emoji-scene .label {
+      display: block;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 12px !important;
+      font-weight: 700;
+      color: #3a2218;
+      letter-spacing: 0.06em;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 40px;
+      padding: 0.1rem 0.6rem;
+      margin-top: 0.1rem;
+      text-transform: uppercase;
+      backdrop-filter: blur(4px);
+      font-style: normal !important;
+    }
+
+    /* ----- CHARACTER NAMES ----- */
+    .character {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 22px;
+      color: #3a2218;
+      display: inline;
+      margin-right: 0.2rem;
+      padding: 0.1rem 0.4rem;
+      background: linear-gradient(to right, transparent, rgba(139, 115, 85, 0.1), transparent);
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .character::after {
+      content: ': ';
+      color: #8b7355;
+      font-weight: 900;
+    }
+
+    /* ----- DIALOGUE ----- */
+    .dialogue {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      color: #2c1810;
+      font-weight: 600;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-style: normal !important;
+    }
+
+    .dialogue::before {
+      content: '\201C';
+      color: #8b7355;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    .dialogue::after {
+      content: '\201D';
+      color: #8b7355;
+      font-size: 24px;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    /* ----- STAGE DIRECTIONS (no italics) ----- */
+    .stage-dir {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      color: #6b5a4a;
+      background: rgba(245, 237, 224, 0.5);
+      padding: 0.2rem 1rem;
+      border-radius: 16px 4px 16px 4px;
+      display: inline-block;
+      margin: 0.2rem 0;
+      font-size: 18px;
+      border-left: 3px solid #d4c5a9;
+      font-style: normal !important;
+      font-weight: 400;
+    }
+
+    /* ----- NARRATOR TEXT ----- */
+    .narrator-text {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      color: #3d2a1a;
+      padding: 0.8rem 1.5rem;
+      background: linear-gradient(to right, rgba(139, 115, 85, 0.05), rgba(139, 115, 85, 0.1), rgba(139, 115, 85, 0.05));
+      border-radius: 24px 4px 24px 4px;
+      border: 1px solid rgba(139, 115, 85, 0.15);
+      line-height: 1.8;
+      font-style: normal !important;
+      font-weight: 500;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    p {
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 12px;
+      transition: background 0.3s ease;
+      display: flow-root;
+      clear: both;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      font-style: normal !important;
+    }
+
+    p::after {
+      content: '';
+      display: table;
+      clear: both;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT (golden glow) ----- */
+    .speaking-sentence {
+      background: rgba(139, 115, 85, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(139, 115, 85, 0.15), inset 0 0 20px rgba(139, 115, 85, 0.05);
+      animation: bookGlow 1.2s ease-in-out;
+      border: 1px solid rgba(139, 115, 85, 0.1);
+      font-style: normal !important;
+    }
+
+    @keyframes bookGlow {
+      0% { box-shadow: 0 0 0 rgba(139, 115, 85, 0); }
+      50% { box-shadow: 0 0 40px rgba(139, 115, 85, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(139, 115, 85, 0.15); }
+    }
+
+    /* ----- THE END ----- */
+    .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #8b7355;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(139, 115, 85, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+
+    .the-end::before {
+      content: '✦ ✦ ✦ ✦ ✦';
+      display: block;
+      font-size: 18px;
+      color: #d4c5a9;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    p, span, div {
+      transition: background 0.3s ease;
+      font-style: normal !important;
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 768px) {
+      .playbook { padding: 1.5rem; font-size: 18px; }
+      .title-page h1 { font-size: 32px; }
+      .chapter-heading { font-size: 24px; }
+      .emoji-scene { font-size: 40px !important; float: none !important; display: block; margin: 0.8rem auto !important; width: fit-content; transform: none !important; }
+      .emoji-scene:hover { transform: scale(1.04) !important; }
+      .character { font-size: 18px; }
+      .dialogue { font-size: 18px; }
+      .the-end { font-size: 26px; }
+      .stage-dir { font-size: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      .playbook { padding: 1rem; font-size: 16px; border-radius: 12px; }
+      .title-page h1 { font-size: 26px; }
+      .chapter-heading { font-size: 20px; }
+      .emoji-scene { font-size: 34px !important; }
+      .character { font-size: 16px; }
+      .dialogue { font-size: 16px; }
+      .the-end { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="playbook">
+
+  <!-- ============================================ -->
+  <!-- TITLE PAGE -->
+  <!-- ============================================ -->
+  <div class="title-page">
+    <h1>Oliver Twist</h1>
+    <div class="subtitle">A Tale of Courage and Kindness</div>
+    <div class="author">by Charles Dickens · Adapted for Young Readers</div>
+    <div class="grade-badge">📖 Grade 6 · English Literature</div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 1: Oliver's Beginnings -->
+  <!-- ============================================ -->
+  <div class="chapter-heading">Chapter 1 · Oliver's Beginnings</div>
+
+  <p>
+    <span class="emoji-scene">🏚️👶🍼<span class="label">The Workhouse</span></span>
+    <span class="narrator-text">In a dusty old workhouse in a small English town, a baby boy was born. His mother, weak and tired, held him close for just a moment before she passed away. The baby had no family, no home, and not even a name — until the parish officials named him Oliver Twist.</span>
+  </p>
+
+  <p>
+    <span class="emoji-scene">🥣👦😢<span class="label">Hungry Boy</span></span>
+    <span class="narrator-text">Oliver grew up in the workhouse with other orphaned children. They were always hungry. The workhouse master gave them only thin gruel — three meals a day of watery oatmeal. The boys were so hungry that they decided someone must ask for more.</span>
+  </p>
+
+  <p>
+    <span class="stage-dir">The boys whisper among themselves, pushing Oliver forward.</span>
+  </p>
+
+  <p>
+    <span class="character">Oliver</span>
+    <span class="dialogue">Please, sir, I want some more.</span>
+  </p>
+
+  <p>
+    <span class="stage-dir">The workhouse master stares in shock. His face turns red with anger.</span>
+  </p>
+
+  <p>
+    <span class="character">Master</span>
+    <span class="dialogue">More?! You ungrateful boy! How dare you ask for more!</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">For this terrible crime, Oliver was punished and locked in a dark room. The parish officials decided they must get rid of him. They offered five pounds to anyone who would take Oliver away as an apprentice.</span>
+  </p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 2: A Cruel Master -->
+  <!-- ============================================ -->
+  <div class="chapter-heading">Chapter 2 · A Cruel Master</div>
+
+  <p>
+    <span class="emoji-scene">🧹👦💨<span class="label">The Sweep</span></span>
+    <span class="narrator-text">A chimney sweep named Mr. Gamfield said he would take Oliver. But the kind magistrate saw how frightened Oliver was and refused to let him go. Instead, Oliver was sent to work for an undertaker named Mr. Sowerberry.</span>
+  </p>
+
+  <p>
+    <span class="stage-dir">Mr. Sowerberry's shop is dark and filled with coffins. Oliver shivers.</span>
+  </p>
+
+  <p>
+    <span class="character">Mr. Sowerberry</span>
+    <span class="dialogue">You'll sleep in the shop, boy, among the coffins. And you'll walk in funeral processions.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Oliver worked hard, but the other apprentice, Noah Claypole, was cruel to him. Noah teased Oliver about his mother and made his life miserable. One day, Noah insulted Oliver's mother so terribly that Oliver finally fought back.</span>
+  </p>
+
+  <p>
+    <span class="character">Noah</span>
+    <span class="dialogue">Your mother was a bad woman, Oliver Twist! Everybody knows it!</span>
+  </p>
+
+  <p>
+    <span class="character">Oliver</span>
+    <span class="dialogue">Don't you speak about my mother! Don't you dare!</span>
+  </p>
+
+  <p>
+    <span class="stage-dir">Oliver, small but fierce, tackles Noah. Mrs. Sowerberry and Mr. Bumble rush in.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Oliver was punished severely. That night, he packed his few belongings and ran away. He walked for seven days, hungry and tired, until he reached the great city of London.</span>
+  </p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 3: London and a New Friend -->
+  <!-- ============================================ -->
+  <div class="chapter-heading">Chapter 3 · London and a New Friend</div>
+
+  <p>
+    <span class="emoji-scene">🏙️👦🚶<span class="label">Arriving in London</span></span>
+    <span class="narrator-text">London was huge, noisy, and crowded. Oliver had never seen so many people, carriages, and buildings. He was tired, hungry, and had no money. A cheerful boy with a funny hat spotted him sitting on a doorstep.</span>
+  </p>
+
+  <p>
+    <span class="character">Jack Dawkins (The Artful Dodger)</span>
+    <span class="dialogue">Hullo, my covey! What's the matter? You look like you've seen hard times!</span>
+  </p>
+
+  <p>
+    <span class="character">Oliver</span>
+    <span class="dialogue">I'm very hungry and I have nowhere to go.</span>
+  </p>
+
+  <p>
+    <span class="character">Dodger</span>
+    <span class="dialogue">Come with me! I know a gentleman who'll give you lodgings for free!</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">The Dodger led Oliver through narrow, winding streets to a dirty old house. There, Oliver met Fagin — an old man with a wrinkled face and greedy eyes, surrounded by a group of boys.</span>
+  </p>
+
+  <p>
+    <span class="emoji-scene">👴🧒👦<span class="label">Fagin's Den</span></span>
+    <span class="character">Fagin</span>
+    <span class="dialogue">So, my dear, you want to stay with us? Very well! You'll be comfortable here, I promise.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Fagin gave Oliver food and a place to sleep. But Oliver didn't yet know that Fagin and his boys were pickpockets — they stole wallets and handkerchiefs from rich people in the streets.</span>
+  </p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 4: A Terrible Mistake -->
+  <!-- ============================================ -->
+  <div class="chapter-heading">Chapter 4 · A Terrible Mistake</div>
+
+  <p>
+    <span class="emoji-scene">🎩👦🏃<span class="label">The Pickpocket</span></span>
+    <span class="narrator-text">One day, the Dodger took Oliver for a walk. The Dodger spotted a wealthy old gentleman reading a book at a bookstall. Quick as a flash, the Dodger picked the gentleman's pocket and ran. But the gentleman turned around just as Oliver was standing there, confused.</span>
+  </p>
+
+  <p>
+    <span class="character">Gentleman (Mr. Brownlow)</span>
+    <span class="dialogue">Stop! Thief! My handkerchief is gone!</span>
+  </p>
+
+  <p>
+    <span class="stage-dir">People grab Oliver and drag him through the streets. A crowd gathers.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Poor Oliver was dragged before a magistrate. But a kind bookstall owner had seen everything and testified that Oliver was innocent — it was another boy who had stolen the handkerchief. The gentleman, Mr. Brownlow, felt terrible for the frightened boy.</span>
+  </p>
+
+  <p>
+    <span class="character">Mr. Brownlow</span>
+    <span class="dialogue">The poor child looks half-starved! Come home with me, boy. I'll take care of you.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">For the first time in his life, Oliver experienced kindness. Mr. Brownlow gave him clean clothes, good food, and a warm bed. Oliver was happy and hoped he would never have to return to Fagin's den.</span>
+  </p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 5: Captured Again -->
+  <!-- ============================================ -->
+  <div class="chapter-heading">Chapter 5 · Captured Again</div>
+
+  <p>
+    <span class="emoji-scene">😈👦🔒<span class="label">The Capture</span></span>
+    <span class="narrator-text">But Fagin was angry. Oliver knew too much about their operations. Fagin sent a terrifying man named Bill Sikes and a woman named Nancy to find Oliver and bring him back.</span>
+  </p>
+
+  <p>
+    <span class="character">Bill Sikes</span>
+    <span class="dialogue">Come along, boy! Your friends are waiting for you!</span>
+  </p>
+
+  <p>
+    <span class="stage-dir">Sikes grabs Oliver roughly. Nancy looks away, her heart heavy with guilt.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Nancy was a kind woman trapped in a terrible life. She secretly helped Oliver and tried to protect him from Sikes's cruelty. But Sikes was a violent man who trusted no one.</span>
+  </p>
+
+  <p>
+    <span class="character">Nancy</span>
+    <span class="dialogue">(whispering to Oliver) I'll help you, child. I promise. But you must be patient.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Sikes forced Oliver to help him break into a house one dark night. But the plan went wrong — the homeowners woke up and raised the alarm. Sikes escaped, but Oliver was shot and left behind, wounded and bleeding.</span>
+  </p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 6: A Kind Rescue -->
+  <!-- ============================================ -->
+  <div class="chapter-heading">Chapter 6 · A Kind Rescue</div>
+
+  <p>
+    <span class="emoji-scene">🏠❤️👦<span class="label">The Rescue</span></span>
+    <span class="narrator-text">The people in the house — the kind Mrs. Maylie and her beautiful niece Rose — found Oliver bleeding in the garden. Instead of calling the police, they carried him inside and nursed him back to health.</span>
+  </p>
+
+  <p>
+    <span class="character">Mrs. Maylie</span>
+    <span class="dialogue">This poor child is innocent. Look at his face — there is no evil in him.</span>
+  </p>
+
+  <p>
+    <span class="character">Rose</span>
+    <span class="dialogue">We'll take care of you, Oliver. You're safe now.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Oliver stayed with the Maylies in their beautiful country home. He learned to read and write, played in the garden, and felt truly loved for the first time. But Fagin and Sikes were still searching for him.</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">Meanwhile, Nancy, tormented by guilt, secretly met with Rose and Mr. Brownlow. She told them everything about Fagin's plans to recapture Oliver. But Sikes discovered her betrayal.</span>
+  </p>
+
+  <p>
+    <span class="stage-dir">Sikes, furious and wild, confronts Nancy in a dark room.</span>
+  </p>
+
+  <p>
+    <span class="character">Sikes</span>
+    <span class="dialogue">You've betrayed me, Nancy! You told them everything!</span>
+  </p>
+
+  <p>
+    <span class="character">Nancy</span>
+    <span class="dialogue">I did what was right! Oliver is just a child — he deserves a better life!</span>
+  </p>
+
+  <p>
+    <span class="narrator-text">In a terrible rage, Sikes attacked Nancy. Her brave sacrifice would not be in vain — the police were now hunting for Fagin and his gang.</span>
+  </p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 7: Justice and a New Beginning -->
+  <!-- ============================================ -->

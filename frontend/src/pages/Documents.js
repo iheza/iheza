@@ -11,8 +11,11 @@ const Documents = () => {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewType, setPreviewType] = useState(null);
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'projects', 'report_cards', 'analytics'
+  const [activeTab, setActiveTab] = useState('all'); // 'all', 'projects', 'report_cards', 'analytics', 'examination_reports'
+  const [examReportFilter, setExamReportFilter] = useState({ year: '', term: '' });
   const [selectedChain, setSelectedChain] = useState('');
+  const [filterSource, setFilterSource] = useState(null); // Clickable filter from analytics
+  const [filterTeacher, setFilterTeacher] = useState(null); // Clickable filter from analytics
   const fileInputRef = useRef(null);
   
   // Only principals can upload, delete, or clear documents
@@ -130,7 +133,7 @@ const Documents = () => {
 
       try {
         const base64 = await fileToBase64(file);
-        newDocs.push({
+        const docData = {
           id: Date.now() + '_' + i,
           name: file.name,
           type: file.type,
@@ -139,7 +142,25 @@ const Documents = () => {
           source: 'upload',
           uploaded_by: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email || 'Unknown' : localStorage.getItem('userName') || 'Unknown',
           uploadedAt: new Date().toISOString()
-        });
+        };
+        newDocs.push(docData);
+
+        // Also upload to backend API for persistence
+        try {
+          const token = localStorage.getItem('sessionToken');
+          if (token) {
+            await fetch(`${API_URL}/api/documents`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(docData)
+            });
+          }
+        } catch (backendErr) {
+          console.warn('Backend upload failed, saved locally only:', backendErr);
+        }
       } catch (err) {
         console.error('Error reading file:', err);
         alert(`Error reading file ${file.name}`);
@@ -204,6 +225,194 @@ const Documents = () => {
   };
 
   const previewDocument = (doc) => {
+    // For examination reports stored with metadata only (no full HTML content),
+    // regenerate the HTML from the stored form data
+    if (doc.source === 'examination_report' && (!doc.data || doc.data === null) && doc.metadata?.formData) {
+      const fd = doc.metadata.formData;
+      const termOptions = [
+        { value: '1', label: 'First Term' },
+        { value: '2', label: 'Second Term' },
+        { value: '3', label: 'Third Term' },
+        { value: 'final', label: 'Final' },
+      ];
+      const termLabel = termOptions.find(t => t.value === fd.term)?.label || `Term ${fd.term}`;
+      
+      // Helper: convert tab-separated text into an HTML table
+      const tabDataToTable = (text, headers = []) => {
+        if (!text || !text.trim()) return '';
+        const lines = text.split('\n').filter(l => l.trim());
+        if (lines.length === 0) return '';
+        let html = '<table>\n';
+        if (headers.length > 0) {
+          html += '  <tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>\n';
+        }
+        lines.forEach((line, idx) => {
+          const cols = line.split('\t');
+          const isHeader = idx === 0 && headers.length === 0 && !/^\d+/.test(cols[0]) && cols.length > 1;
+          if (isHeader) {
+            html += '  <tr>' + cols.map(c => `<th>${c.trim()}</th>`).join('') + '</tr>\n';
+          } else {
+            html += '  <tr>' + cols.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>\n';
+          }
+        });
+        html += '</table>\n';
+        return html;
+      };
+      
+      // Helper: convert bullet-point text into numbered list items
+      const bulletToNumberedList = (text) => {
+        if (!text || !text.trim()) return '';
+        const items = text.split(/[●•]\s*/).filter(i => i.trim());
+        if (items.length <= 1) {
+          const altItems = text.split('\n\n').filter(i => i.trim());
+          if (altItems.length > 1) {
+            let html = '<ol>\n';
+            altItems.forEach(item => {
+              const clean = item.replace(/^[●•]\s*/, '').trim();
+              if (clean) html += `  <li>${clean}</li>\n`;
+            });
+            html += '</ol>\n';
+            return html;
+          }
+          return `<p>${text.replace(/\n/g, '<br/>')}</p>`;
+        }
+        let html = '<ol>\n';
+        items.forEach(item => {
+          const clean = item.replace(/^[●•]\s*/, '').trim();
+          if (clean) html += `  <li>${clean}</li>\n`;
+        });
+        html += '</ol>\n';
+        return html;
+      };
+      
+      // Determine dynamic class names from stored formData
+      const dynamicClassNames = [];
+      if (fd) {
+        // First check if dynamicClassNames was stored directly
+        if (fd.dynamicClassNames && Array.isArray(fd.dynamicClassNames) && fd.dynamicClassNames.length > 0) {
+          dynamicClassNames.push(...fd.dynamicClassNames);
+        } else {
+          // Fallback: check for dynamic class name fields (subjectAverages_0, subjectAverages_1, etc.)
+          for (let i = 0; i < 50; i++) {
+            if (fd[`subjectAverages_${i}`] !== undefined) {
+              dynamicClassNames.push(`Class ${i + 1}`);
+            } else {
+              break;
+            }
+          }
+        }
+      }
+      
+      const schoolName = doc.metadata.schoolName || 'DENIZ PRIMARY SCHOOL';
+      const htmlContent = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Examination Report</title>
+<style>
+  @page { size: A4; margin: 2cm 2.5cm; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.6; color: #1a1a1a; background: white; }
+  .logo-container { text-align: center; margin-bottom: 20px; }
+  .logo-img { max-width: 120px; max-height: 120px; }
+  .school-header { text-align: center; margin-bottom: 30px; }
+  .school-name { font-size: 26pt; font-weight: bold; text-transform: uppercase; color: #1a1a1a; letter-spacing: 1px; }
+  .school-motto { font-size: 14pt; font-style: italic; color: #555; margin: 8px 0; }
+  .school-contact { font-size: 10pt; color: #666; line-height: 1.8; }
+  .report-title { text-align: center; font-size: 18pt; font-weight: bold; margin: 50px 0 15px 0; text-transform: uppercase; color: #1a1a1a; letter-spacing: 0.5px; }
+  .report-date { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 40px; color: #1a1a1a; }
+  .prepared-by { text-align: center; font-size: 12pt; margin-bottom: 50px; color: #1a1a1a; line-height: 2; }
+  .prepared-by .role { font-weight: bold; }
+  .prepared-by .name { font-weight: bold; text-decoration: underline; }
+  .cover-note { text-align: center; font-size: 11pt; margin-bottom: 40px; color: #444; font-style: italic; }
+  .section-title { font-size: 16pt; font-weight: bold; text-transform: uppercase; margin: 35px 0 15px 0; border-bottom: 3px solid #1a1a1a; padding-bottom: 8px; color: #1a1a1a; letter-spacing: 0.5px; }
+  .section-content { margin-bottom: 20px; white-space: pre-wrap; color: #1a1a1a; text-align: justify; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11pt; }
+  th, td { border: 1.5px solid #333; padding: 10px 12px; text-align: left; color: #1a1a1a; }
+  th { background: #d4d4d4; font-weight: bold; text-align: center; font-size: 11pt; }
+  tr:nth-child(even) { background: #f5f5f5; }
+  tr:nth-child(odd) { background: #ffffff; }
+  .grade-scale { margin: 15px 0; padding: 15px; background: #f9f9f9; border-left: 4px solid #333; }
+  .findings-subsection { font-weight: bold; font-size: 13pt; margin: 20px 0 10px 0; color: #1a1a1a; }
+  .page-break { page-break-before: always; }
+  .most-passed-failed { margin: 20px 0; }
+  .most-passed-failed th { background: #2c3e50; color: white; font-size: 11pt; }
+  .most-passed-failed td { text-align: center; font-weight: bold; font-size: 12pt; padding: 12px; }
+  .general-error { background: #fff8e1; border: 2px solid #f9a825; padding: 18px; margin: 20px 0; font-weight: bold; color: #1a1a1a; border-radius: 4px; }
+  ol { margin: 15px 0; padding-left: 30px; }
+  ol li { margin-bottom: 10px; text-align: justify; line-height: 1.6; }
+  .numbered-list { margin: 15px 0; }
+  .numbered-list .list-item { margin-bottom: 12px; text-align: justify; line-height: 1.6; padding-left: 5px; }
+</style></head>
+<body>
+${fd.logoPreview ? `<div class="logo-container"><img src="${fd.logoPreview}" class="logo-img" /></div>` : ''}
+<div class="school-header">
+  <div class="school-name">${schoolName}</div>
+  <div class="school-motto">Everyone is an achiever</div>
+  <div class="school-contact">Tel: +255 678 436 080 Email: denizprimary@gmail.com P.O.BOX 2254, Magogoni – Zanzibar.</div>
+</div>
+<div class="report-title">${termLabel.toUpperCase()} - EXAMINATION REPORT - ${fd.termMonth}</div>
+<div class="report-date">${fd.examDate}</div>
+<div class="prepared-by">
+  PREPARED BY:<br/>
+  <span class="role">${(fd.preparedByRole || '').toUpperCase()},</span><br/>
+  <span class="name">${(fd.preparedBy || '').toUpperCase()}</span>
+</div>
+<div class="cover-note">${fd.coverPageNote || ''}</div>
+<div class="page-break"></div>
+<div class="section-title">CONTENTS</div>
+<div class="section-content">${(fd.contents || '').replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;').replace(/\\n/g, '<br/>')}</div>
+<div class="page-break"></div>
+<div class="section-title">INTRODUCTION</div>
+<div class="section-content">${(fd.introduction || '').replace(/\\n/g, '<br/>')}</div>
+<div class="grade-scale"><strong>Grades that were used:</strong><br/>${(fd.gradeScale || '').replace(/\\n/g, '<br/>')}</div>
+<div class="page-break"></div>
+<div class="section-title">SUMMARY</div>
+<div class="section-content">${(fd.summaryNote || '').replace(/\\n/g, '<br/>')}</div>
+${tabDataToTable(fd.summaryClasses, ['CLASSES', 'BOYS', 'GIRLS', 'TOTAL'])}
+<div class="page-break"></div>
+<div class="section-title">FINDINGS</div>
+<div class="findings-subsection">A) SUBJECT AVERAGES, GRADES AND POSITION:</div>
+<div class="section-content">${(fd.findingsANote || '').replace(/\\n/g, '<br/>')}</div>
+${dynamicClassNames.length > 0 
+  ? dynamicClassNames.map((clsName, idx) => {
+      const fieldKey = `subjectAverages_${idx}`;
+      const tableData = fd[fieldKey] || '';
+      return tabDataToTable(tableData, ['NO.', 'SUBJECTS', clsName]);
+    }).join('\n')
+  : `
+${tabDataToTable(fd.subjectAveragesGrade5A, ['NO.', 'SUBJECTS', 'GRADE 5-A'])}
+${tabDataToTable(fd.subjectAveragesGrade5B, ['NO.', 'SUBJECTS', 'GRADE 5-B'])}
+${tabDataToTable(fd.subjectAveragesGrade6, ['NO.', 'SUBJECTS', 'GRADE 6'])}
+`}
+<div class="findings-subsection">B) CLASS AVERAGE, GRADE AND POSITION:</div>
+<div class="section-content">${(fd.findingsBNote || '').replace(/\\n/g, '<br/>')}</div>
+${tabDataToTable(fd.classAverages, ['NO.', 'CLASSES', 'AV - GR - POS'])}
+<div class="findings-subsection">C) SCHOOL PERFORMANCE: SUBJECT WISE</div>
+${tabDataToTable(fd.schoolPerformanceSubjectWise, ['NO.', 'SUBJECTS', 'AVERAGE', 'GRADE', 'POSITION'])}
+<div class="most-passed-failed"><table><tr><th>MOST PASSED SUBJECT</th><th>MOST FAILED SUBJECT</th><th>OVERALL SCHOOL PERFORMANCE</th></tr><tr><td>${fd.mostPassedSubject || ''}</td><td>${fd.mostFailedSubject || ''}</td><td>${fd.overallSchoolPerformance || ''}</td></tr></table></div>
+<div class="findings-subsection">D) MOST FAILED QUESTIONS AND REASONS:</div>
+<div class="findings-subsection">GRADE 5 A&B</div>
+${tabDataToTable(fd.failedQuestionsGrade5AB, ['SUBJECTS', 'QUESTION(S) NUMBER', 'PART OF TOPICS', 'REASON(S)'])}
+<div class="findings-subsection">GRADE 6</div>
+${tabDataToTable(fd.failedQuestionsGrade6, ['SUBJECTS', 'QUESTION(S) NUMBER', 'PART OF TOPICS', 'REASON(S)'])}
+<div class="findings-subsection">E) EXAMS AND MARKING SCHEMES ERRORS:</div>
+<div class="findings-subsection">PART 1: EXAMS ERRORS</div>
+<div class="section-content">${(fd.examErrors || '').replace(/\\n/g, '<br/>')}</div>
+<div class="findings-subsection">PART 2: MARKING SCHEMES ERRORS</div>
+${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'ERRORS'])}
+<div class="general-error">${(fd.generalError || '').replace(/\\n/g, '<br/>')}</div>
+<div class="page-break"></div>
+<div class="section-title">CONCLUSION</div>
+<div class="numbered-list">${bulletToNumberedList(fd.conclusion)}</div>
+<div class="page-break"></div>
+<div class="section-title">RECOMMENDATIONS</div>
+<div class="numbered-list">${bulletToNumberedList(fd.recommendations)}</div>
+</body></html>`;
+      
+      const dataUri = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(htmlContent)));
+      setPreviewUrl(dataUri);
+      setPreviewType('word');
+      return;
+    }
+    
     if (doc.type.startsWith('image/')) {
       setPreviewUrl(doc.data);
       setPreviewType('image');
@@ -211,13 +420,6 @@ const Documents = () => {
       setPreviewUrl(doc.data);
       setPreviewType('pdf');
     } else if (doc.type.includes('word') || doc.type.includes('document') || doc.type.includes('msword')) {
-      // Check if this is a .docx (ZIP) file or an HTML-based .doc
-      // .docx files start with PK (ZIP signature), HTML files start with <!DOCTYPE or <html
-      // Check if this is a real .docx (ZIP) file or an HTML-based .doc
-      // Real .docx files start with PK (ZIP signature), HTML files start with <!DOCTYPE or <html
-      // IMPORTANT: Always check the actual content first, not just the file extension.
-      // Report cards are stored as HTML with a .docx extension and docx MIME type,
-      // but they are NOT real docx files and cannot be parsed by mammoth.
       let isRealDocx = false;
       try {
         if (doc.data && typeof doc.data === 'string' && doc.data.startsWith('data:') && doc.data.includes('base64,')) {
@@ -229,16 +431,13 @@ const Documents = () => {
       }
       
       if (isRealDocx) {
-        // For real .docx files, use mammoth to convert to HTML
         setPreviewUrl(doc.data);
         setPreviewType('docx');
       } else {
-        // HTML-based .doc files or pseudo-docx (like report cards stored as HTML) - render as HTML
         setPreviewUrl(doc.data);
         setPreviewType('word');
       }
     } else {
-      // Fallback - check if it looks like HTML
       try {
         const base64 = doc.data?.split('base64,')[1];
         const decoded = base64 ? atob(base64) : '';
@@ -534,7 +733,12 @@ const Documents = () => {
                 const color = colors[source] || '#64748b';
                 const label = labels[source] || source.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 return (
-                  <div key={source} style={{ marginBottom: '10px' }}>
+                  <div 
+                    key={source} 
+                    style={{ marginBottom: '10px', cursor: 'pointer' }}
+                    onClick={() => { setFilterSource(source); setFilterTeacher(null); setActiveTab('all'); }}
+                    title={`Click to view ${label.toLowerCase()}`}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
                       <span style={{ color: '#cbd5e1' }}>{label}</span>
                       <span style={{ color: '#94a3b8' }}>{count} ({pct}%)</span>
@@ -582,8 +786,12 @@ const Documents = () => {
                     fontSize: '12px',
                     background: isTop ? 'rgba(34,197,94,0.08)' : isBottom ? 'rgba(239,68,68,0.08)' : 'transparent',
                     borderRadius: '4px',
-                    marginTop: '2px'
-                  }}>
+                    marginTop: '2px',
+                    cursor: 'pointer'
+                  }}
+                    onClick={() => { setFilterTeacher(t.name); setFilterSource(null); setActiveTab('all'); }}
+                    title={`Click to view ${t.name === 'Unknown' ? 'Not Assigned' : t.name}'s documents`}
+                  >
                     <span style={{ color: '#64748b', width: '24px', fontWeight: isTop ? '700' : '400' }}>
                       {isTop ? '🥇' : isBottom ? '📉' : idx + 1}
                     </span>
@@ -1113,20 +1321,91 @@ const Documents = () => {
     )
   );
 
-  // Filter documents based on active tab and chain
+  // Filter documents based on active tab, chain, and analytics filters
   const filteredDocs = (() => {
     // First apply chain filter
     const chainFiltered = selectedChain
       ? documents.filter(d => d.chain === selectedChain)
       : documents;
     
+    // Apply analytics source filter (when clicking from analytics tab)
+    let sourceFiltered = chainFiltered;
+    if (filterSource) {
+      sourceFiltered = chainFiltered.filter(d => d.source === filterSource);
+    }
+    
+    // Apply analytics teacher filter (when clicking from analytics tab)
+    let teacherFiltered = sourceFiltered;
+    if (filterTeacher) {
+      teacherFiltered = sourceFiltered.filter(d => {
+        const teacher = d.metadata?.teacher || d.uploaded_by || 'Unknown';
+        return teacher === filterTeacher;
+      });
+    }
+    
     // Then apply tab filter
     if (activeTab === 'projects') {
-      return chainFiltered.filter(d => d.source === 'upload');
+      return teacherFiltered.filter(d => d.source === 'upload');
     } else if (activeTab === 'report_cards') {
-      return chainFiltered.filter(d => d.source === 'report_card');
+      return teacherFiltered.filter(d => d.source === 'report_card');
+    } else if (activeTab === 'examination_reports') {
+      let examDocs = teacherFiltered.filter(d => d.source === 'examination_report');
+      // Apply year filter
+      if (examReportFilter.year) {
+        examDocs = examDocs.filter(d => d.metadata?.year === examReportFilter.year);
+      }
+      // Apply term filter
+      if (examReportFilter.term) {
+        examDocs = examDocs.filter(d => d.metadata?.term === examReportFilter.term);
+      }
+      return examDocs;
     }
-    return chainFiltered;
+    return teacherFiltered;
+  })();
+  // Show filter indicator when analytics filters are active
+  const hasAnalyticsFilter = filterSource || filterTeacher;
+  const getFilterLabel = () => {
+    if (filterSource && filterTeacher) {
+      const labels = {
+        'upload': 'Uploaded Files',
+        'lesson_plan': 'Lesson Plans',
+        'scheme_of_work': 'Scheme of Work',
+        'subject_evaluation': 'Subject Evaluations',
+        'assessment': 'Assessments',
+        'report_card': 'Report Cards'
+      };
+      return `${labels[filterSource] || filterSource} by ${filterTeacher === 'Unknown' ? 'Not Assigned' : filterTeacher}`;
+    }
+    if (filterSource) {
+      const labels = {
+        'upload': 'Uploaded Files',
+        'lesson_plan': 'Lesson Plans',
+        'scheme_of_work': 'Scheme of Work',
+        'subject_evaluation': 'Subject Evaluations',
+        'assessment': 'Assessments',
+        'report_card': 'Report Cards'
+      };
+      return labels[filterSource] || filterSource;
+    }
+    if (filterTeacher) {
+      return filterTeacher === 'Unknown' ? 'Not Assigned' : filterTeacher;
+    }
+    return '';
+  };
+  
+  // Computed variable for examination reports count display
+  const examReportsFiltered = (() => {
+    const chainFiltered = selectedChain
+      ? documents.filter(d => d.chain === selectedChain)
+      : documents;
+    let examDocs = chainFiltered.filter(d => d.source === 'examination_report');
+    if (examReportFilter.year) {
+      examDocs = examDocs.filter(d => d.metadata?.year === examReportFilter.year);
+    }
+    if (examReportFilter.term) {
+      examDocs = examDocs.filter(d => d.metadata?.term === examReportFilter.term);
+    }
+    return examDocs;
   })();
 
   // Compute analytics from chain-filtered documents
@@ -1496,7 +1775,126 @@ const Documents = () => {
           <BarChart3 size={16} />
           Analytics
         </button>
+        <button 
+          className={`tab-btn ${activeTab === 'examination_reports' ? 'active' : ''}`}
+          onClick={() => setActiveTab('examination_reports')}
+          style={activeTab === 'examination_reports' ? { color: '#8b5cf6' } : {}}
+        >
+          <FileText size={16} />
+          Examination Reports
+        </button>
       </div>
+      
+      {/* Examination Reports Filter */}
+      {activeTab === 'examination_reports' && (
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          marginBottom: '16px',
+          padding: '12px 16px',
+          background: 'white',
+          borderRadius: '10px',
+          border: '1px solid #e2e8f0',
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Filter:</span>
+          <select
+            value={examReportFilter.year}
+            onChange={(e) => setExamReportFilter(prev => ({ ...prev, year: e.target.value }))}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '6px',
+              fontSize: '13px',
+              color: '#1e293b',
+              background: 'white'
+            }}
+          >
+            <option value="">All Years</option>
+            {[...new Set(
+              documents
+                .filter(d => d.source === 'examination_report' && d.metadata?.year)
+                .map(d => d.metadata.year)
+            )].sort().reverse().map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          <select
+            value={examReportFilter.term}
+            onChange={(e) => setExamReportFilter(prev => ({ ...prev, term: e.target.value }))}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '6px',
+              fontSize: '13px',
+              color: '#1e293b',
+              background: 'white'
+            }}
+          >
+            <option value="">All Terms</option>
+            <option value="1">First Term</option>
+            <option value="2">Second Term</option>
+            <option value="3">Third Term</option>
+            <option value="final">Final</option>
+          </select>
+          {(examReportFilter.year || examReportFilter.term) && (
+            <button
+              onClick={() => setExamReportFilter({ year: '', term: '' })}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: '#64748b',
+                background: '#f8fafc',
+                cursor: 'pointer'
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
+          <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
+            {examReportsFiltered.length} report(s)
+          </span>
+        </div>
+      )}
+
+      {/* Analytics Filter Indicator */}
+      {hasAnalyticsFilter && activeTab !== 'analytics' && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '16px',
+          padding: '10px 16px',
+          background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
+          borderRadius: '10px',
+          color: 'white',
+          fontSize: '13px',
+          fontWeight: '500'
+        }}>
+          <BarChart3 size={16} />
+          <span>Filtered by: <strong>{getFilterLabel()}</strong></span>
+          <button
+            onClick={() => { setFilterSource(null); setFilterTeacher(null); }}
+            style={{
+              marginLeft: 'auto',
+              padding: '4px 12px',
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              borderRadius: '6px',
+              color: 'white',
+              fontSize: '12px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            <X size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+            Clear Filter
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       {activeTab === 'analytics' ? (
@@ -1529,12 +1927,19 @@ const Documents = () => {
                 <iframe 
                   srcDoc={(() => {
                     try {
-                      // Extract base64 data and decode to HTML
+                      // Extract base64 data and decode to HTML with proper UTF-8 handling
                       const base64 = previewUrl.split(',')[1];
-                      const decoded = atob(base64);
+                      // Use decodeURIComponent + escape to properly handle UTF-8 characters (e.g., en-dash –)
+                      const decoded = decodeURIComponent(escape(atob(base64)));
                       return decoded;
                     } catch(e) {
-                      return '<p>Unable to preview this document. Please download to view.</p>';
+                      // Fallback to simple atob if the UTF-8 decode fails
+                      try {
+                        const base64 = previewUrl.split(',')[1];
+                        return atob(base64);
+                      } catch(e2) {
+                        return '<p>Unable to preview this document. Please download to view.</p>';
+                      }
                     }
                   })()}
                   title="Word Document Preview"

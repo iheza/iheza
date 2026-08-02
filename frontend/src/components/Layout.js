@@ -9,7 +9,7 @@ import {
   Calendar, BarChart3, Settings, LogOut, Menu, X,
   ChevronRight, QrCode, Award, FileText, DollarSign,
   ClipboardList, BookMarked, User, Bell, Building, Trash2,
-  Globe
+  Globe, Library
 } from 'lucide-react';
 
 // Navigation permissions by role
@@ -64,6 +64,10 @@ const NAV_PERMISSIONS = {
   'bin': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
   // Expenses: Only principals, directors, and coordinators
   'expenses': ['director', 'coordinator', 'principal'],
+  // Examination Reports: Academic office and above
+  'examination-reports': ['director', 'coordinator', 'principal', 'academic', 'section_leader'],
+  // e-Book: Available to all portals
+  'ebook': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
 };
 
 function Layout({ children }) {
@@ -115,7 +119,9 @@ function Layout({ children }) {
     { path: '/portal/documents', icon: FileText, label: 'Documents', key: 'documents' },
     { path: '/portal/bin', icon: Trash2, label: 'Bin', key: 'bin' },
     { path: '/portal/expenses', icon: DollarSign, label: 'Expenses', key: 'expenses' },
+    { path: '/portal/ebook', icon: Library, label: 'e-Book', key: 'ebook' },
     { path: '/portal/reports', icon: BarChart3, label: 'Reports', key: 'reports' },
+    { path: '/portal/examination-reports', icon: FileText, label: 'Examination Reports', key: 'examination-reports' },
   ];
 
   // Filter nav items based on user role

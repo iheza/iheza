@@ -701,7 +701,16 @@ const SchemeOfWork = ({ onSave }) => {
         type: 'application/msword',
         size: blob.size,
         data: base64Data,
-        source: 'scheme_of_work'
+        source: 'scheme_of_work',
+        metadata: {
+          type: 'scheme_of_work',
+          subject: formData.subject,
+          class: formData.class,
+          year: formData.year,
+          term: formData.term,
+          teacher: formData.teacher,
+          school: formData.school
+        }
       };
 
       // Always save to localStorage first (for Documents component)

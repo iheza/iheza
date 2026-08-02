@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Oliver: The Boy Who Found Balance · Grade 6 Edition</title>
+  <!-- All fonts Arial 20px - no italics, no serif -->
+  <style>
+    /* ============================================
+       CHILDREN'S BOOK STYLES - ARIAL ONLY
+       No italics, no serif fonts
+       ============================================ */
+
+    /* ----- RESET & BASE ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ----- WARM VILLAGE BACKGROUND ----- */
+    body {
+      background: #1a1815;
+      background-image:
+        radial-gradient(ellipse at 30% 20%, #2a2218 0%, #1a1815 60%),
+        radial-gradient(ellipse at 70% 80%, #221e18 0%, #1a1815 50%),
+        radial-gradient(circle at 50% 0%, #3a2a18 0%, transparent 40%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 1rem;
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ----- FLOATING LEAF PARTICLES ----- */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      background-image:
+        radial-gradient(2px 2px at 10% 20%, rgba(144, 238, 144, 0.4), transparent),
+        radial-gradient(2px 2px at 30% 60%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(3px 3px at 50% 10%, rgba(144, 238, 144, 0.3), transparent),
+        radial-gradient(2px 2px at 70% 40%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(3px 3px at 90% 80%, rgba(144, 238, 144, 0.3), transparent),
+        radial-gradient(2px 2px at 15% 85%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(2px 2px at 85% 15%, rgba(144, 238, 144, 0.2), transparent),
+        radial-gradient(3px 3px at 45% 45%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(2px 2px at 60% 90%, rgba(144, 238, 144, 0.3), transparent),
+        radial-gradient(2px 2px at 25% 35%, rgba(255, 215, 0, 0.2), transparent);
+      animation: leafFloat 6s ease-in-out infinite alternate;
+    }
+    body::after {
+      background-image:
+        radial-gradient(1px 1px at 20% 50%, rgba(255, 215, 0, 0.3), transparent),
+        radial-gradient(1px 1px at 60% 30%, rgba(144, 238, 144, 0.3), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(255, 215, 0, 0.2), transparent),
+        radial-gradient(1px 1px at 40% 80%, rgba(144, 238, 144, 0.3), transparent),
+        radial-gradient(2px 2px at 10% 70%, rgba(255, 215, 0, 0.2), transparent);
+      animation: leafFloat 8s ease-in-out infinite alternate-reverse;
+    }
+
+    @keyframes leafFloat {
+      0% { opacity: 0.2; transform: translateY(0) rotate(0deg); }
+      50% { opacity: 0.5; transform: translateY(-15px) rotate(5deg); }
+      100% { opacity: 0.3; transform: translateY(5px) rotate(-3deg); }
+    }
+
+    /* ----- LEATHER-BOUND BOOK CONTAINER ----- */
+    .playbook {
+      max-width: 950px;
+      width: 100%;
+      background: #fef9f0;
+      background-image:
+        linear-gradient(to bottom, #fef9f0 0%, #f5ede0 50%, #fef9f0 100%);
+      border-radius: 24px;
+      padding: 3rem 3.5rem;
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(201, 168, 76, 0.2),
+        inset 0 0 40px rgba(201, 168, 76, 0.05);
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(201, 168, 76, 0.15);
+    }
+
+    /* ----- DECORATIVE CORNER ORNAMENTS ----- */
+    .playbook::before {
+      content: '✦';
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      font-size: 24px;
+      color: #c9a84c;
+      opacity: 0.3;
+    }
+    .playbook::after {
+      content: '✦';
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-size: 24px;
+      color: #c9a84c;
+      opacity: 0.3;
+    }
+
+    /* ----- TITLE PAGE ----- */
+    .title-page {
+      text-align: center;
+      padding: 2rem 0 3rem 0;
+      border-bottom: 2px solid rgba(201, 168, 76, 0.2);
+      margin-bottom: 2rem;
+    }
+
+    .title-page h1 {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 42px;
+      color: #2c1810;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 0 rgba(201, 168, 76, 0.15);
+      font-style: normal !important;
+    }
+
+    .title-page .subtitle {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 22px;
+      color: #8a7a6a;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-style: normal !important;
+    }
+
+    .title-page .author {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 18px;
+      color: #a09080;
+      font-weight: 500;
+      font-style: normal !important;
+    }
+
+    .title-page .title-emoji {
+      font-size: 64px;
+      display: block;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    /* ----- CHAPTER HEADERS ----- */
+    .chapter-header {
+      margin: 2.5rem 0 1.5rem 0;
+      padding: 1rem 0;
+      border-top: 2px solid rgba(201, 168, 76, 0.2);
+      border-bottom: 2px solid rgba(201, 168, 76, 0.2);
+      text-align: center;
+    }
+
+    .chapter-number {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 18px;
+      color: #c9a84c;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+      font-style: normal !important;
+    }
+
+    .chapter-title {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #2c1810;
+      letter-spacing: 0.03em;
+      font-style: normal !important;
+    }
+
+    /* ----- CHAPTER EMOJI DECORATION ----- */
+    .chapter-emoji {
+      text-align: center;
+      font-size: 48px;
+      margin: 1rem 0;
+      line-height: 1.3;
+    }
+
+    /* ----- PARAGRAPHS ----- */
+    .playbook p {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 20px;
+      line-height: 1.9;
+      color: #2c1810;
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 8px;
+      transition: background 0.3s ease;
+      font-style: normal !important;
+    }
+
+    /* ----- SPEAKING HIGHLIGHT (golden glow) ----- */
+    .speaking-sentence {
+      background: rgba(201, 168, 76, 0.15) !important;
+      border-radius: 8px;
+      padding: 0.1rem 0.4rem;
+      box-shadow: 0 0 30px rgba(201, 168, 76, 0.15), inset 0 0 20px rgba(201, 168, 76, 0.05);
+      animation: bookGlow 1.2s ease-in-out;
+      border: 1px solid rgba(201, 168, 76, 0.1);
+      font-style: normal !important;
+    }
+
+    .active-sentence {
+      background: rgba(201, 168, 76, 0.12) !important;
+    }
+
+    @keyframes bookGlow {
+      0% { box-shadow: 0 0 0 rgba(201, 168, 76, 0); }
+      50% { box-shadow: 0 0 40px rgba(201, 168, 76, 0.25); }
+      100% { box-shadow: 0 0 30px rgba(201, 168, 76, 0.15); }
+    }
+
+    /* ----- THE END ----- */
+    .the-end {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 32px;
+      text-align: center;
+      color: #c9a84c;
+      margin: 2.5rem 0 1rem 0;
+      letter-spacing: 0.3em;
+      text-shadow: 0 2px 12px rgba(201, 168, 76, 0.2);
+      position: relative;
+      font-style: normal !important;
+    }
+
+    .the-end::before {
+      content: '✦ ✦ ✦ ✦ ✦';
+      display: block;
+      font-size: 18px;
+      color: #e8d5a3;
+      letter-spacing: 0.8em;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+      font-style: normal !important;
+    }
+
+    /* ----- EPILOGUE HEADING ----- */
+    .epilogue-heading {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      color: #2c1810;
+      text-align: center;
+      margin: 2rem 0 1rem 0;
+      letter-spacing: 0.08em;
+      font-style: normal !important;
+    }
+
+    .epilogue-heading::after {
+      content: '✦ ✦ ✦';
+      display: block;
+      font-size: 18px;
+      color: #c9a84c;
+      letter-spacing: 0.5em;
+      margin-top: 0.3rem;
+      opacity: 0.5;
+      font-style: normal !important;
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 768px) {
+      .playbook {
+        padding: 1.5rem;
+        font-size: 18px;
+      }
+      .title-page h1 { font-size: 32px; }
+      .chapter-title { font-size: 22px; }
+      .playbook p { font-size: 18px; }
+      .title-page .title-emoji { font-size: 48px; }
+    }
+
+    @media (max-width: 480px) {
+      .playbook {
+        padding: 1rem;
+        font-size: 16px;
+      }
+      .title-page h1 { font-size: 26px; }
+      .chapter-title { font-size: 18px; }
+      .playbook p { font-size: 16px; }
+      .title-page .title-emoji { font-size: 40px; }
+    }
+
+    /* ----- CLICKABLE CURSOR ----- */
+    .playbook p { cursor: pointer; }
+  </style>
+</head>
+<body>
+<div class="playbook">
+
+  <!-- ============================================ -->
+  <!-- TITLE PAGE                                    -->
+  <!-- ============================================ -->
+  <div class="title-page">
+    <span class="title-emoji">🍞⚖️🌿</span>
+    <h1>Oliver: The Boy Who Found Balance</h1>
+    <div class="subtitle">A Story About Learning to Live Well</div>
+    <div class="author">Grade 6 · IHEZA Education</div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 1                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 1</div>
+    <div class="chapter-title">The Boy with an Endless Appetite</div>
+  </div>
+  <div class="chapter-emoji">🍞🥖🥐🧀🥘🍲</div>
+
+  <p>In the small, picturesque village of Willowbrook, nestled between rolling green hills and a sparkling river, lived a boy named Oliver. Oliver was no ordinary boy; he had a passion for food that was unmatched by anyone in the village. From the moment he could walk, Oliver had been drawn to the kitchen, where the tantalizing smells of his mother's cooking filled the air. By the time he was ten years old, Oliver had become known throughout Willowbrook as the boy who could eat more than anyone else.</p>
+
+  <p>Oliver's parents, Mr. and Mrs. Thompson, were kind and hardworking people who ran a modest bakery in the village. They loved their son dearly, but they couldn't help but worry about his insatiable appetite. No matter how much food they put in front of him, Oliver always wanted more. He would devour entire loaves of bread, plates of pastries, and bowls of stew without a second thought. His parents tried to reason with him, telling him that eating too much could make him sick, but Oliver was stubborn. He believed that food was the greatest joy in life, and he saw no reason to hold back.</p>
+
+  <p>As the years went by, Oliver's appetite only grew. By the time he was fifteen, he was eating enough food to feed three grown men. His once-slender frame had become round and heavy, and he found it increasingly difficult to keep up with the other children in the village. Despite this, Oliver refused to change his ways. He loved food too much to give it up, and he was convinced that nothing bad could ever happen to him because of it.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 2                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 2</div>
+    <div class="chapter-title">The First Signs of Trouble</div>
+  </div>
+  <div class="chapter-emoji">😰🤒😵💤😟</div>
+
+  <p>One crisp autumn morning, Oliver woke up feeling unusually tired. His limbs felt heavy, and his head was foggy. He dragged himself out of bed and stumbled downstairs to the kitchen, where his mother was preparing breakfast. The smell of freshly baked bread and sizzling bacon usually filled Oliver with excitement, but today, he felt nothing. He sat down at the table and picked at his food, barely eating a few bites before pushing his plate away.</p>
+
+  <p>"Oliver, are you feeling alright?" his mother asked, concern etched on her face.</p>
+
+  <p>"I'm fine," Oliver muttered, though he didn't feel fine at all. His stomach was churning, and he felt a strange ache in his chest. He tried to shake off the feeling and went about his day as usual, but the discomfort only grew worse.</p>
+
+  <p>Over the next few weeks, Oliver's health continued to decline. He was constantly tired, his breath came in short gasps, and he often felt dizzy. His parents begged him to see the village doctor, but Oliver refused. He was convinced that he was just going through a phase and that he would feel better soon. He didn't want to admit that his love of food might be causing him harm.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 3                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 3</div>
+    <div class="chapter-title">The Doctor's Warning</div>
+  </div>
+  <div class="chapter-emoji">🏥👨‍⚕️💉📋😨</div>
+
+  <p>One evening, after a particularly large meal, Oliver collapsed in the middle of the village square. His parents rushed him to the doctor, who examined him thoroughly. The doctor's face grew grave as he listened to Oliver's heart and checked his blood pressure.</p>
+
+  <p>"Oliver," the doctor said sternly, "you are suffering from a severe case of obesity, and it's putting a tremendous strain on your body. Your heart is working overtime to pump blood through your system, and your organs are struggling to function properly. If you don't make some serious changes to your diet and lifestyle, you could be in grave danger."</p>
+
+  <p>Oliver stared at the doctor in disbelief. He had always thought of himself as strong and healthy, despite his size. He couldn't believe that his love of food could actually be harming him.</p>
+
+  <p>"But... I can't just stop eating," Oliver protested. "Food is the only thing that makes me happy."</p>
+
+  <p>The doctor sighed. "I'm not saying you have to stop eating altogether, Oliver. But you need to learn to eat in moderation. You need to choose healthier foods and exercise regularly. If you don't, your body will continue to suffer, and you could develop even more serious conditions, like diabetes or heart disease."</p>
+
+  <p>Oliver's parents looked at him with pleading eyes. "Please, Oliver," his mother said, tears streaming down her face. "We love you, and we don't want to lose you. Please listen to the doctor."</p>
+
+  <p>Oliver felt a lump form in his throat. He had always been stubborn, but seeing the fear in his parents' eyes made him realize that he couldn't keep ignoring the problem. He nodded slowly. "Alright," he said. "I'll try."</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 4                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 4</div>
+    <div class="chapter-title">The Long Road to Recovery</div>
+  </div>
+  <div class="chapter-emoji">🥗🏃‍♂️💪🌅😤</div>
+
+  <p>The next few months were the hardest of Oliver's life. He started by cutting back on the amount of food he ate, but it was a constant struggle. His body craved the large meals he was used to, and he often felt hungry and irritable. He also started going for walks around the village, though at first, he could only manage a few minutes before he was out of breath.</p>
+
+  <p>Despite the challenges, Oliver was determined to change. He began to educate himself about nutrition, learning which foods were healthy and which ones he should avoid. He started eating more fruits, vegetables, and lean proteins, and he cut back on sugary treats and fatty foods. He also began to enjoy his walks, gradually increasing the distance he could cover.</p>
+
+  <p>As the weeks turned into months, Oliver began to notice changes in his body. He had more energy, his breathing became easier, and he started to lose weight. His parents were overjoyed to see him taking control of his health, and they supported him every step of the way.</p>
+
+  <!-- ============================================ -->
+  <!-- CHAPTER 5                                     -->
+  <!-- ============================================ -->
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 5</div>
+    <div class="chapter-title">A New Beginning</div>
+  </div>
+  <div class="chapter-emoji">🌟😊🏆🌄🎉</div>
+
+  <p>A year after his collapse in the village square, Oliver was almost unrecognizable. He had lost a significant amount of weight, and his once-round face had become lean and defined. He was still a lover of food, but now he approached it with a sense of balance and moderation. He had learned to appreciate the flavors of healthy, nourishing meals, and he no longer felt the need to overindulge.</p>
+
+  <p>Oliver's journey had not been easy, but it had taught him valuable lessons about self-discipline, perseverance, and the importance of taking care of his body. He had also learned to listen to the advice of others, rather than stubbornly insisting that he knew best.</p>
+
+  <p>One sunny afternoon, Oliver stood at the edge of the village, looking out over the rolling hills. He felt a sense of pride and accomplishment that he had never known before. He had faced a difficult challenge and come out stronger on the other side.</p>
+
+  <p>As he turned to walk back home, Oliver smiled to himself. He knew that life would always have its ups and downs, but he was ready to face whatever came his way. And for the first time in a long time, he felt truly happy.</p>
+
+  <!-- ============================================ -->
+  <!-- EPILOGUE                                      -->
+  <!-- ============================================ -->
+  <div class="epilogue-heading">Epilogue: The Boy Who Found Balance</div>
+  <div class="chapter-emoji">⚖️🍎📖🌱💛</div>
+
+  <p>Oliver's story became well-known throughout Willowbrook and beyond. People admired his determination and willpower, and he became an inspiration to others who were struggling with their own health issues. Oliver continued to live a balanced life, enjoying food in moderation and staying active. He even started helping out at his parents' bakery, creating healthy versions of their most popular treats.</p>
+
+  <p>Years later, when Oliver looked back on his journey, he realized that his stubbornness had been both his greatest weakness and his greatest strength. It had led him down a dangerous path, but it had also given him the determination to change his life for the better.</p>
+
+  <p>And so, the boy who once ate the world learned to savor it instead, finding joy not in the quantity of food, but in the quality of life.</p>
+
+  <!-- ============================================ -->
+  <!-- THE END                                       -->
+  <!-- ============================================ -->
+  <div class="the-end">The End.</div>
+
+</div>
+
+<script>
+  // ============================================
+  // READ ALOUD FUNCTIONALITY
+  // ============================================
+
+  (function() {
+    'use strict';
+
+    var isReading = false;
+    var isPaused = false;
+    var currentIndex = 0;
+    var sentences = [];
+    var utterance = null;
+    var selectedVoice = null;
+
+    // ----- COLLECT ALL TEXT PARAGRAPHS -----
+    function getTextBlocks() {
+      var blocks = [];
+      var paragraphs = document.querySelectorAll('.playbook p');
+      paragraphs.forEach(function(p) {
+        var text = p.textContent.trim();
+        if (text && text.length > 2) {
+          blocks.push({ text: text, element: p });
+        }
+      });
+      return blocks;
+    }
+
+    // ----- HIGHLIGHT A SENTENCE -----
+    function highlightSentence(index) {
+      // Remove all previous highlights
+      document.querySelectorAll('.speaking-sentence').forEach(function(el) {
+        el.classList.remove('speaking-sentence');
+      });
+      document.querySelectorAll('.active-sentence').forEach(function(el) {
+        el.classList.remove('active-sentence');
+      });
+
+      var blocks = getTextBlocks();
+      if (blocks.length > 0 && index < blocks.length) {
+        blocks[index].element.classList.add('speaking-sentence');
+        blocks[index].element.classList.add('active-sentence');
+        blocks[index].element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+
+    // ----- SPEAK A SENTENCE -----
+    function speakSentence(text, index) {
+      if (!window.speechSynthesis) {
+        alert('Your browser does not support speech synthesis.');
+        return;
+      }
+
+      // Cancel any ongoing speech
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+
+      utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.25;
+      utterance.volume = 1;
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.onstart = function() {
+        isReading = true;
+        isPaused = false;
+        currentIndex = index;
+        highlightSentence(index);
+      };
+
+      utterance.onend = function() {
+        var nextIndex = index + 1;
+        if (nextIndex < sentences.length) {
+          speakSentence(sentences[nextIndex], nextIndex);
+        } else {
+          isReading = false;
+          highlightSentence(-1);
+          showToast('🎉 Finished reading the book!');
+        }
+      };
+
+      utterance.onerror = function(e) {
+        // Ignore "canceled" and "interrupted" errors (they're intentional)
+        if (e.error === 'canceled' || e.error === 'interrupted') {
+          console.log('Speech was cancelled or interrupted');
+          return;
+        }
+        // Only show warning for actual failures
+        if (e.error === 'synthesis-failed') {
+          console.warn('Speech synthesis failed, retrying...');
+          setTimeout(function() {
+            if (!isPaused && isReading) {
+              speakSentence(text, index);
+            }
+          }, 500);
+        } else {
+          console.error('Speech error:', e);
+          isReading = false;
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // ----- READ BOOK ALOUD -----
+    function readBookAloud() {
+      var blocks = getTextBlocks();
+      if (blocks.length === 0) {
+        showToast('No readable text found in this book.');
+        return;
+      }
+
+      // Stop any ongoing speech
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+
+      sentences = blocks.map(function(b) { return b.text; });
+      currentIndex = 0;
+      speakSentence(sentences[0], 0);
+    }
+
+    // ----- PAUSE -----
+    function pauseReading() {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.pause();
+        isPaused = true;
+      }
+    }
+
+    // ----- RESUME -----
+    function resumeReading() {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.resume();
+        isPaused = false;
+      }
+    }
+
+    // ----- STOP -----
+    function stopReading() {
+      try {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          if (utterance) {
+            utterance.onend = null;
+            utterance.onerror = null;
+            utterance = null;
+          }
+        }
+      } catch (e) {
+        console.warn('Stop speech error:', e);
+      }
+      isReading = false;
+      isPaused = false;
+      highlightSentence(-1);
+    }
+
+    // ----- SIMPLE TOAST -----
+    function showToast(msg) {
+      var toast = document.createElement('div');
+      toast.textContent = msg;
+      toast.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2c1810;color:#fef9f0;padding:12px 24px;border-radius:12px;font-family:Arial,sans-serif;font-size:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.3);animation:fadeInOut 3s ease forwards;';
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 3000);
+    }
+
+    // Inject fade animation
+    var styleSheet = document.createElement('style');
+    styleSheet.textContent = '@keyframes fadeInOut{0%{opacity:0;transform:translateX(-50%) translateY(20px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1;transform:translateX(-50%) translateY(0)}100%{opacity:0;transform:translateX(-50%) translateY(-20px)}}';
+    document.head.appendChild(styleSheet);
+
+    // ----- CLICK TO READ -----
+    document.querySelector('.playbook').addEventListener('click', function(e) {
+      var p = e.target.closest('p');
+      if (!p) return;
+      var text = p.textContent.trim();
+      if (!text || text.length < 2) return;
+
+      // Stop any ongoing speech
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+
+      sentences = [text];
+      currentIndex = 0;
+      speakSentence(text, 0);
+    });
+
+    // ----- KEYBOARD SHORTCUTS -----
+    document.addEventListener('keydown', function(e) {
+      if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+        if (isReading && isPaused) {
+          resumeReading();
+        } else if (isReading && !isPaused) {
+          pauseReading();
+        } else {
+          readBookAloud();
+        }
+      }
+      if (e.key === 'Escape') {
+        stopReading();
+      }
+    });
+
+    // ----- AUTO-SELECT CHILD-LIKE VOICE -----
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = function() {
+        var voices = window.speechSynthesis.getVoices();
+        var childVoice = voices.find(function(v) {
+          var name = v.name.toLowerCase();
+          return name.includes('child') || name.includes('kid') ||
+                 name.includes('samantha') || name.includes('google uk english female') ||
+                 name.includes('moira') || name.includes('siri');
+        });
+        if (childVoice) selectedVoice = childVoice;
+      };
+      // Also try immediately
+      setTimeout(function() {
+        var voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          var childVoice = voices.find(function(v) {
+            var name = v.name.toLowerCase();
+            return name.includes('child') || name.includes('kid') ||
+                   name.includes('samantha') || name.includes('google uk english female') ||
+                   name.includes('moira') || name.includes('siri');
+          });
+          if (childVoice) selectedVoice = childVoice;
+        }
+      }, 200);
+    }
+
+    // Expose controls globally for the EBook.js reader
+    window.readBookAloud = readBookAloud;
+    window.pauseReading = pauseReading;
+    window.resumeReading = resumeReading;
+    window.stopReading = stopReading;
+    window.getTextBlocks = getTextBlocks;
+    window.highlightSentence = highlightSentence;
+    window.speakSentence = speakSentence;
+    window.isReading = function() { return isReading; };
+    window.isPaused = function() { return isPaused; };
+    window.getSentences = function() { return sentences; };
+    window.getCurrentIndex = function() { return currentIndex; };
+    window.setSelectedVoice = function(voice) { selectedVoice = voice; };
+
+  })();
+</script>
+</body>
+</html>

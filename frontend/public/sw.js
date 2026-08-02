@@ -1,7 +1,7 @@
 // Service Worker for IHEZA School Management System
 // Version-based cache to ensure updates are applied immediately
 // Bump this version on EVERY deployment to force cache refresh
-const CACHE_VERSION = 'v6-20260531b';  // BUMPED: force cache refresh
+const CACHE_VERSION = 'v9-20260708';  // BUMPED: fixed SW catch-all returning empty responses
 const CACHE_NAME = `iheza-cache-${CACHE_VERSION}`;
 
 // Only cache truly static assets that rarely change
@@ -63,12 +63,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 🔴 CRITICAL FIX: Bypass uploads FIRST — before any extension checks
+  // This prevents /uploads/ebooks/book.html from being caught by the .html check below
+  if (url.pathname.startsWith('/uploads/')) {
+    console.log('[SW] Bypassing upload:', url.pathname);
+    return; // Let browser handle it normally, no SW interception
+  }
+
   // Skip API calls - never cache these
   if (url.pathname.startsWith('/api')) {
     return;
   }
 
   // For JS, CSS, and HTML files - ALWAYS fetch from network (no caching)
+  // Safe now because /uploads/ paths are already excluded above
   if (url.pathname.endsWith('.js') || 
       url.pathname.endsWith('.css') || 
       url.pathname.endsWith('.html') ||
@@ -114,21 +122,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For everything else - network only with proper error handling
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Return whatever the server gave us (even 404s are valid Response objects)
-        return response;
-      })
-      .catch((error) => {
-        console.log('[SW] Fetch failed, returning empty response:', error);
-        return new Response('', {
-          status: 200,
-          headers: { 'Content-Type': 'text/html' }
-        });
-      })
-  );
+  // For everything else - don't intercept, let browser handle normally
+  return;
 });
 
 // Listen for messages from the main app
