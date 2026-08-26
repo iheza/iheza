@@ -339,39 +339,40 @@ function QRAttendance() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 1.5rem;
+          margin-bottom: 0.75rem;
           flex-wrap: wrap;
-          gap: 1rem;
+          gap: 0.5rem;
         }
         
         .page-title {
-          font-size: 1.5rem;
+          font-size: 1rem;
           font-weight: 700;
           color: #0f4c81;
           display: flex;
           align-items: center;
-          gap: 0.75rem;
+          gap: 0.5rem;
         }
         
         .page-title-icon {
-          width: 40px;
-          height: 40px;
+          width: 32px;
+          height: 32px;
           background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
-          border-radius: 10px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
         }
         
         .my-status-card {
-          padding: 1rem 1.5rem;
+          padding: 0.25rem 0.75rem;
           background: rgba(255, 255, 255, 0.9);
           border: 1px solid #e2e8f0;
-          border-radius: 1rem;
+          border-radius: 0.5rem;
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 0.5rem;
           box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+          min-height: 40px;
         }
         
         .my-status-card.checked-in {
@@ -391,26 +392,28 @@ function QRAttendance() {
         
         .mode-tabs {
           display: flex;
-          gap: 0.5rem;
-          padding: 0.25rem;
+          gap: 0.25rem;
+          padding: 0.15rem;
           background: rgba(14, 165, 233, 0.1);
-          border-radius: 0.75rem;
+          border-radius: 0.5rem;
           width: fit-content;
-          margin-bottom: 1.5rem;
+          margin-bottom: 0.75rem;
         }
         
         .mode-tab {
-          padding: 0.75rem 1.5rem;
+          padding: 0.25rem 0.75rem;
           background: transparent;
           border: none;
-          border-radius: 0.5rem;
+          border-radius: 0.35rem;
           color: #0369a1;
           font-weight: 500;
+          font-size: 0.8rem;
           cursor: pointer;
           transition: all 0.2s;
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.35rem;
+          min-height: 40px;
         }
         
         .mode-tab:hover {
@@ -466,17 +469,19 @@ function QRAttendance() {
         
         .filter-row {
           display: flex;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
+          gap: 0.5rem;
+          margin-bottom: 0.75rem;
         }
         
         .filter-select {
           flex: 1;
-          padding: 0.75rem 1rem;
+          padding: 0.25rem 0.75rem;
           background: white;
           border: 1px solid #e2e8f0;
-          border-radius: 0.75rem;
+          border-radius: 0.5rem;
           color: #1e293b;
+          font-size: 0.8rem;
+          min-height: 40px;
         }
         
         .filter-select:disabled {
@@ -650,30 +655,37 @@ function QRAttendance() {
         
         .stats-bar {
           display: flex;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
+          gap: 0.5rem;
+          margin-bottom: 0.75rem;
           flex-wrap: wrap;
         }
         
         .stat-item {
           flex: 1;
-          min-width: 100px;
-          padding: 1rem;
+          min-width: 80px;
+          padding: 0.25rem 0.5rem;
           background: white;
           border: 1px solid #e2e8f0;
-          border-radius: 0.75rem;
+          border-radius: 0.5rem;
           text-align: center;
+          min-height: 40px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
         }
         
         .stat-value {
-          font-size: 1.5rem;
+          font-size: 0.9rem;
           font-weight: 700;
           color: #1e293b;
+          line-height: 1.1;
         }
         
         .stat-label {
-          font-size: 0.7rem;
+          font-size: 0.6rem;
           color: #64748b;
+          line-height: 1.1;
         }
         
         .empty-state {

@@ -33,6 +33,7 @@ import Bin from './pages/Bin';
 import Expenses from './pages/Expenses';
 import ExaminationReports from './pages/ExaminationReports';
 import EBook from './pages/EBook';
+import Admission from './pages/Admission';
 
 // Components
 import Layout from './components/Layout';
@@ -220,6 +221,7 @@ function App() {
                   <Route path="expenses" element={<Expenses />} />
                   <Route path="examination-reports" element={<ExaminationReports />} />
                   <Route path="ebook" element={<EBook />} />
+                  <Route path="admission" element={<Admission />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>

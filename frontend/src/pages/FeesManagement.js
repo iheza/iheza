@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
-import { studentService } from '../services/studentService';
 import { toast } from '../hooks/useSoundEnabledToast';
+
 import { 
   DollarSign, Edit2, Trash2, Search, X, 
   CreditCard, Users, MessageCircle, Check, AlertCircle, Image, Upload, Eye, Download, Receipt
@@ -45,7 +45,7 @@ function FeesManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [activeTab, setActiveTab] = useState(
-    ['secretary', 'principal'].includes(currentUser?.role?.toLowerCase()) ? 'payments' : 'all-students'
+    ['secretary', 'principal', 'director'].includes(currentUser?.role?.toLowerCase()) ? 'payments' : 'all-students'
   ); // 'payments' or 'all-students'
   
   // Receipt viewer modal state
@@ -61,8 +61,8 @@ function FeesManagement() {
     { id: 'custom', name: 'Custom Amount', amount: 0 }
   ];
 
-  const canManageFees = ['secretary', 'principal', 'director', 'coordinator'].includes(currentUser?.role?.toLowerCase());
-  const canViewPayments = ['secretary', 'principal'].includes(currentUser?.role?.toLowerCase());
+  const canManageFees = ['secretary', 'principal', 'coordinator'].includes(currentUser?.role?.toLowerCase());
+  const canViewPayments = ['secretary', 'principal', 'director'].includes(currentUser?.role?.toLowerCase());
   const canUploadReceipts = currentUser?.role === 'secretary';
 
   const getAuthHeaders = () => {
@@ -81,23 +81,41 @@ function FeesManagement() {
     setLoading(true);
     const headers = getAuthHeaders();
     try {
-      // Load students and payments
-      const studentsData = await studentService.getStudents();
-      setStudents(studentsData);
-      
-      let url = `${API_URL}/api/payments`;
+      // Load students only. We intentionally do NOT fetch /api/payments here:
+      // that endpoint returns EVERY payment with its full base64 receipt image
+      // (1-5 MB each), which makes the response enormous and causes Nginx
+      // proxy_read_timeout (504) / Cloudflare buffer (520) errors. The global
+      // `payments` state is never rendered on this page anyway — individual
+      // student fee data (including receipts) is fetched on demand via
+      // /api/student-fees/{id} when a student is selected.
+      //
+      // We also use the lightweight /all-student-fees endpoint (paginated,
+      // no full receipt images, clean serializable data) instead of
+      // /api/students, which can crash with a 520 when DLP student documents
+      // contain nested datetime/ObjectId fields that fail to serialize.
+      const params = new URLSearchParams();
+      params.set('page', 1);
+      params.set('page_size', 1000);
       if (chain) {
-        url += `?chain=${chain}`;
+        params.set('chain', chain);
       }
+      const url = `${API_URL}/api/all-student-fees?${params.toString()}`;
       const response = await fetch(url, { headers });
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
       const data = await response.json();
-      setPayments(data);
+      // Handle both paginated response { students: [...] } and flat array fallback
+      const studentsData = (data && data.students) || (Array.isArray(data) ? data : []);
+      setStudents(studentsData);
     } catch (error) {
       console.error('Failed to load data:', error);
+      toast.error('Failed to load student data');
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleSelectStudent = async (student) => {
     // Accept either student.id or student.admission_no as the identifier
@@ -342,9 +360,9 @@ function FeesManagement() {
       const file = e.target.files[0];
       if (!file) return;
       
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image must be less than 5MB');
+      // Validate file size (max 500KB)
+      if (file.size > 500 * 1024) {
+        toast.error('Image must be less than 500KB');
         return;
       }
       
@@ -355,6 +373,7 @@ function FeesManagement() {
         
         try {
           const response = await fetch(`${API_URL}/api/payments/${paymentId}/receipt`, {
+
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({ receipt_image: base64Image })
@@ -413,9 +432,9 @@ function FeesManagement() {
       const file = e.target.files[0];
       if (!file) return;
       
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image must be less than 5MB');
+      // Validate file size (max 500KB)
+      if (file.size > 500 * 1024) {
+        toast.error('Image must be less than 500KB');
         return;
       }
       
@@ -426,6 +445,7 @@ function FeesManagement() {
         
         try {
           const response = await fetch(`${API_URL}/api/student-fees/${encodeURIComponent(studentId)}/receipt`, {
+
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({ receipt_image: base64Image })
@@ -643,13 +663,24 @@ function FeesManagement() {
     return fullName.includes(searchTerm.toLowerCase()) || admNo.includes(searchTerm.toLowerCase());
   });
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, studentStatus) => {
+    // Graduated / left-school students are identified by their admission
+    // status (student_status), not their fee payment status. Show a distinct
+    // badge for them so the All Students table reflects the admission status.
+    const sStatus = (studentStatus || '').toLowerCase();
+    if (sStatus === 'graduated') {
+      return <span className="status-badge graduated"><Check size={12}/> Graduated</span>;
+    }
+    if (sStatus === 'left') {
+      return <span className="status-badge left"><AlertCircle size={12}/> Left School</span>;
+    }
     switch(status) {
       case 'fully_paid': return <span className="status-badge paid"><Check size={12}/> Fully Paid</span>;
       case 'partial': return <span className="status-badge partial"><AlertCircle size={12}/> Partial</span>;
       default: return <span className="status-badge unpaid"><AlertCircle size={12}/> Unpaid</span>;
     }
   };
+
 
   // Load all student fees for the table view (paginated)
   const loadAllStudentFees = async (page = currentPage, size = pageSize) => {
@@ -715,10 +746,19 @@ function FeesManagement() {
       return;
     }
     
-    const totalStudents = allStudentFees.length;
-    const totalExpected = allStudentFees.reduce((sum, s) => sum + (s.total_fees || 0), 0);
-    const totalCollected = allStudentFees.reduce((sum, s) => sum + (s.total_paid || 0), 0);
-    const outstandingBalance = allStudentFees.reduce((sum, s) => sum + (s.balance || 0), 0);
+    // Exclude graduated / left-school students from the active financial totals
+    // so the CSV matches the analytics (which no longer count them).
+    const activeStudents = allStudentFees.filter(s => {
+      const st = (s.student_status || '').toLowerCase();
+      return st !== 'graduated' && st !== 'left';
+    });
+    const graduatedCount = allStudentFees.filter(s => (s.student_status || '').toLowerCase() === 'graduated').length;
+    const leftCount = allStudentFees.filter(s => (s.student_status || '').toLowerCase() === 'left').length;
+    
+    const totalStudents = activeStudents.length;
+    const totalExpected = activeStudents.reduce((sum, s) => sum + (s.total_fees || 0), 0);
+    const totalCollected = activeStudents.reduce((sum, s) => sum + (s.total_paid || 0), 0);
+    const outstandingBalance = activeStudents.reduce((sum, s) => sum + (s.balance || 0), 0);
     const collectionRate = totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : '0.0';
     
     let csv = 'Financial Report\n\n';
@@ -727,6 +767,8 @@ function FeesManagement() {
     csv += `Total Collected,${totalCollected}\n`;
     csv += `Outstanding Balance,${outstandingBalance}\n`;
     csv += `Collection Rate,${collectionRate}%\n`;
+    csv += `Graduated Students,${graduatedCount}\n`;
+    csv += `Left School Students,${leftCount}\n`;
     
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -735,6 +777,7 @@ function FeesManagement() {
     a.download = `financial_report_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   };
+
 
   return (
     <div className="fees-page">
@@ -795,6 +838,9 @@ function FeesManagement() {
         .status-badge.paid { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
         .status-badge.partial { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
         .status-badge.unpaid { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .status-badge.graduated { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+        .status-badge.left { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+
         
         .fee-breakdown { margin-top: 1rem; }
         .fee-item { display: flex; justify-content: space-between; padding: 0.75rem; border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
@@ -1145,22 +1191,26 @@ function FeesManagement() {
                                     </button>
                                   )}
 
-                                  <button 
-                                    className="action-btn edit"
-                                    onClick={() => handleEditPayment(p)}
-                                    title="Edit Payment"
-                                    data-testid={`edit-payment-${p.id}`}
-                                  >
-                                    <Edit2 size={14} />
-                                  </button>
-                                  <button 
-                                    className="action-btn delete"
-                                    onClick={() => handleDeletePayment(p.id)}
-                                    title="Delete Payment"
-                                    data-testid={`delete-payment-${p.id}`}
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
+                                  {canManageFees && (
+                                    <button 
+                                      className="action-btn edit"
+                                      onClick={() => handleEditPayment(p)}
+                                      title="Edit Payment"
+                                      data-testid={`edit-payment-${p.id}`}
+                                    >
+                                      <Edit2 size={14} />
+                                    </button>
+                                  )}
+                                  {canManageFees && (
+                                    <button 
+                                      className="action-btn delete"
+                                      onClick={() => handleDeletePayment(p.id)}
+                                      title="Delete Payment"
+                                      data-testid={`delete-payment-${p.id}`}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -1317,8 +1367,9 @@ function FeesManagement() {
                         TZS {item.balance?.toLocaleString() || '0'}
                       </td>
                       <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                        {getStatusBadge(item.status)}
+                        {getStatusBadge(item.status, item.student_status)}
                       </td>
+
                       <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
                         {item.receipt_image ? (
                           <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center', alignItems: 'center' }}>

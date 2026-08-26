@@ -3,7 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchStaff, createStaff, updateStaff, deleteStaff, selectStaff, selectStaffLoading } from '../store/slices/staffSlice';
 import { selectCurrentUser, updateCurrentUser } from '../store/slices/authSlice';
 import { toast } from '../hooks/useSoundEnabledToast';
-import { Plus, Search, Edit2, Trash2, X, Users, Eye, UserX, Camera, Upload } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, X, Users, Eye, UserX, Camera, Upload, RefreshCw, UserPlus, Mail, Phone, Building, IdCard, UserCheck, Clock, Filter } from 'lucide-react';
+
 import { apiClient } from '../services/authService';
 import ChainToggle from '../components/ChainToggle';
 
@@ -35,6 +36,7 @@ function Staff() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
     const [selectedChain, setSelectedChain] = useState('');
@@ -227,10 +229,11 @@ function Staff() {
       member.employee_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.access_code?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = !roleFilter || member.role === roleFilter;
+    const matchesStatus = !statusFilter || (member.status || 'active') === statusFilter;
     // Principals only see staff from their own chain
     const memberChain = member.access_code?.split('/')[0] || member.chain;
     const matchesChain = userChain === 'IHEZA' || memberChain === userChain;
-    return matchesSearch && matchesRole && matchesChain;
+    return matchesSearch && matchesRole && matchesStatus && matchesChain;
   });
 
   const getRoleColor = (role) => {
@@ -246,6 +249,23 @@ function Staff() {
     return colors[role] || '#64748b';
   };
 
+  const getRoleIcon = (role) => {
+    const icons = {
+      'Teacher': '🎓',
+      'Coordinator': '🛡️',
+      'Principal': '👔',
+      'Secretary': '✏️',
+      'Academic': '📚',
+      'Section Leader': '👥',
+      'Administrator': '⚙️',
+    };
+    return icons[role] || '👤';
+  };
+
+  const activeCount = staff.filter(m => (m.status || 'active') === 'active').length;
+  const suspendedCount = staff.filter(m => m.status === 'suspended').length;
+  const departmentsCount = new Set(staff.map(m => m.department).filter(Boolean)).size;
+
   return (
     <div className="staff-page">
       <ChainToggle selectedChain={selectedChain} onChainChange={(chain) => {
@@ -254,9 +274,15 @@ function Staff() {
       }} />
       <style>{`
         .staff-page {
+          background: #f1f5f9;
+          font-family: 'Inter', -apple-system, sans-serif;
           padding: 1.5rem;
+          display: flex;
+          justify-content: center;
+          min-height: 100vh;
         }
-        
+        .app-wrapper { max-width: 1400px; width: 100%; }
+
         .page-header {
           display: flex;
           align-items: center;
@@ -265,574 +291,455 @@ function Staff() {
           flex-wrap: wrap;
           gap: 1rem;
         }
-        
-        .page-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #f8fafc;
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
+        .page-title { display: flex; align-items: center; gap: 0.75rem; }
+        .page-title .icon-wrap {
+          width: 42px; height: 42px;
+          background: linear-gradient(135deg, #2563eb, #7c3aed);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-size: 1.1rem;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
-        
-        .page-title-icon {
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        .page-title h1 { font-size: 1.5rem; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; }
+        .page-title .sub { font-size: 0.8rem; color: #64748b; font-weight: 400; margin-left: 0.3rem; }
+        .header-actions { display: flex; gap: 0.6rem; }
+
+        .btn {
+          display: inline-flex; align-items: center; gap: 0.4rem;
+          padding: 0.5rem 1.1rem; border-radius: 10px;
+          font-weight: 600; font-size: 0.8rem; border: none; cursor: pointer;
+          transition: all 0.2s ease; font-family: 'Inter', sans-serif;
         }
-        
-        .filters-row {
-          display: flex;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
-          flex-wrap: wrap;
+        .btn-primary {
+          background: linear-gradient(135deg, #2563eb, #7c3aed);
+          color: white; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
         }
-        
-        .search-box {
-          flex: 1;
-          min-width: 240px;
-          position: relative;
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4); }
+        .btn-outline { background: white; color: #475569; border: 1px solid #e2e8f0; }
+        .btn-outline:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+        .stats-row {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+          gap: 0.8rem; margin-bottom: 1.5rem;
         }
-        
-        .search-icon {
-          position: absolute;
-          left: 1rem;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #64748b;
+        .stat-box {
+          background: white; border-radius: 10px; padding: 0.25rem 0.6rem;
+          display: flex; align-items: center; gap: 0.5rem;
+          border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          transition: all 0.2s ease;
+          min-height: 50px; max-height: 50px; height: 50px;
         }
-        
-        .search-input {
-          width: 100%;
-          padding: 0.75rem 1rem 0.75rem 2.75rem;
-          background: rgba(51, 65, 85, 0.5);
-          border: 1px solid rgba(71, 85, 105, 0.5);
-          border-radius: 0.75rem;
-          color: #f8fafc;
-          font-size: 0.95rem;
+        .stat-box:hover { border-color: #b3c7e6; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+        .stat-box .icon {
+          width: 30px; height: 30px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 0.75rem; flex-shrink: 0;
         }
-        
-        .search-input:focus {
-          outline: none;
-          border-color: #3b82f6;
+        .stat-box .icon.blue { background: #dbeafe; color: #2563eb; }
+        .stat-box .icon.green { background: #d1fae5; color: #059669; }
+        .stat-box .icon.orange { background: #fef3c7; color: #d97706; }
+        .stat-box .icon.purple { background: #ede9fe; color: #7c3aed; }
+        .stat-box .info .num { font-size: 1rem; font-weight: 700; color: #0f172a; line-height: 1.1; }
+        .stat-box .info .label { font-size: 0.55rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; }
+
+
+        .filters-bar {
+          display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+          background: white; padding: 0.5rem 1rem; border-radius: 12px;
+          border: 1px solid #e2e8f0; margin-bottom: 1.5rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        
-        .filter-select {
-          padding: 0.75rem 1rem;
-          background: rgba(51, 65, 85, 0.5);
-          border: 1px solid rgba(71, 85, 105, 0.5);
-          border-radius: 0.75rem;
-          color: #f8fafc;
-          min-width: 160px;
+        .filters-bar .search-wrap { flex: 1; min-width: 180px; position: relative; }
+        .filters-bar .search-wrap input {
+          width: 100%; padding: 0.4rem 0.6rem 0.4rem 2rem;
+          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+          color: #0f172a; font-size: 0.8rem; font-family: 'Inter', sans-serif;
+          transition: all 0.2s ease;
         }
-        
+        .filters-bar .search-wrap input:focus {
+          outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .filters-bar .search-wrap .search-icon {
+          position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%);
+          color: #94a3b8; font-size: 0.75rem;
+        }
+        .filters-bar select {
+          padding: 0.4rem 0.8rem; background: #f8fafc;
+          border: 1px solid #e2e8f0; border-radius: 8px;
+          color: #0f172a; font-size: 0.8rem; font-family: 'Inter', sans-serif; cursor: pointer;
+        }
+        .filters-bar select:focus { outline: none; border-color: #2563eb; }
+        .filters-bar .filter-label { font-size: 0.7rem; color: #64748b; font-weight: 500; }
+        .filters-bar .result-count { font-size: 0.75rem; color: #64748b; margin-left: auto; }
+
         .staff-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 1.25rem;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 1rem;
         }
-        
         .staff-card {
-          background: rgba(30, 41, 59, 0.8);
-          border: 1px solid rgba(51, 65, 85, 0.5);
-          border-radius: 1rem;
-          padding: 1.5rem;
-          transition: all 0.3s ease;
+          background: white; border-radius: 16px; padding: 1.25rem;
+          border: 1px solid #e2e8f0; transition: all 0.25s ease;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04); position: relative;
         }
-        
         .staff-card:hover {
-          border-color: #3b82f6;
-          transform: translateY(-2px);
+          border-color: #b3c7e6; box-shadow: 0 8px 24px rgba(0,0,0,0.07);
+          transform: translateY(-3px);
         }
-        
-        .staff-card-header {
-          display: flex;
-          align-items: flex-start;
-          gap: 1rem;
-          margin-bottom: 1rem;
+        .staff-card.suspended { opacity: 0.6; background: #f8fafc; }
+        .staff-card.suspended::after {
+          content: 'SUSPENDED';
+          position: absolute; top: 10px; right: -24px;
+          background: #ef4444; color: white; font-size: 0.5rem; font-weight: 700;
+          padding: 0.1rem 1.8rem; transform: rotate(45deg); letter-spacing: 0.5px;
         }
-        
-        .staff-avatar {
-          width: 56px;
-          height: 56px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          font-size: 1.25rem;
-          color: white;
+        .staff-card.active::after {
+          content: 'ACTIVE';
+          position: absolute; top: 10px; right: -24px;
+          background: #059669; color: white; font-size: 0.5rem; font-weight: 700;
+          padding: 0.1rem 1.8rem; transform: rotate(45deg); letter-spacing: 0.5px;
         }
-        
-        .staff-info {
-          flex: 1;
+
+        .card-top { display: flex; align-items: flex-start; gap: 0.8rem; margin-bottom: 0.8rem; }
+        .card-avatar {
+          width: 48px; height: 48px; border-radius: 14px;
+          display: flex; align-items: center; justify-content: center;
+          font-weight: 700; font-size: 1.1rem; color: white; flex-shrink: 0; position: relative;
         }
-        
-        .staff-name {
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: #f8fafc;
-          margin-bottom: 0.25rem;
+        .card-avatar img { width: 100%; height: 100%; border-radius: 14px; object-fit: cover; }
+        .card-avatar .status-dot {
+          position: absolute; bottom: -2px; right: -2px;
+          width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;
         }
-        
-        .staff-id {
-          font-size: 0.8rem;
-          color: #64748b;
+        .card-avatar .status-dot.active { background: #22c55e; }
+        .card-avatar .status-dot.suspended { background: #ef4444; }
+
+        .card-user { flex: 1; min-width: 0; }
+        .card-user .name {
+          font-size: 1rem; font-weight: 700; color: #0f172a;
+          display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
         }
-        
-        .staff-role-badge {
-          display: inline-flex;
-          padding: 0.25rem 0.75rem;
-          border-radius: 9999px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          margin-top: 0.5rem;
+        .card-user .name .status-badge {
+          font-size: 0.55rem; font-weight: 600; padding: 0.1rem 0.4rem;
+          border-radius: 20px; text-transform: uppercase; letter-spacing: 0.3px;
         }
-        
-        .staff-details {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: #94a3b8;
-          margin-bottom: 1rem;
+        .card-user .name .status-badge.active { background: #d1fae5; color: #059669; }
+        .card-user .name .status-badge.suspended { background: #fee2e2; color: #dc2626; }
+        .card-user .employee-id { font-size: 0.7rem; color: #94a3b8; font-family: 'Inter', monospace; }
+        .card-user .role-tag {
+          display: inline-flex; align-items: center; gap: 0.3rem;
+          padding: 0.15rem 0.6rem; border-radius: 20px;
+          font-size: 0.65rem; font-weight: 600; margin-top: 0.3rem;
         }
-        
-        .staff-detail {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
+
+        .card-details { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.8rem; }
+        .card-details .detail {
+          display: flex; align-items: center; gap: 0.5rem;
+          font-size: 0.75rem; color: #64748b;
         }
-        
-        .staff-actions {
-          display: flex;
-          gap: 0.5rem;
-          padding-top: 1rem;
-          border-top: 1px solid rgba(51, 65, 85, 0.5);
+        .card-details .detail .val { color: #0f172a; font-weight: 500; }
+
+        .card-actions {
+          display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem;
+          padding-top: 0.7rem; border-top: 1px solid #f1f5f9;
         }
-        
-        .action-btn {
-          flex: 1;
-          padding: 0.5rem;
-          background: rgba(51, 65, 85, 0.5);
-          border: none;
-          border-radius: 0.5rem;
-          color: #94a3b8;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          font-size: 0.8rem;
+        .card-actions .act-btn {
+          display: flex; align-items: center; justify-content: center; gap: 0.2rem;
+          padding: 0.3rem 0.1rem; background: #f8fafc; border: none; border-radius: 8px;
+          color: #64748b; font-size: 0.65rem; font-weight: 500; cursor: pointer;
+          transition: all 0.2s ease; font-family: 'Inter', sans-serif;
         }
-        
-        .action-btn:hover {
-          background: rgba(51, 65, 85, 0.8);
-          color: #f8fafc;
-        }
-        
-        .action-btn.edit:hover {
-          background: rgba(59, 130, 246, 0.2);
-          color: #60a5fa;
-        }
-        
-        .action-btn.delete:hover {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-        }
-        
-        .action-btn.upload {
-          border-color: rgba(59, 130, 246, 0.5);
-          color: #3b82f6;
-          cursor: pointer;
-        }
-        
-        .action-btn.upload:hover {
-          background: rgba(59, 130, 246, 0.2);
-          color: #3b82f6;
-        }
-        
-        .action-btn.suspend {
-          border-color: rgba(245, 158, 11, 0.5);
-          color: #f59e0b;
-        }
-        
-        .action-btn.suspend:hover {
-          background: rgba(245, 158, 11, 0.2);
-          color: #f59e0b;
-        }
-        
-        .action-btn.reactivate {
-          border-color: rgba(16, 185, 129, 0.5);
-          color: #10b981;
-        }
-        
-        .action-btn.reactivate:hover {
-          background: rgba(16, 185, 129, 0.2);
-          color: #10b981;
-        }
-        
-        .staff-status-badge {
-          display: inline-block;
-          padding: 0.125rem 0.5rem;
-          border-radius: 9999px;
-          font-size: 0.65rem;
-          font-weight: 600;
-          text-transform: uppercase;
-          margin-left: 0.5rem;
-        }
-        
-        .staff-status-badge.active {
-          background: rgba(16, 185, 129, 0.2);
-          color: #10b981;
-        }
-        
-        .staff-status-badge.suspended {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-        }
-        
-        .profile-pic {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          object-fit: cover;
-        }
-        
+        .card-actions .act-btn:hover { background: #e2e8f0; color: #0f172a; }
+        .card-actions .act-btn.edit:hover { background: #dbeafe; color: #2563eb; }
+        .card-actions .act-btn.photo:hover { background: #ede9fe; color: #7c3aed; }
+        .card-actions .act-btn.suspend:hover { background: #fef3c7; color: #d97706; }
+        .card-actions .act-btn.delete:hover { background: #fee2e2; color: #dc2626; }
+        .card-actions .act-btn.reactivate:hover { background: #d1fae5; color: #059669; }
+        .card-actions .act-btn.view-only { opacity: 0.5; cursor: default; }
+        .card-actions .act-btn.view-only:hover { background: #f8fafc; color: #64748b; }
+
         .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.75);
-          backdrop-filter: blur(4px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          padding: 1rem;
+          position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
+          backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
+          z-index: 1000; padding: 1rem;
         }
-        
         .modal {
-          background: #1e293b;
-          border: 1px solid rgba(51, 65, 85, 0.5);
-          border-radius: 1rem;
-          width: 100%;
-          max-width: 500px;
-          max-height: 90vh;
-          overflow-y: auto;
+          background: white; border-radius: 20px; width: 100%; max-width: 500px;
+          max-height: 90vh; overflow-y: auto; animation: modalIn 0.25s ease;
+          box-shadow: 0 24px 48px rgba(0,0,0,0.2);
         }
-        
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.95) translateY(16px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
         .modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1.5rem;
-          border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 1.25rem 1.5rem; border-bottom: 1px solid #e2e8f0;
         }
-        
-        .modal-title {
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: #f8fafc;
+        .modal-header h2 { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+        .modal-close { background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0.3rem; border-radius: 8px; transition: background 0.2s ease; }
+        .modal-close:hover { background: #f1f5f9; }
+        .modal-body { padding: 1.5rem; }
+        .modal-body .form-group { margin-bottom: 0.8rem; }
+        .modal-body .form-group label {
+          display: block; font-size: 0.7rem; font-weight: 600; color: #475569;
+          text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 0.2rem;
         }
-        
-        .modal-close {
-          background: none;
-          border: none;
-          color: #64748b;
-          cursor: pointer;
-          padding: 0.5rem;
+        .modal-body .form-group input,
+        .modal-body .form-group select {
+          width: 100%; padding: 0.5rem 0.8rem; background: #f8fafc;
+          border: 1px solid #e2e8f0; border-radius: 10px; color: #0f172a;
+          font-size: 0.85rem; font-family: 'Inter', sans-serif; transition: all 0.2s ease;
         }
-        
-        .modal-body {
-          padding: 1.5rem;
+        .modal-body .form-group input:focus,
+        .modal-body .form-group select:focus {
+          outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
-        
-        .form-row {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 1rem;
-        }
-        
-        .form-group {
-          margin-bottom: 1rem;
-        }
-        
-        .form-label {
-          display: block;
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: #94a3b8;
-          margin-bottom: 0.5rem;
-        }
-        
-        .form-input {
-          width: 100%;
-          padding: 0.75rem 1rem;
-          background: rgba(51, 65, 85, 0.5);
-          border: 1px solid rgba(71, 85, 105, 0.5);
-          border-radius: 0.5rem;
-          color: #f8fafc;
-          font-size: 0.95rem;
-        }
-        
-        .form-input:focus {
-          outline: none;
-          border-color: #3b82f6;
-        }
-        
-        .form-input:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        
+        .modal-body .form-group input:disabled { opacity: 0.6; cursor: not-allowed; }
+        .modal-body .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
         .modal-footer {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-          padding: 1.5rem;
-          border-top: 1px solid rgba(51, 65, 85, 0.5);
+          display: flex; gap: 0.8rem; justify-content: flex-end;
+          padding: 1.25rem 1.5rem; border-top: 1px solid #e2e8f0;
         }
-        
-        .empty-state {
-          text-align: center;
-          padding: 3rem;
-          color: #64748b;
+        .btn-success {
+          background: linear-gradient(135deg, #059669, #10b981);
+          color: white; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);
         }
-        
-        .stats-row {
-          display: flex;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
+        .btn-success:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4); }
+        .btn-ghost { background: transparent; color: #475569; border: 1px solid #e2e8f0; }
+        .btn-ghost:hover { background: #f8fafc; }
+
+        .empty-state { text-align: center; padding: 3rem; color: #64748b; background: white; border-radius: 16px; border: 1px solid #e2e8f0; }
+        .footer-note {
+          margin-top: 1.5rem; text-align: center; color: #94a3b8; font-size: 0.7rem;
+          border-top: 1px solid #e2e8f0; padding-top: 1.2rem;
         }
-        
-        .stat-chip {
-          padding: 0.5rem 1rem;
-          background: rgba(51, 65, 85, 0.5);
-          border-radius: 9999px;
-          font-size: 0.875rem;
-          color: #94a3b8;
+
+        @media (max-width: 768px) {
+          .staff-page { padding: 1rem; }
+          .page-title h1 { font-size: 1.2rem; }
+          .page-title .sub { display: none; }
+          .filters-bar { flex-direction: column; align-items: stretch; }
+          .filters-bar .search-wrap { min-width: unset; }
+          .staff-grid { grid-template-columns: 1fr; }
+          .modal-body .form-row { grid-template-columns: 1fr; }
+          .stats-row { grid-template-columns: repeat(2, 1fr); }
+          .card-actions { grid-template-columns: repeat(2, 1fr); }
         }
-        
-        .stat-chip strong {
-          color: #f8fafc;
+        @media (max-width: 480px) {
+          .stats-row { grid-template-columns: 1fr 1fr; }
         }
       `}</style>
-      
-      <div className="page-header">
-        <h1 className="page-title">
-          <span className="page-title-icon">
-            <Users size={20} color="white" />
-          </span>
-          Staff Management
-        </h1>
-        {canRegisterStaff && (
-          <button 
-            className="btn btn-primary"
-            onClick={() => { resetForm(); setShowModal(true); }}
-            data-testid="add-staff-btn"
-          >
-            <Plus size={18} />
-            Add Staff
-          </button>
-        )}
-      </div>
-      
-      <div className="stats-row">
-        <div className="stat-chip">
-          Total: <strong>{staff.length}</strong>
-        </div>
-        <div className="stat-chip">
-          Filtered: <strong>{filteredStaff.length}</strong>
-        </div>
-      </div>
-      
-      <div className="filters-row">
-        <div className="search-box">
-          <Search className="search-icon" size={18} />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search by name or employee ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            data-testid="staff-search"
-          />
-        </div>
-        <select
-          className="filter-select"
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          data-testid="role-filter"
-        >
-          <option value="">All Roles</option>
-          {displayRoles.map(role => (
-            <option key={role} value={role}>{role}</option>
-          ))}
-        </select>
-      </div>
-      
-      {loading ? (
-        <div className="empty-state">Loading staff...</div>
-      ) : filteredStaff.length === 0 ? (
-        <div className="empty-state">
-          {staff.length === 0 
-            ? (canRegisterStaff ? 'No staff members registered yet. Click "Add Staff" to get started.' : 'No staff members found.')
-            : 'No staff members match your search criteria.'
-          }
-        </div>
-      ) : (
-        <div className="staff-grid" data-testid="staff-grid">
-          {filteredStaff.map((member) => (
-            <div key={member.id} className={`staff-card ${member.status === 'suspended' ? 'suspended' : ''}`}>
-              <div className="staff-card-header">
-                {member.profile_pic ? (
-                  <img 
-                    src={member.profile_pic} 
-                    alt={member.name}
-                    className="profile-pic"
-                  />
-                ) : (
-                  <div 
-                    className="staff-avatar"
-                    style={{ background: getRoleColor(member.role) }}
-                  >
-                    {member.name?.charAt(0) || 'S'}
-                  </div>
-                )}
-                <div className="staff-info">
-                  <div className="staff-name">
-                    {member.name}
-                    <span className={`staff-status-badge ${member.status || 'active'}`}>
-                      {member.status || 'Active'}
-                    </span>
-                  </div>
-                  <div className="staff-id">{member.employee_id || member.access_code}</div>
-                  <span 
-                    className="staff-role-badge"
-                    style={{ 
-                      background: `${getRoleColor(member.role)}20`,
-                      color: getRoleColor(member.role)
-                    }}
-                  >
-                    {member.role}
-                  </span>
-                </div>
-              </div>
-              <div className="staff-details">
-                {member.department && (
-                  <div className="staff-detail">
-                    Department: {member.department}
-                  </div>
-                )}
-                {member.email && (
-                  <div className="staff-detail">
-                    {member.email}
-                  </div>
-                )}
-                {member.phone && (
-                  <div className="staff-detail">
-                    {member.phone}
-                  </div>
-                )}
-              </div>
-              <div className="staff-actions">
-                {canEditMember(member) ? (
-                  <>
-                    <button 
-                      className="action-btn edit"
-                      onClick={() => handleEdit(member)}
-                      data-testid={`edit-staff-${member.id}`}
-                      title="Edit staff details"
-                    >
-                      <Edit2 size={14} /> Edit
-                    </button>
-                    <label className="action-btn upload" title="Upload profile picture">
-                      <Camera size={14} /> Photo
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        onChange={(e) => handleProfilePicUpload(member, e)}
-                      />
-                    </label>
-                    <button 
-                      className={`action-btn ${member.status === 'suspended' ? 'reactivate' : 'suspend'}`}
-                      onClick={() => handleSuspend(member)}
-                      data-testid={`suspend-staff-${member.id}`}
-                      title={member.status === 'suspended' ? 'Reactivate staff' : 'Suspend staff'}
-                    >
-                      <UserX size={14} /> {member.status === 'suspended' ? 'Activate' : 'Suspend'}
-                    </button>
-                    <button 
-                      className="action-btn delete"
-                      onClick={() => handleDelete(member.id)}
-                      data-testid={`delete-staff-${member.id}`}
-                      title="Delete staff"
-                    >
-                      <Trash2 size={14} /> Delete
-                    </button>
-                  </>
-                ) : (
-                  <button className="action-btn" disabled style={{ opacity: 0.5 }}>
-                    <Eye size={14} /> View Only
-                  </button>
-                )}
-              </div>
+
+      <div className="app-wrapper">
+        {/* HEADER */}
+        <header className="page-header">
+          <div className="page-title">
+            <div className="icon-wrap"><Users size={20} /></div>
+            <div>
+              <h1>Staff <span className="sub">· Management</span></h1>
             </div>
-          ))}
+          </div>
+          <div className="header-actions">
+            <button className="btn btn-outline" onClick={() => dispatch(fetchStaff({ chain: selectedChain || undefined }))}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+            {canRegisterStaff && (
+              <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }} data-testid="add-staff-btn">
+                <Plus size={14} /> Add Staff
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* STATS */}
+        <div className="stats-row">
+          <div className="stat-box">
+            <div className="icon blue"><Users size={18} /></div>
+            <div className="info"><div className="num">{staff.length}</div><div className="label">Total</div></div>
+          </div>
+          <div className="stat-box">
+            <div className="icon green"><UserCheck size={18} /></div>
+            <div className="info"><div className="num">{activeCount}</div><div className="label">Active</div></div>
+          </div>
+          <div className="stat-box">
+            <div className="icon orange"><Clock size={18} /></div>
+            <div className="info"><div className="num">{suspendedCount}</div><div className="label">Suspended</div></div>
+          </div>
+
+          <div className="stat-box">
+            <div className="icon purple"><Building size={18} /></div>
+            <div className="info"><div className="num">{departmentsCount}</div><div className="label">Departments</div></div>
+          </div>
         </div>
-      )}
-      
+
+        {/* FILTERS */}
+        <div className="filters-bar">
+          <div className="search-wrap">
+            <Search className="search-icon" size={14} />
+            <input
+              type="text"
+              placeholder="Search by name or ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              data-testid="staff-search"
+            />
+          </div>
+          <span className="filter-label">Role</span>
+          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} data-testid="role-filter">
+            <option value="">All Roles</option>
+            {displayRoles.map(role => (
+              <option key={role} value={role}>{role}</option>
+            ))}
+          </select>
+          <span className="filter-label">Status</span>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <span className="result-count"><Filter size={12} /> {filteredStaff.length} results</span>
+        </div>
+
+        {/* STAFF GRID */}
+        {loading ? (
+          <div className="empty-state">Loading staff...</div>
+        ) : filteredStaff.length === 0 ? (
+          <div className="empty-state">
+            {staff.length === 0 
+              ? (canRegisterStaff ? 'No staff members registered yet. Click "Add Staff" to get started.' : 'No staff members found.')
+              : 'No staff members match your search criteria.'
+            }
+          </div>
+        ) : (
+          <div className="staff-grid" data-testid="staff-grid">
+            {filteredStaff.map((member) => {
+              const status = member.status || 'active';
+              const roleColor = getRoleColor(member.role);
+              return (
+                <div key={member.id} className={`staff-card ${status}`}>
+                  <div className="card-top">
+                    <div className="card-avatar" style={{ background: `linear-gradient(135deg, ${roleColor}, ${roleColor}cc)` }}>
+                      {member.profile_pic ? (
+                        <img src={member.profile_pic} alt={member.name} />
+                      ) : (
+                        member.name?.charAt(0) || 'S'
+                      )}
+                      <span className={`status-dot ${status}`}></span>
+                    </div>
+                    <div className="card-user">
+                      <div className="name">
+                        {member.name}
+                        <span className={`status-badge ${status}`}>{status}</span>
+                      </div>
+                      <div className="employee-id"><IdCard size={11} /> {member.employee_id || member.access_code}</div>
+                      <span className="role-tag" style={{ background: `${roleColor}20`, color: roleColor }}>
+                        {getRoleIcon(member.role)} {member.role}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="card-details">
+                    {member.email && (
+                      <div className="detail"><Mail size={12} /> <span className="val">{member.email}</span></div>
+                    )}
+                    {member.phone && (
+                      <div className="detail"><Phone size={12} /> <span className="val">{member.phone}</span></div>
+                    )}
+                    {member.department && (
+                      <div className="detail"><Building size={12} /> <span className="val">{member.department}</span></div>
+                    )}
+                  </div>
+                  <div className="card-actions">
+                    {canEditMember(member) ? (
+                      <>
+                        <button className="act-btn edit" onClick={() => handleEdit(member)} data-testid={`edit-staff-${member.id}`} title="Edit staff details">
+                          <Edit2 size={12} /> Edit
+                        </button>
+                        <label className="act-btn photo" title="Upload profile picture">
+                          <Camera size={12} /> Photo
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            onChange={(e) => handleProfilePicUpload(member, e)}
+                          />
+                        </label>
+                        <button 
+                          className={`act-btn ${status === 'suspended' ? 'reactivate' : 'suspend'}`}
+                          onClick={() => handleSuspend(member)}
+                          data-testid={`suspend-staff-${member.id}`}
+                          title={status === 'suspended' ? 'Reactivate staff' : 'Suspend staff'}
+                        >
+                          <UserX size={12} /> {status === 'suspended' ? 'Activate' : 'Suspend'}
+                        </button>
+                        <button className="act-btn delete" onClick={() => handleDelete(member.id)} data-testid={`delete-staff-${member.id}`} title="Delete staff">
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      </>
+                    ) : (
+                      <button className="act-btn view-only" disabled>
+                        <Eye size={12} /> View Only
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* FOOTER */}
+        <div className="footer-note">
+          <Users size={12} /> IHEZA Staff Management · {filteredStaff.length} members displayed
+        </div>
+      </div>
+
       {/* Add/Edit Staff Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">
+              <h2>
+                <UserPlus size={18} style={{ color: '#2563eb', marginRight: 6, verticalAlign: 'middle' }} />
                 {editingStaff ? 'Edit Staff Member' : 'Add Staff Member'}
               </h2>
               <button className="modal-close" onClick={handleCloseModal}>
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Employee ID *</label>
+                    <label>Employee ID *</label>
                     <input
                       type="text"
-                      className="form-input"
                       value={formData.employee_id}
                       onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
                       required
                       disabled={!!editingStaff}
                       data-testid="employee-id-input"
+                      placeholder="EMP-001"
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Full Name *</label>
+                    <label>Full Name *</label>
                     <input
                       type="text"
-                      className="form-input"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
                       data-testid="staff-name-input"
+                      placeholder="John Doe"
                     />
                   </div>
                 </div>
                 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Role *</label>
+                    <label>Role *</label>
                     <select
-                      className="form-input"
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                       required
@@ -844,44 +751,41 @@ function Staff() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Department</label>
+                    <label>Department</label>
                     <input
                       type="text"
-                      className="form-input"
                       value={formData.department}
                       onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                      placeholder="Science Dept."
                     />
                   </div>
                 </div>
                 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Email</label>
+                    <label>Email</label>
                     <input
                       type="email"
-                      className="form-input"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="john@iheza.edu"
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Phone</label>
+                    <label>Phone</label>
                     <input
                       type="text"
-                      className="form-input"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="+255 123 456 789"
                     />
                   </div>
                 </div>
                 
                 <div className="form-group">
-                  <label className="form-label">
-                    {editingStaff ? 'New Password (leave blank to keep current)' : 'Password *'}
-                  </label>
+                  <label>{editingStaff ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
                   <input
                     type="password"
-                    className="form-input"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required={!editingStaff}
@@ -890,11 +794,11 @@ function Staff() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
+                <button type="button" className="btn btn-ghost" onClick={handleCloseModal}>
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-success" data-testid="submit-staff-btn">
-                  {editingStaff ? 'Update Staff' : 'Add Staff'}
+                  <Upload size={14} /> {editingStaff ? 'Update Staff' : 'Add Staff'}
                 </button>
               </div>
             </form>
@@ -906,3 +810,4 @@ function Staff() {
 }
 
 export default Staff;
+

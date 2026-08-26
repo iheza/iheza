@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
-import { BookMarked, FileText, Calendar, List, ClipboardCheck } from 'lucide-react';
+import { BookMarked, FileText, Calendar, List, ClipboardCheck, Library } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import LessonPlanForm from './LessonPlanForm';
 import AssessmentForm from './AssessmentForm';
 import SchemeOfWork from './SchemeOfWork';
 import SubjectEvaluation from './SubjectEvaluation';
+import StudentPortal from './StudentPortal';
 
 const TOOLS = [
   { id: 'lesson-plans', label: 'Lesson Plans', icon: FileText, color: '#8b5cf6' },
@@ -14,9 +16,15 @@ const TOOLS = [
   { id: 'assessments', label: 'Assessments', icon: ClipboardCheck, color: '#f59e0b' },
 ];
 
+// Staff roles that can access the teacher tools (lesson plans, schemes, etc.)
+const STAFF_ROLES = ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'];
+
 function AcademicHub() {
   const currentUser = useSelector(selectCurrentUser);
   const [activeTool, setActiveTool] = useState('lesson-plans');
+
+  const userRole = currentUser?.role?.toLowerCase();
+  const isStaff = STAFF_ROLES.includes(userRole);
 
   const renderActiveForm = () => {
     switch (activeTool) {
@@ -32,6 +40,12 @@ function AcademicHub() {
         return <LessonPlanForm />;
     }
   };
+
+  // Students should see the redesigned Excel-style Student Portal
+  // (Tasks, Report Cards, Fees, Announcements) when accessing Academic Hub.
+  if (!isStaff) {
+    return <StudentPortal />;
+  }
 
   return (
     <div className="academic-hub-page">

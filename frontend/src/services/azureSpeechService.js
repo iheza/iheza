@@ -143,16 +143,35 @@ export async function synthesizeSpeech(text, voiceName, options) {
 
   var endpoint = AZURE_SPEECH_ENDPOINT || ('https://' + AZURE_SPEECH_REGION + '.tts.speech.microsoft.com/cognitiveservices/v1');
 
-  var response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
-      'Content-Type': 'application/ssml+xml',
-      'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
-      'User-Agent': 'iheza-ebook-reader'
-    },
-    body: ssml
-  });
+  // Use AbortController with a timeout so a slow/unreachable Azure endpoint
+  // doesn't leave the "Starting..." spinner spinning forever.
+  var controller = new AbortController();
+  var timeoutId = setTimeout(function() {
+    controller.abort();
+  }, 15000); // 15 second timeout
+
+  var response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
+        'Content-Type': 'application/ssml+xml',
+        'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
+        'User-Agent': 'iheza-ebook-reader'
+      },
+      body: ssml,
+      signal: controller.signal
+    });
+  } catch (fetchError) {
+    clearTimeout(timeoutId);
+    if (fetchError.name === 'AbortError') {
+      throw new Error('Azure TTS timed out. Please check your internet connection and try again.');
+    }
+    throw fetchError;
+  }
+  clearTimeout(timeoutId);
+
 
   if (!response.ok) {
     var errorText = await response.text();

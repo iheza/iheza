@@ -1,0 +1,859 @@
+/* ============================================================
+   ADMISSION.CSS - Excel Sheet Style for Admission Module
+   ============================================================ */
+
+/* ---------- MAIN WRAPPER ---------- */
+.admission-wrapper {
+    width: 100%;
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 20px 40px -12px rgba(0, 20, 30, 0.2);
+    padding: 1.8rem 1.8rem 2.5rem;
+}
+
+
+/* ---------- HEADER BAR ---------- */
+.admission-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #1a3b5d;
+    padding-bottom: 0.8rem;
+    margin-bottom: 1.5rem;
+}
+
+.admission-header .title {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.admission-header .title h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #0b2a44;
+    letter-spacing: -0.3px;
+}
+
+.admission-header .title .badge {
+    background: #dce5f0;
+    padding: 0.2rem 1rem;
+    border-radius: 40px;
+    font-weight: 600;
+    color: #1a3b5d;
+    font-size: 0.8rem;
+}
+
+.admission-header .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.admission-header .tools button {
+    background: white;
+    border: 1px solid #c7d6e8;
+    border-radius: 30px;
+    padding: 0.4rem 1.2rem;
+    font-weight: 500;
+    color: #1f3b5c;
+    cursor: pointer;
+    transition: 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.admission-header .tools button:hover {
+    background: #f2f6fc;
+    border-color: #1a3b5d;
+}
+
+.admission-header .tools button.primary {
+    background: #1a3b5d;
+    color: white;
+    border-color: #1a3b5d;
+}
+
+.admission-header .tools button.primary:hover {
+    background: #12304b;
+}
+
+.admission-header .tools button.danger {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.admission-header .tools button.danger:hover {
+    background: #fecaca;
+}
+
+/* ---------- FILTER ROW (Excel style) ---------- */
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.8rem 1.2rem;
+    margin-bottom: 1.2rem;
+    background: #f8faff;
+    padding: 0.6rem 1.2rem;
+    border-radius: 40px;
+    border: 1px solid #e2e8f0;
+}
+
+.filter-row .search-box {
+    display: flex;
+    align-items: center;
+    background: white;
+    border-radius: 40px;
+    border: 1px solid #d0d7e2;
+    padding: 0.1rem 0.1rem 0.1rem 0.8rem;
+    flex: 1 1 240px;
+}
+
+.filter-row .search-box input {
+    border: none;
+    padding: 0.4rem 0.2rem;
+    font-size: 0.8rem;
+    outline: none;
+    width: 100%;
+    background: transparent;
+}
+
+.filter-row .search-box i {
+    color: #7a92b0;
+    font-size: 0.8rem;
+}
+
+.filter-row select,
+.filter-row .filter-select {
+    padding: 0.35rem 0.8rem;
+    border-radius: 40px;
+    border: 1px solid #d0d7e2;
+    background: white;
+    font-size: 0.8rem;
+    color: #1f3b5c;
+    outline: none;
+    cursor: pointer;
+}
+
+.filter-row select:focus,
+.filter-row .filter-select:focus {
+    border-color: #1a3b5d;
+    box-shadow: 0 0 0 2px rgba(26, 59, 93, 0.15);
+}
+
+.filter-row .clear-btn {
+    background: transparent;
+    border: none;
+    color: #3f6490;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    transition: 0.15s;
+}
+
+.filter-row .clear-btn:hover {
+    background: #e2eaf3;
+}
+
+.filter-row .filter-stats {
+    font-size: 0.75rem;
+    color: #5a7a9a;
+    margin-left: auto;
+}
+
+/* ---------- EXCEL CONTAINER ---------- */
+.excel-container {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid #d0d7e2;
+    background: white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+/* ---------- EXCEL TABLE ---------- */
+.excel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    font-size: 0.8rem;
+    min-width: 1000px;
+}
+
+/* ---- Table Header (Excel style) ---- */
+.excel-table thead th {
+    background: #e8edf4;
+    color: #1f3b5c;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.3px;
+    padding: 0.6rem 0.5rem;
+    border-right: 1px solid #d0d7e2;
+    border-bottom: 2px solid #b8c6d8;
+    text-align: left;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.excel-table thead th:last-child {
+    border-right: none;
+}
+
+.excel-table thead th .sort-icon {
+    margin-left: 4px;
+    color: #8aa3be;
+    font-size: 0.6rem;
+}
+
+.excel-table thead th:hover .sort-icon {
+    color: #1a3b5d;
+}
+
+/* ---- Table Body ---- */
+.excel-table tbody td {
+    padding: 0.4rem 0.5rem;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+    color: #1e2f3f;
+    background: white;
+    transition: background 0.1s;
+}
+
+.excel-table tbody td:last-child {
+    border-right: none;
+}
+
+/* ---- Zebra Stripes ---- */
+.excel-table tbody tr:nth-child(even) td {
+    background: #f8faff;
+}
+
+.excel-table tbody tr:hover td {
+    background: #e8f0fe;
+}
+
+/* ---- Photo Thumbnail ---- */
+.photo-thumb {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #cfdcec;
+    background: #eef3fa;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #3f6490;
+    cursor: pointer;
+    transition: 0.15s;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.photo-thumb:hover {
+    transform: scale(1.08);
+    border-color: #1a3b5d;
+    box-shadow: 0 2px 8px rgba(26, 59, 93, 0.15);
+}
+
+.photo-thumb img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.photo-thumb .placeholder-icon {
+    font-size: 18px;
+    color: #7a92b0;
+}
+
+/* ---- Student Name Cell ---- */
+.student-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.student-cell .name {
+    font-weight: 500;
+    color: #0b2a44;
+}
+
+.student-cell .dob {
+    font-size: 0.65rem;
+    color: #6a8aa8;
+}
+
+/* ---- Gender Badge ---- */
+.gender-badge {
+    padding: 0.1rem 0.7rem;
+    border-radius: 30px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    display: inline-block;
+}
+
+.gender-badge.male {
+    background: #dbeafe;
+    color: #1a4b7a;
+}
+
+.gender-badge.female {
+    background: #fce7f3;
+    color: #8a2d6a;
+}
+
+.gender-badge.other {
+    background: #e2e8f0;
+    color: #4a5a6e;
+}
+
+/* ---- Status Badge ---- */
+.status-badge {
+    display: inline-block;
+    padding: 0.1rem 0.6rem;
+    border-radius: 40px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+    background: #eef2f7;
+    color: #2d4a6b;
+    border: 1px solid #d0d7e2;
+}
+
+.status-badge.approved {
+    background: #dff0d8;
+    border-color: #b8d4b0;
+    color: #2d6a3e;
+}
+
+.status-badge.pending {
+    background: #fff3d6;
+    border-color: #f0d8a8;
+    color: #8a6d2b;
+}
+
+.status-badge.rejected {
+    background: #f8dddd;
+    border-color: #e8b8b8;
+    color: #8a3a3a;
+}
+
+.status-badge.left {
+    background: #e2e8f0;
+    border-color: #c8d0db;
+    color: #4a5a6e;
+}
+
+/* ---- Contact Cell ---- */
+.contact-cell .phone {
+    font-size: 0.8rem;
+}
+
+.contact-cell .location {
+    font-size: 0.65rem;
+    color: #6a8aa8;
+}
+
+/* ---- Action Buttons ---- */
+.action-group {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.action-group button {
+    background: transparent;
+    border: none;
+    padding: 0.2rem 0.4rem;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #3f6490;
+    transition: 0.1s;
+    font-size: 0.85rem;
+}
+
+.action-group button:hover {
+    background: #dce5f0;
+    color: #0b2a44;
+}
+
+.action-group button.danger:hover {
+    background: #f8dddd;
+    color: #b33a3a;
+}
+
+.action-group button.success:hover {
+    background: #dff0d8;
+    color: #2d6a3e;
+}
+
+.action-group button.warning:hover {
+    background: #fff3d6;
+    color: #8a6d2b;
+}
+
+/* ---------- PAGINATION (Excel style) ---------- */
+.pagination-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1rem;
+    background: #f8faff;
+    border-top: 1px solid #d0d7e2;
+    border-radius: 0 0 12px 12px;
+    font-size: 0.8rem;
+    color: #1f3b5c;
+}
+
+.pagination-bar .info {
+    color: #3f6490;
+}
+
+.pagination-bar .info i {
+    margin-right: 4px;
+}
+
+.pagination-bar .pages {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.pagination-bar .pages button {
+    background: white;
+    border: 1px solid #d0d7e2;
+    padding: 0.2rem 0.7rem;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 0.75rem;
+    color: #1f3b5c;
+    cursor: pointer;
+    transition: 0.1s;
+}
+
+.pagination-bar .pages button:hover {
+    background: #eef3fa;
+}
+
+.pagination-bar .pages button.active {
+    background: #1a3b5d;
+    color: white;
+    border-color: #1a3b5d;
+}
+
+.pagination-bar .pages button:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: #f0f3f8;
+}
+
+/* ---------- FOOTER ---------- */
+.admission-footer {
+    margin-top: 1.2rem;
+    font-size: 0.75rem;
+    color: #5a7a9a;
+    text-align: center;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 1rem;
+}
+
+.admission-footer i {
+    margin: 0 2px;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 700px) {
+    .admission-wrapper {
+        padding: 1rem;
+        border-radius: 16px;
+    }
+
+
+    .admission-header .title h1 {
+        font-size: 1.3rem;
+    }
+
+    .admission-header .tools {
+        gap: 0.4rem;
+    }
+
+    .admission-header .tools button {
+        padding: 0.3rem 0.8rem;
+        font-size: 0.75rem;
+    }
+
+    .filter-row {
+        flex-direction: column;
+        align-items: stretch;
+        border-radius: 20px;
+        padding: 0.8rem 1rem;
+        gap: 0.6rem;
+    }
+
+    .filter-row .search-box {
+        flex: 1 1 auto;
+    }
+
+    .filter-row .filter-stats {
+        margin-left: 0;
+        text-align: center;
+    }
+
+    .pagination-bar {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .excel-table {
+        font-size: 0.7rem;
+        min-width: 700px;
+    }
+
+    .excel-table thead th,
+    .excel-table tbody td {
+        padding: 0.3rem 0.4rem;
+    }
+
+    .action-group button {
+        font-size: 0.75rem;
+        padding: 0.15rem 0.3rem;
+    }
+}
+
+/* ---------- SCROLLBAR STYLING ---------- */
+.excel-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.excel-container::-webkit-scrollbar-track {
+    background: #f1f4f9;
+    border-radius: 4px;
+}
+
+.excel-container::-webkit-scrollbar-thumb {
+    background: #c7d6e8;
+    border-radius: 4px;
+}
+
+.excel-container::-webkit-scrollbar-thumb:hover {
+    background: #a8bbd4;
+}
+
+/* ---------- UTILITY CLASSES ---------- */
+.text-muted {
+    color: #6a8aa8;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-nowrap {
+    white-space: nowrap;
+}
+
+.flex-center {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.gap-1 {
+    gap: 0.25rem;
+}
+
+.gap-2 {
+    gap: 0.5rem;
+}
+
+.gap-3 {
+    gap: 1rem;
+}
+
+.mt-1 {
+    margin-top: 0.25rem;
+}
+
+.mb-1 {
+    margin-bottom: 0.25rem;
+}
+
+.p-1 {
+    padding: 0.25rem;
+}
+
+.p-2 {
+    padding: 0.5rem;
+}
+
+/* ---------- LOADING STATE ---------- */
+.admission-loading {
+    padding: 2rem;
+    text-align: center;
+    color: #5a7a9a;
+}
+
+.admission-loading .spinner {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #e2e8f0;
+    border-top: 3px solid #1a3b5d;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ---------- EMPTY STATE ---------- */
+.admission-empty {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: #7a92b0;
+}
+
+.admission-empty i {
+    font-size: 3rem;
+    color: #c7d6e8;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.admission-empty h3 {
+    color: #1f3b5c;
+    margin-bottom: 0.3rem;
+}
+
+/* ---------- TOAST / MESSAGE ---------- */
+.admission-toast {
+    padding: 0.8rem 1.2rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    font-size: 0.9rem;
+}
+
+.admission-toast.success {
+    background: #dff0d8;
+    border: 1px solid #b8d4b0;
+    color: #2d6a3e;
+}
+
+.admission-toast.error {
+    background: #f8dddd;
+    border: 1px solid #e8b8b8;
+    color: #8a3a3a;
+}
+
+.admission-toast.info {
+    background: #dbeafe;
+    border: 1px solid #b8cfe8;
+    color: #1a4b7a;
+}
+
+/* ---------- CHECKBOX (Excel style) ---------- */
+.excel-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #1a3b5d;
+}
+
+/* ---------- TOOLTIP ---------- */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f3b5c;
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    z-index: 100;
+}
+
+/* ---------- FORM STYLES (used by Admission form) ---------- */
+.admission-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0369a1;
+    border-bottom: 2px solid #0ea5e9;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.admission-card {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #e2e8f0;
+}
+
+.admission-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.admission-input:focus {
+    outline: none;
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+.admission-input:disabled {
+    background: #f9fafb;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+.admission-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.25rem;
+}
+
+.admission-btn-primary {
+    background: linear-gradient(135deg, #0369a1, #0284c7);
+    color: white;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.admission-btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.admission-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.admission-btn-secondary {
+    background: white;
+    color: #374151;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    border: 1px solid #d1d5db;
+    cursor: pointer;
+}
+
+.admission-btn-secondary:hover { background: #f9fafb; }
+
+.admission-btn-danger {
+    background: #fee2e2;
+    color: #dc2626;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.admission-btn-danger:hover { background: #fecaca; }
+
+.admission-btn-view {
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.admission-btn-view:hover { background: #bae6fd; }
+
+.admission-btn-download {
+    background: #dcfce7;
+    color: #166534;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.admission-btn-download:hover { background: #bbf7d0; }
+
+.admission-btn-edit {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.admission-btn-edit:hover { background: #fde68a; }
+
+.admission-table th {
+    background: #f8fafc;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.admission-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.875rem;
+}
+
+.admission-table tr:hover { background: #f8fafc; }
+
+.admission-photo {
+    width: 80px;
+    height: 80px;
+    border-radius: 0.5rem;
+    object-fit: cover;
+    border: 2px solid #e2e8f0;
+}
+

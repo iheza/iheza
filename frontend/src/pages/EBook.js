@@ -137,6 +137,9 @@ function EBook() {
   const currentSentenceIndexRef = useRef(0);
   const pauseLoadingTimerRef = useRef(null);
   const stopLoadingTimerRef = useRef(null);
+  const isPausedRef = useRef(false);
+  const currentUtteranceRef = useRef(null);
+
 
   const userRole = currentUser?.role?.toLowerCase();
   const userChain = currentUser?.chain;
@@ -289,58 +292,6 @@ function EBook() {
     return textNodes;
   }, []);
 
-  // ----- SPEAK SENTENCES USING AZURE SPEECH -----
-  const speakSentence = useCallback((text, index) => {
-    // Check if Azure Speech is configured before attempting
-    if (!isAzureSpeechConfigured()) {
-      toast.error('Azure Speech is not configured. Please set REACT_APP_AZURE_SPEECH_KEY and REACT_APP_AZURE_SPEECH_REGION in .env');
-      setIsReading(false);
-      return;
-    }
-    
-    const speechManager = getSpeechManager();
-    
-    // Configure voice and options
-    if (selectedVoice) {
-      speechManager.setVoice(selectedVoice.voice);
-    }
-    speechManager.setOptions({ rate: 0.9, pitch: 1.25, volume: 1 });
-    
-    // Show loading spinner while first Azure TTS request is in progress
-    setIsSpeechLoading(true);
-    
-    // Set up callbacks
-    speechManager.onSentenceStart = (sentence, idx) => {
-      setIsSpeechLoading(false);
-      setIsReading(true);
-      setIsPaused(false);
-      setReadingProgress(idx + 1);
-      currentSentenceIndexRef.current = idx;
-      highlightSentence(idx);
-    };
-    
-    speechManager.onSentenceEnd = (idx) => {
-      // Progress is already updated in onSentenceStart
-    };
-    
-    speechManager.onEnd = () => {
-      setIsSpeechLoading(false);
-      setIsReading(false);
-      setReadingProgress(sentencesRef.current.length);
-      toast.success('🎉 Finished reading the book!');
-    };
-    
-    speechManager.onError = (error, idx) => {
-      setIsSpeechLoading(false);
-      console.error('Azure Speech error:', error);
-      setIsReading(false);
-      toast.error('Speech error: ' + (error.message || 'Please try again.'));
-    };
-    
-    // Speak from the given index
-    speechManager.speakSentences(sentencesRef.current, index);
-  }, [selectedVoice]);
-
   // ----- HIGHLIGHT CURRENT SENTENCE -----
   const highlightSentence = (index) => {
     const contentEl = contentRef.current;
@@ -389,8 +340,123 @@ function EBook() {
     }
   };
 
+  // ----- FALLBACK: BROWSER SPEECH SYNTHESIS (used if Azure TTS fails) -----
+  const speakWithBrowserFallback = useCallback((startIndex) => {
+    if (!('speechSynthesis' in window)) {
+      toast.error('Speech synthesis is not supported in this browser.');
+      setIsReading(false);
+      return;
+    }
+    
+    const sentences = sentencesRef.current;
+    if (!sentences || sentences.length === 0) return;
+    
+    setIsSpeechLoading(false);
+    setIsReading(true);
+    setIsPaused(false);
+    
+    const speakFrom = (i) => {
+      if (i >= sentences.length) {
+        setIsReading(false);
+        setReadingProgress(sentences.length);
+        toast.success('🎉 Finished reading the book!');
+        return;
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(sentences[i]);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
+      utterance.volume = 1;
+      
+      // Try to pick a natural English voice
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en') && v.name.toLowerCase().includes('female')) 
+        || voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+      if (preferred) utterance.voice = preferred;
+      
+      utterance.onstart = () => {
+        setReadingProgress(i + 1);
+        currentSentenceIndexRef.current = i;
+        highlightSentence(i);
+      };
+      
+      utterance.onend = () => {
+        if (!isPausedRef.current) {
+          speakFrom(i + 1);
+        }
+      };
+      
+      utterance.onerror = (e) => {
+        console.warn('Browser speech error:', e);
+        if (e.error === 'interrupted' || e.error === 'canceled') return;
+        speakFrom(i + 1);
+      };
+      
+      currentUtteranceRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+    };
+    
+    speakFrom(startIndex);
+  }, []);
+
+
+  // ----- SPEAK SENTENCES USING AZURE SPEECH -----
+  const speakSentence = useCallback((text, index) => {
+    // Check if Azure Speech is configured before attempting
+    if (!isAzureSpeechConfigured()) {
+      // Fall back to browser speech synthesis if Azure isn't configured
+      speakWithBrowserFallback(index || 0);
+      return;
+    }
+    
+    const speechManager = getSpeechManager();
+    
+    // Configure voice and options
+    if (selectedVoice) {
+      speechManager.setVoice(selectedVoice.voice);
+    }
+    speechManager.setOptions({ rate: 0.9, pitch: 1.25, volume: 1 });
+    
+    // Show loading spinner while first Azure TTS request is in progress
+    setIsSpeechLoading(true);
+    
+    // Set up callbacks
+    speechManager.onSentenceStart = (sentence, idx) => {
+      setIsSpeechLoading(false);
+      setIsReading(true);
+      setIsPaused(false);
+      setReadingProgress(idx + 1);
+      currentSentenceIndexRef.current = idx;
+      highlightSentence(idx);
+    };
+    
+    speechManager.onSentenceEnd = (idx) => {
+      // Progress is already updated in onSentenceStart
+    };
+    
+    speechManager.onEnd = () => {
+      setIsSpeechLoading(false);
+      setIsReading(false);
+      setReadingProgress(sentencesRef.current.length);
+      toast.success('🎉 Finished reading the book!');
+    };
+    
+    speechManager.onError = (error, idx) => {
+      setIsSpeechLoading(false);
+      console.error('Azure Speech error:', error);
+      // Fall back to browser speech synthesis so the book still reads aloud
+      toast.info('Azure speech unavailable - using browser voice.');
+      speakWithBrowserFallback(idx || 0);
+    };
+    
+    // Speak from the given index
+    speechManager.speakSentences(sentencesRef.current, index);
+  }, [selectedVoice, speakWithBrowserFallback]);
+
+
   // ----- GET TEXT BLOCKS FROM E-BOOK CONTENT -----
   const getTextBlocks = useCallback(() => {
+
     if (!contentRef.current) return [];
     const el = contentRef.current;
     
@@ -509,7 +575,13 @@ function EBook() {
     }
     
     getSpeechManager().pause();
+    isPausedRef.current = true;
     setIsPaused(true);
+    
+    // Also pause browser speech synthesis if it's being used as fallback
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.pause();
+    }
     
     // Keep spinner for a minimum duration so user sees feedback
     pauseLoadingTimerRef.current = setTimeout(() => {
@@ -520,7 +592,13 @@ function EBook() {
   // ----- RESUME READING -----
   const resumeReading = () => {
     getSpeechManager().resume();
+    isPausedRef.current = false;
     setIsPaused(false);
+    
+    // Also resume browser speech synthesis if it's being used as fallback
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.resume();
+    }
   };
 
   // ----- STOP READING -----
@@ -538,6 +616,13 @@ function EBook() {
     } catch (e) {
       console.warn('Stop speech error:', e);
     }
+    
+    // Also stop browser speech synthesis if it's being used as fallback
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    isPausedRef.current = false;
+    currentUtteranceRef.current = null;
     
     setIsReading(false);
     setIsPaused(false);
@@ -559,6 +644,7 @@ function EBook() {
       setIsStopLoading(false);
     }, 1500);
   };
+
 
   // Clean up loading timers on unmount
   useEffect(() => {
@@ -611,8 +697,10 @@ function EBook() {
 
     try {
       const response = await apiClient.get(`/ebooks/${book.id}/content`, {
-        responseType: 'text'
+        responseType: 'text',
+        timeout: 20000 // 20 second timeout so the reader never hangs forever
       });
+
       
       // Sanitize the HTML content before rendering
       // Allow scripts and event handlers so e-book interactivity (speech, click-to-read) works

@@ -31,8 +31,21 @@
         <script>
             // Force clear old caches and update service worker on version change
             (function() {
-                var APP_VERSION = 'v4-20260404b';
+                var APP_VERSION = 'v5-20260821';
                 var storedVersion = localStorage.getItem('iheza_app_version');
+                
+                // Always unregister any existing service workers on load.
+                // This prevents repeated failed SW update attempts (e.g. 502 errors
+                // from preview hosts that cannot serve sw.js).
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        registrations.forEach(function(registration) {
+                            registration.unregister().then(function() {
+                                console.log('[IHEZA] Unregistered service worker');
+                            });
+                        });
+                    });
+                }
                 
                 if (storedVersion !== APP_VERSION) {
                     console.log('[IHEZA] New version detected, clearing caches...');
@@ -43,17 +56,6 @@
                             names.forEach(function(name) {
                                 caches.delete(name);
                                 console.log('[IHEZA] Deleted cache:', name);
-                            });
-                        });
-                    }
-                    
-                    // Unregister and re-register service worker
-                    if ('serviceWorker' in navigator) {
-                        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                            registrations.forEach(function(registration) {
-                                registration.unregister().then(function() {
-                                    console.log('[IHEZA] Unregistered old service worker');
-                                });
                             });
                         });
                     }

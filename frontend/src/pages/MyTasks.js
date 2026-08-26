@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { selectCurrentUser, selectCurrentPortal } from '../store/slices/authSlice';
 import { apiClient } from '../services/authService';
 import { toast } from '../hooks/useSoundEnabledToast';
-import { ClipboardList, Check, Clock, AlertCircle, X, ChevronRight, Download, FileText, Image } from 'lucide-react';
+import { ClipboardList, Check, Clock, AlertCircle, X, Download, FileText, Image, Play, CheckCircle2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { saveAs } from 'file-saver';
@@ -16,8 +16,10 @@ const MyTasks = () => {
   const [selectedTask, setSelectedTask] = useState(null);
   const [blinking, setBlinking] = useState(false);
 
-  // Don't show for Student, IHEZA chains, or Principal (who assigns tasks)
-  const shouldShow = !['student', 'director', 'coordinator', 'principal'].includes(portal);
+  // Don't show for Student, IHEZA chains, Director, or Coordinator
+  // Principals CAN receive tasks from directors/coordinators
+  const shouldShow = !['student', 'director', 'coordinator'].includes(portal);
+
 
   const loadTasks = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -209,48 +211,79 @@ const MyTasks = () => {
 
   const pendingTasks = tasks.filter(t => t.status === 'pending');
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
-  const completedTasks = tasks.filter(t => t.status === 'completed').slice(0, 5);
+  const completedTasks = tasks.filter(t => t.status === 'completed');
 
-  const getPriorityColor = (priority) => {
+  const getPriorityClass = (priority) => {
     switch (priority) {
-      case 'high': return '#ef4444';
-      case 'medium': return '#f59e0b';
-      case 'low': return '#22c55e';
-      default: return '#64748b';
+      case 'high': return 'priority-high';
+      case 'medium': return 'priority-medium';
+      case 'low': return 'priority-low';
+      default: return 'priority-default';
+    }
+  };
+
+  const getStatusClass = (status) => {
+    switch (status) {
+      case 'completed': return 'status-completed';
+      case 'in_progress': return 'status-in_progress';
+      default: return 'status-pending';
     }
   };
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'completed': return <Check size={14} color="#22c55e" />;
-      case 'in_progress': return <Clock size={14} color="#f59e0b" />;
-      default: return <AlertCircle size={14} color="#ef4444" />;
+      case 'completed': return <Check size={13} />;
+      case 'in_progress': return <Clock size={13} />;
+      default: return <AlertCircle size={13} />;
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'completed': return 'Completed';
+      case 'in_progress': return 'In Progress';
+      default: return 'Pending';
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return dateStr;
     }
   };
 
   return (
     <div className="my-tasks-page">
       <style>{`
+        /* ===== PAGE BACKGROUND ===== */
         .my-tasks-page {
-          padding: 1rem;
-          max-width: 1200px;
+          padding: 2rem 1rem;
+          max-width: 1400px;
           margin: 0 auto;
+          background: #f3f6fa;
+          min-height: 100vh;
         }
 
+        /* ===== HEADER ===== */
         .tasks-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           margin-bottom: 1.5rem;
+          flex-wrap: wrap;
+          gap: 0.5rem 1rem;
         }
 
         .tasks-header h1 {
-          font-size: 1.5rem;
-          font-weight: 700;
+          font-size: 1.8rem;
+          font-weight: 600;
           color: #0f4c81;
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.6rem;
         }
 
         .blink-indicator {
@@ -259,6 +292,7 @@ const MyTasks = () => {
           background: #ef4444;
           border-radius: 50%;
           animation: blink 1s ease-in-out infinite;
+          display: inline-block;
         }
 
         @keyframes blink {
@@ -266,88 +300,172 @@ const MyTasks = () => {
           50% { opacity: 0.3; transform: scale(0.8); }
         }
 
-        .tasks-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 1.5rem;
-        }
-
-        .tasks-section {
+        .task-stats {
+          display: flex;
+          gap: 1.2rem;
           background: white;
-          border-radius: 1rem;
-          padding: 1.25rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+          padding: 0.5rem 1.2rem;
+          border-radius: 40px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: #1e293b;
+          align-items: center;
         }
 
-        .section-title {
-          font-size: 1rem;
+        .stat-item {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+        }
+
+        .stat-badge {
+          background: #e9edf2;
+          padding: 0.1rem 0.6rem;
+          border-radius: 20px;
+          font-size: 0.75rem;
           font-weight: 600;
           color: #0f4c81;
-          margin-bottom: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
         }
 
-        .task-count {
-          background: #0f4c81;
-          color: white;
-          padding: 0.125rem 0.5rem;
-          border-radius: 9999px;
-          font-size: 0.75rem;
+        .stat-badge.pending { background: #fee9e7; color: #b91c1c; }
+        .stat-badge.in-progress { background: #fff3d6; color: #a16207; }
+        .stat-badge.completed { background: #e0f2e6; color: #166534; }
+
+        /* ===== SHEET CONTAINER ===== */
+        .sheet-container {
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 8px 24px rgba(0, 20, 40, 0.08);
+          overflow: auto;
+          border: 1px solid #e2e8f0;
         }
 
-        .task-item {
-          padding: 0.875rem;
-          background: #f8fafc;
-          border-radius: 0.5rem;
-          margin-bottom: 0.75rem;
-          border-left: 3px solid;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .task-item:hover {
-          background: #e3f2fd;
-          transform: translateX(4px);
-        }
-
-        .task-item.pending { border-left-color: #ef4444; }
-        .task-item.in_progress { border-left-color: #f59e0b; }
-        .task-item.completed { border-left-color: #22c55e; opacity: 0.7; }
-
-        .task-title {
-          font-weight: 600;
-          color: #1e293b;
+        /* ===== TABLE ===== */
+        .task-table {
+          width: 100%;
+          border-collapse: collapse;
           font-size: 0.9rem;
-          margin-bottom: 0.25rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
+          min-width: 780px;
         }
 
-        .task-meta {
-          display: flex;
-          gap: 0.75rem;
-          font-size: 0.75rem;
-          color: #64748b;
-        }
-
-        .priority-badge {
-          padding: 0.125rem 0.5rem;
-          border-radius: 9999px;
-          font-size: 0.65rem;
+        .task-table th {
+          background: #f8fafd;
+          color: #1e3a5f;
           font-weight: 600;
-          color: white;
-        }
-
-        .task-description {
-          margin-top: 0.5rem;
           font-size: 0.8rem;
-          color: #475569;
-          line-height: 1.4;
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
+          padding: 0.9rem 0.8rem;
+          border-bottom: 2px solid #dce3ec;
+          text-align: left;
+          white-space: nowrap;
         }
 
+        .task-table td {
+          padding: 0.7rem 0.8rem;
+          border-bottom: 1px solid #e9edf4;
+          vertical-align: middle;
+          background-color: white;
+          transition: background 0.1s;
+        }
+
+        .task-table tr:hover td {
+          background-color: #f5f9ff;
+        }
+
+        .task-table tr:last-child td {
+          border-bottom: none;
+        }
+
+        .task-title-cell {
+          font-weight: 500;
+          color: #1e293b;
+          cursor: pointer;
+        }
+
+        .task-title-cell:hover {
+          color: #0f4c81;
+          text-decoration: underline;
+        }
+
+        /* ===== STATUS BADGE ===== */
+        .status-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.3rem;
+          padding: 0.2rem 0.7rem;
+          border-radius: 30px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: capitalize;
+          white-space: nowrap;
+        }
+
+        .status-pending { background: #fee9e7; color: #b91c1c; }
+        .status-in_progress { background: #fff3d6; color: #a16207; }
+        .status-completed { background: #e0f2e6; color: #166534; }
+
+        /* ===== PRIORITY CHIP ===== */
+        .priority-chip {
+          display: inline-block;
+          padding: 0.15rem 0.7rem;
+          border-radius: 40px;
+          font-size: 0.7rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: white;
+          letter-spacing: 0.02em;
+          white-space: nowrap;
+        }
+
+        .priority-high { background: #b91c1c; }
+        .priority-medium { background: #b45309; }
+        .priority-low { background: #15803d; }
+        .priority-default { background: #6b7280; }
+
+        /* ===== ACTION BUTTONS ===== */
+        .action-group {
+          display: flex;
+          gap: 0.3rem;
+          flex-wrap: wrap;
+        }
+
+        .btn-icon {
+          background: #f1f5f9;
+          border: none;
+          padding: 0.3rem 0.6rem;
+          border-radius: 6px;
+          font-size: 0.75rem;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          cursor: pointer;
+          transition: 0.15s;
+          color: #2c3e5c;
+          white-space: nowrap;
+        }
+
+        .btn-icon:hover { background: #dce3ec; }
+
+        .btn-start { background: #fbbf24; color: #78350f; }
+        .btn-start:hover { background: #f59e0b; }
+
+        .btn-complete { background: #34d399; color: #064e3b; }
+        .btn-complete:hover { background: #10b981; }
+
+        .btn-download { background: #e0e9f5; color: #0f4c81; }
+        .btn-download:hover { background: #cbd9eb; }
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+          padding: 3rem 1.5rem;
+          text-align: center;
+          color: #6b7a8f;
+        }
+
+        /* ===== MODAL ===== */
         .modal-overlay {
           position: fixed;
           inset: 0;
@@ -361,12 +479,13 @@ const MyTasks = () => {
 
         .modal-content {
           background: white;
-          border-radius: 1rem;
+          border-radius: 20px;
           padding: 1.5rem;
           max-width: 500px;
           width: 100%;
           max-height: 90vh;
           overflow-y: auto;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
         }
 
         .modal-header {
@@ -374,6 +493,8 @@ const MyTasks = () => {
           justify-content: space-between;
           align-items: flex-start;
           margin-bottom: 1rem;
+          border-bottom: 1px solid #edf2f7;
+          padding-bottom: 1rem;
         }
 
         .modal-header h2 {
@@ -387,16 +508,31 @@ const MyTasks = () => {
           border: none;
           cursor: pointer;
           color: #64748b;
+          padding: 0.25rem;
+          border-radius: 0.375rem;
+        }
+
+        .modal-close:hover {
+          background: #f1f5f9;
+          color: #1e293b;
         }
 
         .task-detail {
-          margin-bottom: 1rem;
+          margin-bottom: 0.75rem;
+          padding-bottom: 0.75rem;
+          border-bottom: 1px solid #edf2f7;
+        }
+
+        .task-detail:last-of-type {
+          border-bottom: none;
         }
 
         .task-detail-label {
           font-size: 0.75rem;
           color: #64748b;
           margin-bottom: 0.25rem;
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
         }
 
         .task-detail-value {
@@ -422,144 +558,196 @@ const MyTasks = () => {
           align-items: center;
           justify-content: center;
           gap: 0.5rem;
+          transition: 0.15s;
         }
 
         .btn-start {
+          background: #fbbf24;
+          color: #78350f;
+        }
+
+        .btn-start:hover {
           background: #f59e0b;
-          color: white;
         }
 
         .btn-complete {
-          background: #22c55e;
-          color: white;
+          background: #34d399;
+          color: #064e3b;
         }
 
-        .empty-state {
-          text-align: center;
-          padding: 2rem;
-          color: #64748b;
-          font-size: 0.875rem;
+        .btn-complete:hover {
+          background: #10b981;
         }
 
+        /* Download dropdown menu */
+        .download-menu {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          margin-top: 0.25rem;
+          background: white;
+          border: 1px solid #e0e0e0;
+          border-radius: 0.5rem;
+          overflow: hidden;
+          z-index: 20;
+          min-width: 160px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .download-menu-item {
+          padding: 0.5rem 0.8rem;
+          cursor: pointer;
+          color: #333;
+          font-size: 0.75rem;
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          border-bottom: 1px solid #e0e0e0;
+          transition: background 0.1s;
+        }
+
+        .download-menu-item:hover {
+          background: #f0f4ff;
+        }
+
+        .download-menu-item:last-child {
+          border-bottom: none;
+        }
+
+        /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
           .my-tasks-page {
-            padding: 0.75rem;
+            padding: 1rem 0.5rem;
           }
           
           .tasks-header h1 {
-            font-size: 1.25rem;
+            font-size: 1.4rem;
           }
           
-          .task-item {
-            padding: 0.75rem;
+          .task-stats {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.8rem;
+            gap: 0.8rem;
+          }
+          
+          .task-table {
+            font-size: 0.8rem;
           }
         }
       `}</style>
 
       <div className="tasks-header">
         <h1>
-          <ClipboardList size={24} />
+          <ClipboardList size={28} />
           My Tasks
           {blinking && pendingTasks.length > 0 && <span className="blink-indicator" />}
         </h1>
+        <div className="task-stats">
+          <span className="stat-item">
+            Pending <span className="stat-badge pending">{pendingTasks.length}</span>
+          </span>
+          <span className="stat-item">
+            In Progress <span className="stat-badge in-progress">{inProgressTasks.length}</span>
+          </span>
+          <span className="stat-item">
+            Completed <span className="stat-badge completed">{completedTasks.length}</span>
+          </span>
+        </div>
       </div>
 
       {loading ? (
-        <div className="empty-state">Loading tasks...</div>
+        <div className="sheet-container">
+          <div className="empty-state">Loading tasks...</div>
+        </div>
       ) : tasks.length === 0 ? (
-        <div className="empty-state">
-          <ClipboardList size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-          <p>No tasks assigned to you</p>
+        <div className="sheet-container">
+          <div className="empty-state">
+            <ClipboardList size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
+            <p>No tasks assigned to you</p>
+          </div>
         </div>
       ) : (
-        <div className="tasks-grid">
-          {/* Pending Tasks */}
-          <div className="tasks-section">
-            <div className="section-title">
-              <AlertCircle size={18} color="#ef4444" />
-              Pending
-              {pendingTasks.length > 0 && <span className="task-count">{pendingTasks.length}</span>}
-            </div>
-            {pendingTasks.length === 0 ? (
-              <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No pending tasks</p>
-            ) : (
-              pendingTasks.map(task => (
-                <div 
-                  key={task.id} 
-                  className="task-item pending"
-                  onClick={() => setSelectedTask(task)}
-                >
-                  <div className="task-title">
-                    {getStatusIcon(task.status)}
-                    {task.title}
-                    <ChevronRight size={14} style={{ marginLeft: 'auto' }} />
-                  </div>
-                  <div className="task-meta">
-                    <span className="priority-badge" style={{ background: getPriorityColor(task.priority) }}>
-                      {task.priority}
+        <div className="sheet-container">
+          <table className="task-table">
+            <thead>
+              <tr>
+                <th style={{ width: '10%' }}>Status</th>
+                <th style={{ width: '28%' }}>Task</th>
+                <th style={{ width: '10%' }}>Priority</th>
+                <th style={{ width: '15%' }}>Assigned By</th>
+                <th style={{ width: '13%' }}>Due Date</th>
+                <th style={{ width: '14%' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map(task => (
+                <tr key={task.id}>
+                  <td>
+                    <span className={`status-badge ${getStatusClass(task.status)}`}>
+                      {getStatusIcon(task.status)}
+                      {getStatusLabel(task.status)}
                     </span>
-                    {task.due_date && <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* In Progress Tasks */}
-          <div className="tasks-section">
-            <div className="section-title">
-              <Clock size={18} color="#f59e0b" />
-              In Progress
-              {inProgressTasks.length > 0 && <span className="task-count">{inProgressTasks.length}</span>}
-            </div>
-            {inProgressTasks.length === 0 ? (
-              <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No tasks in progress</p>
-            ) : (
-              inProgressTasks.map(task => (
-                <div 
-                  key={task.id} 
-                  className="task-item in_progress"
-                  onClick={() => setSelectedTask(task)}
-                >
-                  <div className="task-title">
-                    {getStatusIcon(task.status)}
-                    {task.title}
-                    <ChevronRight size={14} style={{ marginLeft: 'auto' }} />
-                  </div>
-                  <div className="task-meta">
-                    <span className="priority-badge" style={{ background: getPriorityColor(task.priority) }}>
-                      {task.priority}
+                  </td>
+                  <td>
+                    <div className="task-title-cell" onClick={() => setSelectedTask(task)}>
+                      {task.title}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`priority-chip ${getPriorityClass(task.priority)}`}>
+                      {task.priority || 'medium'}
                     </span>
-                    {task.due_date && <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Completed Tasks */}
-          <div className="tasks-section">
-            <div className="section-title">
-              <Check size={18} color="#22c55e" />
-              Completed
-              {completedTasks.length > 0 && <span className="task-count">{completedTasks.length}</span>}
-            </div>
-            {completedTasks.length === 0 ? (
-              <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No completed tasks</p>
-            ) : (
-              completedTasks.map(task => (
-                <div key={task.id} className="task-item completed">
-                  <div className="task-title">
-                    {getStatusIcon(task.status)}
-                    {task.title}
-                  </div>
-                  <div className="task-meta">
-                    <span>Completed</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                  </td>
+                  <td>{task.assigned_by_name || 'Principal'}</td>
+                  <td>{formatDate(task.due_date)}</td>
+                  <td>
+                    <div className="action-group">
+                      {task.status === 'pending' && (
+                        <button className="btn-icon btn-start" onClick={() => updateTaskStatus(task.id, 'in_progress')}>
+                          <Play size={12} /> Start
+                        </button>
+                      )}
+                      {(task.status === 'pending' || task.status === 'in_progress') && (
+                        <button className="btn-icon btn-complete" onClick={() => updateTaskStatus(task.id, 'completed')}>
+                          <CheckCircle2 size={12} /> Complete
+                        </button>
+                      )}
+                      <div style={{ position: 'relative' }}>
+                        <button 
+                          className="btn-icon btn-download"
+                          onClick={(e) => { e.stopPropagation(); setShowTaskFormatMenu(showTaskFormatMenu === task.id ? null : task.id); }}
+                        >
+                          <Download size={12} /> Download ▾
+                        </button>
+                        {showTaskFormatMenu === task.id && (
+                          <>
+                            <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setShowTaskFormatMenu(null)} />
+                            <div className="download-menu">
+                              <div className="download-menu-item" onClick={() => handleDownloadTask(task, 'docx')}>
+                                <FileText size={12} /> Word Document (.doc)
+                              </div>
+                              <div className="download-menu-item" onClick={() => handleDownloadTask(task, 'pdf')}>
+                                <FileText size={12} /> PDF Document (.pdf)
+                              </div>
+                              <div className="download-menu-item" onClick={() => handleDownloadTask(task, 'png')}>
+                                <Image size={12} /> PNG Image (.png)
+                              </div>
+                              <div className="download-menu-item" onClick={() => handleDownloadTask(task, 'jpeg')}>
+                                <Image size={12} /> JPEG Image (.jpg)
+                              </div>
+                              <div className="download-menu-item" onClick={() => handleDownloadTask(task, 'webp')}>
+                                <Image size={12} /> WebP Image (.webp)
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -570,61 +758,35 @@ const MyTasks = () => {
             <div className="modal-header">
               <div>
                 <h2>{selectedTask.title}</h2>
-                <span className="priority-badge" style={{ background: getPriorityColor(selectedTask.priority), marginTop: '0.5rem', display: 'inline-block' }}>
+                <span className={`priority-chip ${getPriorityClass(selectedTask.priority)}`} style={{ marginTop: '0.5rem', display: 'inline-block' }}>
                   {selectedTask.priority} priority
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <div style={{ position: 'relative' }}>
                   <button 
+                    className="btn-icon btn-download"
                     onClick={(e) => { e.stopPropagation(); setShowTaskFormatMenu(showTaskFormatMenu === selectedTask.id ? null : selectedTask.id); }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      padding: '0.4rem 0.7rem',
-                      background: '#0ea5e9',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '0.375rem',
-                      cursor: 'pointer',
-                      fontSize: '0.75rem'
-                    }}
                   >
                     <Download size={14} /> Download ▾
                   </button>
                   {showTaskFormatMenu === selectedTask.id && (
                     <>
                       <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setShowTaskFormatMenu(null)} />
-                      <div style={{
-                        position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem',
-                        background: 'white', border: '1px solid #e0e0e0', borderRadius: '0.5rem',
-                        overflow: 'hidden', zIndex: 20, minWidth: '160px',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.15)'
-                      }}>
-                        <div onClick={() => handleDownloadTask(selectedTask, 'docx')}
-                          style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#333', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid #e0e0e0' }}
-                          onMouseEnter={e => e.target.style.background = '#f0f4ff'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                      <div className="download-menu">
+                        <div className="download-menu-item" onClick={() => handleDownloadTask(selectedTask, 'docx')}>
                           <FileText size={12} /> Word Document (.doc)
                         </div>
-                        <div onClick={() => handleDownloadTask(selectedTask, 'pdf')}
-                          style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#333', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid #e0e0e0' }}
-                          onMouseEnter={e => e.target.style.background = '#f0f4ff'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                        <div className="download-menu-item" onClick={() => handleDownloadTask(selectedTask, 'pdf')}>
                           <FileText size={12} /> PDF Document (.pdf)
                         </div>
-                        <div onClick={() => handleDownloadTask(selectedTask, 'png')}
-                          style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#333', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid #e0e0e0' }}
-                          onMouseEnter={e => e.target.style.background = '#f0f4ff'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                        <div className="download-menu-item" onClick={() => handleDownloadTask(selectedTask, 'png')}>
                           <Image size={12} /> PNG Image (.png)
                         </div>
-                        <div onClick={() => handleDownloadTask(selectedTask, 'jpeg')}
-                          style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#333', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid #e0e0e0' }}
-                          onMouseEnter={e => e.target.style.background = '#f0f4ff'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                        <div className="download-menu-item" onClick={() => handleDownloadTask(selectedTask, 'jpeg')}>
                           <Image size={12} /> JPEG Image (.jpg)
                         </div>
-                        <div onClick={() => handleDownloadTask(selectedTask, 'webp')}
-                          style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#333', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                          onMouseEnter={e => e.target.style.background = '#f0f4ff'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                        <div className="download-menu-item" onClick={() => handleDownloadTask(selectedTask, 'webp')}>
                           <Image size={12} /> WebP Image (.webp)
                         </div>
                       </div>
@@ -652,7 +814,7 @@ const MyTasks = () => {
             {selectedTask.due_date && (
               <div className="task-detail">
                 <div className="task-detail-label">Due Date</div>
-                <div className="task-detail-value">{new Date(selectedTask.due_date).toLocaleDateString()}</div>
+                <div className="task-detail-value">{formatDate(selectedTask.due_date)}</div>
               </div>
             )}
 

@@ -4,17 +4,24 @@ import { useDispatch, useSelector } from 'react-redux';
 import { logout, selectCurrentUser, selectCurrentPortal } from '../store/slices/authSlice';
 import { SoundEffects } from '../hooks/useNotificationSound';
 import { useLanguage } from '../contexts/LanguageContext';
+import TaskNotificationOverlay from './TaskNotificationOverlay';
+import PushNotificationManager from './PushNotificationManager';
+
+
 import { 
   LayoutDashboard, Users, GraduationCap, BookOpen, 
   Calendar, BarChart3, Settings, LogOut, Menu, X,
-  ChevronRight, QrCode, Award, FileText, DollarSign,
+  ChevronRight, ChevronDown, QrCode, Award, FileText, DollarSign,
   ClipboardList, BookMarked, User, Bell, Building, Trash2,
-  Globe, Library
+  Globe, Library, UserPlus
 } from 'lucide-react';
+
 
 // Navigation permissions by role
 // IMPORTANT: Students ONLY see "My Portal" - all other nav items are staff-only
 const NAV_PERMISSIONS = {
+  // Admission: Secretary, Principal, Coordinator can edit; Director can view
+  admission: ['director', 'coordinator', 'principal', 'secretary'],
   // Students page: Staff only
   students: ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
   // Staff page: ONLY Principals can access (and they cannot edit IHEZA chain staff)
@@ -37,16 +44,24 @@ const NAV_PERMISSIONS = {
   'fee-structure': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
   // Task Assignment: Principal assigns to staff
   tasks: ['director', 'coordinator', 'principal'],
-  // My Tasks: Staff who receive tasks (not Student, IHEZA chains, or Principal who assigns)
-  'my-tasks': ['academic', 'teacher', 'secretary', 'section_leader'],
+  // My Tasks: Staff who receive tasks (including principals who can receive tasks from directors/coordinators)
+  'my-tasks': ['academic', 'teacher', 'secretary', 'section_leader', 'principal'],
+
   // Classroom: Teachers assign to students
   classroom: ['director', 'coordinator', 'principal', 'academic', 'teacher', 'section_leader'],
   // Academic Hub: All staff EXCEPT Directors (they don't need teaching templates)
-  'academic-hub': ['coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+  // Students can access e-Book and Almanac via this dropdown
+  'academic-hub': ['coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
+
   // Almanac: All portals can view (Section Leader and Principal can edit)
   'almanac': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
   // Reports: Staff only
   reports: ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+  // Report sub-tabs
+  'reports-attendance': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+  'reports-financial': ['secretary', 'director', 'principal'],
+  'reports-academic': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+
   // Dashboard: Staff only (students go directly to My Portal)
   dashboard: ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
   // Student Portal: Students ONLY - their personal view with Tasks, Report Cards, Fees, Announcements
@@ -64,8 +79,9 @@ const NAV_PERMISSIONS = {
   'bin': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
   // Expenses: Only principals, directors, and coordinators
   'expenses': ['director', 'coordinator', 'principal'],
-  // Examination Reports: Academic office and above
-  'examination-reports': ['director', 'coordinator', 'principal', 'academic', 'section_leader'],
+  // Examination Reports: Academic office and above (NOT shown to Directors)
+  'examination-reports': ['coordinator', 'principal', 'academic', 'section_leader'],
+
   // e-Book: Available to all portals
   'ebook': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
 };
@@ -77,9 +93,22 @@ function Layout({ children }) {
   const currentUser = useSelector(selectCurrentUser);
   const currentPortal = useSelector(selectCurrentPortal);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [openDropdown, setOpenDropdown] = useState(null);
   
   // Get chain name from current user or use default
   const chainName = currentUser?.chain || 'IHEZA';
+
+  // Close the sidebar automatically when a nav item is clicked on mobile.
+  // On desktop the sidebar stays open (it's a persistent rail), but on small
+  // screens the sidebar is an overlay, so navigating should dismiss it so the
+  // user can see the clicked page without having to manually close it.
+  const closeSidebarOnMobile = () => {
+    if (window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
+  };
+
+
 
   const handleLogout = async () => {
     // Play logout sound before dispatching
@@ -96,35 +125,48 @@ function Layout({ children }) {
   };
 
   const navItems = [
+    { path: '/portal/student-portal', icon: User, label: 'My Portal', key: 'student-portal' },
     { path: '/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard', key: 'dashboard' },
-    { path: '/portal/students', icon: GraduationCap, label: 'Students', key: 'students' },
+
+    { path: '/portal/students', icon: GraduationCap, label: 'Students', key: 'students', children: [
+      { path: '/portal/admission', icon: UserPlus, label: 'Admission', key: 'admission' },
+      { path: '/portal/classes', icon: BookOpen, label: 'Classes', key: 'classes' },
+      { path: '/portal/attendance', icon: Calendar, label: 'Attendance', key: 'attendance' },
+      { path: '/portal/classroom', icon: BookOpen, label: 'Classroom', key: 'classroom' },
+    ]},
     { path: '/portal/staff', icon: Users, label: 'Staff', key: 'staff' },
     { path: '/portal/generate-chain', icon: Building, label: 'Generate Chain', key: 'generate-chain' },
-    { path: '/portal/classes', icon: BookOpen, label: 'Classes', key: 'classes' },
-    { path: '/portal/attendance', icon: Calendar, label: 'Attendance', key: 'attendance' },
     { path: '/portal/qr-attendance', icon: QrCode, label: 'QR Check-In', key: 'qr-attendance' },
     { path: '/portal/qr-management', icon: QrCode, label: 'QR Codes', key: 'qr-management' },
-    { path: '/portal/classroom', icon: BookOpen, label: 'Classroom', key: 'classroom' },
     { path: '/portal/tasks', icon: ClipboardList, label: 'Task Assignment', key: 'tasks' },
     { path: '/portal/my-tasks', icon: ClipboardList, label: 'My Tasks', key: 'my-tasks' },
-    { path: '/portal/academic-hub', icon: BookMarked, label: 'Academic Hub', key: 'academic-hub' },
-    { path: '/portal/grades', icon: Award, label: 'Grades', key: 'grades' },
+    { path: '/portal/academic-hub', icon: BookMarked, label: 'Academic Hub', key: 'academic-hub', children: [
+      { path: '/portal/ebook', icon: Library, label: 'e-Book', key: 'ebook' },
+      { path: '/portal/documents', icon: FileText, label: 'Documents', key: 'documents' },
+      { path: '/portal/grades', icon: Award, label: 'Grades', key: 'grades' },
+      { path: '/portal/almanac', icon: Calendar, label: 'Almanac', key: 'almanac' },
+    ]},
     { path: '/portal/report-cards', icon: FileText, label: 'Report Cards', key: 'report-cards' },
     { path: '/portal/fees', icon: DollarSign, label: 'Fees', key: 'fees' },
     { path: '/portal/fee-structure', icon: FileText, label: 'Fee Structure', key: 'fee-structure' },
-    { path: '/portal/almanac', icon: Calendar, label: 'Almanac', key: 'almanac' },
     { path: '/portal/announcements', icon: Bell, label: 'Announcements', key: 'announcements' },
-    { path: '/portal/student-portal', icon: User, label: 'My Portal', key: 'student-portal' },
     { path: '/portal/teachers', icon: Users, label: 'Teachers', key: 'teachers' },
-    { path: '/portal/documents', icon: FileText, label: 'Documents', key: 'documents' },
+
     { path: '/portal/bin', icon: Trash2, label: 'Bin', key: 'bin' },
-    { path: '/portal/expenses', icon: DollarSign, label: 'Expenses', key: 'expenses' },
-    { path: '/portal/ebook', icon: Library, label: 'e-Book', key: 'ebook' },
-    { path: '/portal/reports', icon: BarChart3, label: 'Reports', key: 'reports' },
+    { path: '/portal/reports', icon: BarChart3, label: 'Reports', key: 'reports', children: [
+      { path: '/portal/reports?tab=attendance', icon: Calendar, label: 'Attendance Report', key: 'reports-attendance' },
+      { path: '/portal/reports?tab=financial', icon: DollarSign, label: 'Financial Report', key: 'reports-financial' },
+      { path: '/portal/reports?tab=academic', icon: Users, label: 'Academic Report', key: 'reports-academic' },
+      { path: '/portal/expenses', icon: DollarSign, label: 'Expenses', key: 'expenses' },
+    ]},
+
     { path: '/portal/examination-reports', icon: FileText, label: 'Examination Reports', key: 'examination-reports' },
   ];
 
+
+
   // Filter nav items based on user role
+
   const userRole = currentUser?.role?.toLowerCase();
   const filteredNavItems = navItems.filter(item => {
     const permissions = NAV_PERMISSIONS[item.key];
@@ -135,12 +177,32 @@ function Layout({ children }) {
       return currentUser?.accessCode === 'DUP/PRINCIPAL/0002/2021';
     }
     
+    // If item has children, filter children by their own permissions
+    if (item.children && item.children.length > 0) {
+      const visibleChildren = item.children.filter(child => {
+        const childPermissions = NAV_PERMISSIONS[child.key];
+        return childPermissions && childPermissions.includes(userRole);
+      });
+      // Only show the dropdown if there's at least one visible child
+      if (visibleChildren.length === 0) return false;
+      item.visibleChildren = visibleChildren;
+      return permissions && permissions.includes(userRole);
+    }
+    
     return permissions && permissions.includes(userRole);
   });
 
+
   const { t, toggleLanguage, isTurkish } = useLanguage();
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => {
+    const [pathname, search] = path.split('?');
+    if (search) {
+      return location.pathname === pathname && location.search === `?${search}`;
+    }
+    return location.pathname === path;
+  };
+
   
   // Determine if this is BACA school for styling
   const isBacaSchool = currentUser?.chain === 'BACA';
@@ -258,7 +320,61 @@ function Layout({ children }) {
           transition: opacity 0.2s;
         }
         
+        .nav-dropdown {
+          margin-bottom: 0.25rem;
+        }
+        
+        .nav-dropdown-toggle {
+          width: 100%;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 1rem;
+          font-family: inherit;
+          text-align: left;
+          justify-content: flex-start;
+        }
+        
+        .nav-dropdown-toggle:hover {
+          background: rgba(255, 255, 255, 0.15);
+          color: #ffffff;
+        }
+        
+        .nav-chevron {
+          margin-left: auto;
+          flex-shrink: 0;
+          transition: transform 0.3s ease;
+        }
+        
+        .nav-chevron.rotated {
+          transform: rotate(180deg);
+        }
+        
+        .nav-dropdown-menu {
+          margin-left: 1rem;
+          padding-left: 0.5rem;
+          border-left: 2px solid rgba(255, 255, 255, 0.2);
+          margin-bottom: 0.25rem;
+        }
+        
+        .nav-sub-item {
+          padding: 0.6rem 1rem;
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .nav-sub-item:hover {
+          background: rgba(255, 255, 255, 0.12);
+          color: #ffffff;
+        }
+        
+        .nav-sub-item.active {
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+        }
+        
         .sidebar-footer {
+
           padding: 1rem;
           border-top: 1px solid rgba(255, 255, 255, 0.2);
         }
@@ -530,19 +646,76 @@ function Layout({ children }) {
         <nav className="sidebar-nav">
           {filteredNavItems.map((item) => {
             const Icon = item.icon;
+            
+            // If item has children, render as dropdown
+            if (item.children && item.children.length > 0) {
+              const isOpen = openDropdown === item.key;
+              const visibleChildren = item.visibleChildren || item.children;
+              const hasActiveChild = visibleChildren.some(child => isActive(child.path));
+              
+              return (
+                <div key={item.key} className="nav-dropdown">
+                  <button
+                    className={`nav-item nav-dropdown-toggle ${hasActiveChild || isOpen ? 'active' : ''}`}
+                    onClick={() => {
+                      setOpenDropdown(isOpen ? null : item.key);
+                      navigate(item.path);
+                      closeSidebarOnMobile();
+                    }}
+
+                    data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
+                  >
+
+                    <Icon size={20} className="nav-icon" />
+                    <span className="nav-label">{t(`nav.${item.key}`, item.label)}</span>
+                    <ChevronDown 
+                      size={16} 
+                      className={`nav-chevron ${isOpen ? 'rotated' : ''}`}
+                      style={{ opacity: sidebarOpen ? 1 : 0 }}
+                    />
+                  </button>
+                  
+                  {isOpen && sidebarOpen && (
+                    <div className="nav-dropdown-menu">
+                      {visibleChildren.map((child) => {
+                        const ChildIcon = child.icon;
+                        return (
+                          <Link
+                            key={child.path}
+                            to={child.path}
+                            className={`nav-item nav-sub-item ${isActive(child.path) ? 'active' : ''}`}
+                            data-testid={`nav-${child.label.toLowerCase().replace(' ', '-')}`}
+                            onClick={closeSidebarOnMobile}
+                          >
+                            <ChildIcon size={18} className="nav-icon" />
+                            <span className="nav-label">{t(`nav.${child.key}`, child.label)}</span>
+                          </Link>
+
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
                 data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
+                onClick={closeSidebarOnMobile}
               >
                 <Icon size={20} className="nav-icon" />
                 <span className="nav-label">{t(`nav.${item.key}`, item.label)}</span>
               </Link>
             );
+
           })}
         </nav>
+
         
         <div className="sidebar-footer">
           <div className="user-info">
@@ -623,8 +796,16 @@ function Layout({ children }) {
           {children}
         </div>
       </main>
+      
+      {/* Task Notification Overlay - shows full-screen blurred notification when a task is assigned */}
+      <TaskNotificationOverlay />
+      
+      {/* Push Notification Manager - handles permission prompt + subscription for web push */}
+      <PushNotificationManager />
     </div>
+
   );
 }
+
 
 export default Layout;

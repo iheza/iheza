@@ -2,14 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { studentService } from '../services/studentService';
+
 import { dataService } from '../services/dataService';
 import { toast } from '../hooks/useSoundEnabledToast';
 import { 
-  BookOpen, Plus, Search, X, CheckCircle, Clock, 
-  FileText, Package, ClipboardCheck, PenTool, Users,
-  Send, Eye, Check, Upload, Trash2, Edit2, Image, ExternalLink,
-  Download
+  BookOpen, Plus, X, Clock, 
+  FileText, Package, ClipboardCheck, PenTool, Users, User,
+  Send, Eye, Check, Upload, Trash2, Image, ExternalLink,
+  Download, Printer, Calendar, Search, Filter, RefreshCw, Info
 } from 'lucide-react';
+
 import { API_URL } from '../config/api';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -21,6 +23,13 @@ const TASK_TYPES = [
   { value: 'package', label: 'Package', icon: Package, color: '#22c55e' },
   { value: 'test', label: 'Test', icon: ClipboardCheck, color: '#f59e0b' },
 ];
+
+const TYPE_CLASS = {
+  homework: 'homework',
+  classwork: 'classwork',
+  package: 'package',
+  test: 'test',
+};
 
 function Classroom() {
   const currentUser = useSelector(selectCurrentUser);
@@ -35,6 +44,8 @@ function Classroom() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedClass, setSelectedClass] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterSubject, setFilterSubject] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   
   const [formData, setFormData] = useState({
     title: '',
@@ -43,8 +54,8 @@ function Classroom() {
     class_name: '',
     subject_id: '',
     due_date: '',
-    assigned_to: [], // Empty means entire class
-    attachments: [] // File attachments (base64)
+    assigned_to: [],
+    attachments: []
   });
 
   const fileInputRef = useRef(null);
@@ -57,7 +68,6 @@ function Classroom() {
     
     const fileName = `Task_${(task.title || 'Task').replace(/\s+/g, '_')}`;
     
-    // Check if task has attachments
     const hasAttachments = task.attachments && task.attachments.length > 0;
     
     if (hasAttachments) {
@@ -91,7 +101,6 @@ function Classroom() {
       return;
     }
     
-    // No attachments - generate summary
     if (format === 'docx') {
       const htmlContent = `
         <!DOCTYPE html>
@@ -116,6 +125,7 @@ function Classroom() {
               <tr><td><strong>Type:</strong></td><td>${(task.task_type || 'N/A').toUpperCase()}</td></tr>
               <tr><td><strong>Subject:</strong></td><td>${task.subject_name || 'N/A'}</td></tr>
               <tr><td><strong>Class:</strong></td><td>${task.class_name || 'N/A'}</td></tr>
+              <tr><td><strong>Given By:</strong></td><td>${task.assigned_by_name || 'N/A'}</td></tr>
               <tr><td><strong>Due Date:</strong></td><td>${task.due_date || 'N/A'}</td></tr>
             </table>
           </div>
@@ -133,7 +143,6 @@ function Classroom() {
       return;
     }
     
-    // For image and PDF formats
     const tempDiv = document.createElement('div');
     tempDiv.style.cssText = 'background: white; color: #333; padding: 2rem; font-family: Times New Roman, serif; position: absolute; left: -9999px; top: 0; width: 600px;';
     tempDiv.innerHTML = `
@@ -146,6 +155,7 @@ function Classroom() {
         <tr><td style="border:1px solid #333;padding:8px;font-weight:bold">Type:</td><td style="border:1px solid #333;padding:8px">${(task.task_type || 'N/A').toUpperCase()}</td></tr>
         <tr><td style="border:1px solid #333;padding:8px;font-weight:bold">Subject:</td><td style="border:1px solid #333;padding:8px">${task.subject_name || 'N/A'}</td></tr>
         <tr><td style="border:1px solid #333;padding:8px;font-weight:bold">Class:</td><td style="border:1px solid #333;padding:8px">${task.class_name || 'N/A'}</td></tr>
+        <tr><td style="border:1px solid #333;padding:8px;font-weight:bold">Given By:</td><td style="border:1px solid #333;padding:8px">${task.assigned_by_name || 'N/A'}</td></tr>
         <tr><td style="border:1px solid #333;padding:8px;font-weight:bold">Due Date:</td><td style="border:1px solid #333;padding:8px">${task.due_date || 'N/A'}</td></tr>
       </table>
       <div style="margin:15px 0"><h2 style="font-size:12pt;color:#0f4c81">Description</h2><p style="font-size:10pt">${task.description || 'No description provided.'}</p></div>
@@ -245,13 +255,8 @@ function Classroom() {
     try {
       const subject = subjects.find(s => s.id === formData.subject_id);
       
-      // Convert attachments to a format the backend can handle
-      // Backend expects List[str] (URLs or file references)
-      // We'll store base64 data inline for simplicity
       const processedAttachments = formData.attachments.map(att => {
-        // For images, store as base64 data URI
-        // For other files, store as base64 data URI
-        return att.data; // Already a base64 data URI
+        return att.data;
       });
       
       const taskData = {
@@ -314,13 +319,11 @@ function Classroom() {
       const newAttachments = [];
       
       for (const file of files) {
-        // Check file size (max 5MB)
         if (file.size > 5 * 1024 * 1024) {
           toast.error(`File ${file.name} is too large (max 5MB)`);
           continue;
         }
         
-        // Check file type
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 
                              'application/pdf', 'application/msword', 
                              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
@@ -329,7 +332,6 @@ function Classroom() {
           continue;
         }
         
-        // Convert to base64
         const base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
@@ -420,594 +422,744 @@ function Classroom() {
     }));
   };
 
+  const getProgress = (task) => {
+    if (task.total_students && task.total_students > 0) {
+      return Math.round(((task.completed_count || 0) / task.total_students) * 100);
+    }
+    return 0;
+  };
+
+  const filteredTasks = tasks.filter(task => {
+    const matchesSubject = !filterSubject || task.subject_name === filterSubject;
+    const matchesSearch = !searchTerm || 
+      task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.assigned_by_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesSubject && matchesSearch;
+  });
+
+  const subjectOptions = [...new Set(tasks.map(t => t.subject_name).filter(Boolean))];
+
+  const totalStudents = tasks.reduce((sum, t) => sum + (t.total_students || 0), 0);
+  const totalCompleted = tasks.reduce((sum, t) => sum + (t.completed_count || 0), 0);
+  const avgProgress = tasks.length > 0 ? Math.round((totalCompleted / totalStudents) * 100) : 0;
+
   return (
     <div className="classroom-page">
       <style>{`
-        .classroom-page { padding: 1.5rem; }
-        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-        .page-title { font-size: 1.5rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 0.75rem; }
-        .page-title-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-        
-        .class-selector { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-        .class-select { padding: 0.75rem 1.5rem; background: rgba(51, 65, 85, 0.5); border: 1px solid rgba(71, 85, 105, 0.5); border-radius: 0.5rem; color: #f8fafc; font-size: 0.875rem; font-weight: 500; }
-        
-        .task-type-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        @media (max-width: 768px) { .task-type-cards { grid-template-columns: repeat(2, 1fr); } }
-        .type-card { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 1rem; padding: 1.25rem; cursor: pointer; transition: all 0.2s; }
-        .type-card:hover { border-color: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
-        .type-card.active { border-color: var(--card-color); box-shadow: 0 0 0 1px var(--card-color); }
-        .type-card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
-        .type-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-        .type-label { font-weight: 600; color: #f8fafc; }
-        .type-count { font-size: 2rem; font-weight: 700; color: #f8fafc; }
-        
-        .panel { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 1rem; overflow: hidden; }
-        .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem; border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
-        .panel-title { font-size: 0.875rem; font-weight: 600; color: #94a3b8; }
-        
-        .tasks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; padding: 1rem; }
-        .task-card { background: rgba(51, 65, 85, 0.3); border: 1px solid rgba(71, 85, 105, 0.5); border-radius: 0.75rem; padding: 1rem; transition: all 0.2s; cursor: pointer; }
-        .task-card:hover { border-color: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
-        .task-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.75rem; }
-        .task-type-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 500; }
-        .task-title { font-weight: 600; color: #f8fafc; font-size: 1rem; margin-bottom: 0.25rem; }
-        .task-subject { font-size: 0.8rem; color: #64748b; }
-        .task-description { color: #94a3b8; font-size: 0.8rem; margin-bottom: 0.75rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .task-footer { display: flex; align-items: center; justify-content: space-between; }
-        .task-due { font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 0.25rem; }
-        .task-progress { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #22c55e; }
-        
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
-        .modal { background: #1e293b; border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 1rem; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
-        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
-        .modal-title { font-size: 1.125rem; font-weight: 600; color: #f8fafc; }
-        .modal-close { background: none; border: none; color: #64748b; cursor: pointer; padding: 0.5rem; }
-        .modal-body { padding: 1.25rem; }
-        .modal-footer { display: flex; gap: 1rem; justify-content: flex-end; padding: 1.25rem; border-top: 1px solid rgba(51, 65, 85, 0.5); }
-        
-        .form-group { margin-bottom: 1rem; }
-        .form-label { display: block; font-size: 0.75rem; font-weight: 500; color: #94a3b8; margin-bottom: 0.5rem; text-transform: uppercase; }
-        .form-input, .form-select, .form-textarea { width: 100%; padding: 0.75rem; background: rgba(51, 65, 85, 0.5); border: 1px solid rgba(71, 85, 105, 0.5); border-radius: 0.5rem; color: #f8fafc; font-size: 0.875rem; }
-        .form-textarea { resize: vertical; min-height: 100px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        
-        .task-type-selector { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
-        .type-option { padding: 0.75rem; background: rgba(51, 65, 85, 0.3); border: 2px solid transparent; border-radius: 0.5rem; cursor: pointer; text-align: center; transition: all 0.2s; }
-        .type-option:hover { background: rgba(51, 65, 85, 0.5); }
-        .type-option.selected { border-color: var(--type-color); background: rgba(51, 65, 85, 0.5); }
-        .type-option-label { font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem; }
-        
-        .completion-list { max-height: 400px; overflow-y: auto; }
-        .completion-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; border-bottom: 1px solid rgba(51, 65, 85, 0.3); }
-        .completion-item:last-child { border-bottom: none; }
-        .student-info { display: flex; align-items: center; gap: 0.75rem; }
-        .student-avatar { width: 32px; height: 32px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 600; color: white; font-size: 0.75rem; }
-        .student-name { font-weight: 500; color: #f8fafc; font-size: 0.875rem; }
-        .student-code { font-size: 0.7rem; color: #64748b; }
-        .completion-status { display: flex; align-items: center; gap: 0.5rem; }
-        .status-indicator { width: 8px; height: 8px; border-radius: 50%; }
-        .status-pending { background: #f59e0b; }
+        .classroom-page {
+          background: #f1f5f9;
+          font-family: 'Inter', -apple-system, sans-serif;
+          padding: 1.5rem;
+          display: flex;
+          justify-content: center;
+          min-height: 100vh;
+        }
+        .app-wrapper { max-width: 1400px; width: 100%; }
+
+        .page-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+          gap: 0.8rem;
+        }
+        .page-title { display: flex; align-items: center; gap: 0.6rem; }
+        .page-title .icon-wrap {
+          width: 38px; height: 38px;
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-size: 1rem;
+          box-shadow: 0 4px 10px rgba(139, 92, 246, 0.25);
+        }
+        .page-title h1 { font-size: 1.3rem; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; }
+        .page-title .sub { font-size: 0.8rem; color: #64748b; font-weight: 400; margin-left: 0.2rem; }
+        .header-actions { display: flex; gap: 0.5rem; }
+
+        .btn {
+          display: inline-flex; align-items: center; gap: 0.3rem;
+          padding: 0.4rem 1rem; border-radius: 8px;
+          font-weight: 600; font-size: 0.8rem; border: none; cursor: pointer;
+          transition: all 0.2s ease; font-family: 'Inter', sans-serif;
+        }
+        .btn-primary {
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(139, 92, 246, 0.4); }
+        .btn-outline { background: white; color: #475569; border: 1px solid #e2e8f0; }
+        .btn-outline:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+        .stats-compact {
+          display: flex; align-items: center; gap: 0.3rem 1.2rem; flex-wrap: wrap;
+          background: white; padding: 0.3rem 1rem; border-radius: 10px;
+          border: 1px solid #e2e8f0; margin-bottom: 1rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .stats-compact .stat-item { display: flex; align-items: center; gap: 0.3rem; padding: 0.1rem 0.2rem; }
+        .stats-compact .stat-item .icon {
+          width: 28px; height: 28px; border-radius: 7px;
+          display: flex; align-items: center; justify-content: center; font-size: 0.75rem;
+        }
+        .stats-compact .stat-item .icon.purple { background: #ede9fe; color: #7c3aed; }
+        .stats-compact .stat-item .icon.blue { background: #dbeafe; color: #2563eb; }
+        .stats-compact .stat-item .icon.green { background: #d1fae5; color: #059669; }
+        .stats-compact .stat-item .icon.orange { background: #fef3c7; color: #d97706; }
+        .stats-compact .stat-item .num { font-size: 1.1rem; font-weight: 700; color: #0f172a; line-height: 1.2; }
+        .stats-compact .stat-item .label { font-size: 0.6rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; }
+        .stats-compact .divider { color: #e2e8f0; font-size: 0.8rem; }
+
+        .filters-bar {
+          display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+          background: white; padding: 0.4rem 0.8rem; border-radius: 10px;
+          border: 1px solid #e2e8f0; margin-bottom: 1rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .filters-bar .search-wrap { flex: 1; min-width: 160px; position: relative; }
+        .filters-bar .search-wrap input {
+          width: 100%; padding: 0.35rem 0.6rem 0.35rem 2rem;
+          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 7px;
+          color: #0f172a; font-size: 0.8rem; font-family: 'Inter', sans-serif;
+          transition: all 0.2s ease;
+        }
+        .filters-bar .search-wrap input:focus {
+          outline: none; border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+        .filters-bar .search-wrap .search-icon {
+          position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%);
+          color: #94a3b8; font-size: 0.75rem;
+        }
+        .filters-bar select {
+          padding: 0.35rem 0.7rem; background: #f8fafc;
+          border: 1px solid #e2e8f0; border-radius: 7px;
+          color: #0f172a; font-size: 0.8rem; font-family: 'Inter', sans-serif; cursor: pointer;
+          min-width: 100px;
+        }
+        .filters-bar select:focus { outline: none; border-color: #8b5cf6; }
+        .filters-bar .filter-label { font-size: 0.65rem; color: #64748b; font-weight: 500; }
+        .filters-bar .result-count {
+          font-size: 0.75rem; color: #64748b; margin-left: auto;
+          display: flex; align-items: center; gap: 0.3rem;
+        }
+
+        .excel-container {
+          overflow-x: auto; border-radius: 12px;
+          border: 1px solid #d0d7e2; background: white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .excel-table {
+          width: 100%; border-collapse: collapse;
+          font-family: 'Inter', sans-serif; font-size: 0.82rem; min-width: 1000px;
+        }
+        .excel-table thead th {
+          background: #e8edf4; color: #1f3b5c; font-weight: 600; text-transform: uppercase;
+          font-size: 0.65rem; letter-spacing: 0.4px; padding: 0.6rem 0.7rem;
+          border-right: 1px solid #d0d7e2; border-bottom: 2px solid #b8c6d8;
+          text-align: left; white-space: nowrap; position: sticky; top: 0; z-index: 10;
+        }
+        .excel-table thead th:last-child { border-right: none; }
+        .excel-table tbody td {
+          padding: 0.5rem 0.7rem; border-right: 1px solid #e2e8f0;
+          border-bottom: 1px solid #e2e8f0; vertical-align: middle;
+          color: #1e2f3f; background: white;
+        }
+        .excel-table tbody td:last-child { border-right: none; }
+        .excel-table tbody tr:nth-child(even) td { background: #f8faff; }
+        .excel-table tbody tr:hover td { background: #e8f0fe; }
+        .excel-table .col-id { width: 40px; text-align: center; }
+        .excel-table .col-name { min-width: 150px; font-weight: 600; color: #0f172a; }
+        .excel-table .col-desc { min-width: 180px; }
+        .excel-table .col-type { width: 100px; }
+        .excel-table .col-subject { width: 110px; }
+        .excel-table .col-class { width: 100px; }
+        .excel-table .col-teacher { min-width: 140px; }
+        .excel-table .col-due { width: 100px; }
+        .excel-table .col-progress { width: 130px; }
+        .excel-table .col-actions { width: 140px; }
+
+        .type-badge { padding: 0.1rem 0.5rem; border-radius: 20px; font-size: 0.65rem; font-weight: 600; }
+        .type-badge.homework { background: #ede9fe; color: #7c3aed; }
+        .type-badge.classwork { background: #dbeafe; color: #2563eb; }
+        .type-badge.package { background: #d1fae5; color: #059669; }
+        .type-badge.test { background: #fef3c7; color: #d97706; }
+
+        .subject-badge { padding: 0.1rem 0.4rem; border-radius: 12px; font-size: 0.65rem; font-weight: 500; background: #eef2f7; color: #4a5a6e; }
+
+        .capacity-bar { display: flex; align-items: center; gap: 5px; }
+        .capacity-bar .bar-track { width: 60px; height: 5px; background: #e2e8f0; border-radius: 10px; overflow: hidden; }
+        .capacity-bar .bar-track .fill { height: 100%; border-radius: 10px; transition: width 0.3s ease; }
+        .capacity-bar .fill.green { background: #10b981; }
+        .capacity-bar .fill.orange { background: #f59e0b; }
+        .capacity-bar .fill.red { background: #ef4444; }
+        .capacity-bar .count { font-size: 0.75rem; font-weight: 600; color: #0f172a; min-width: 35px; }
+
+        .teacher-cell { display: flex; align-items: center; gap: 5px; }
+        .teacher-cell .avatar {
+          width: 24px; height: 24px; border-radius: 7px;
+          display: flex; align-items: center; justify-content: center;
+          font-weight: 600; font-size: 0.6rem; color: white; flex-shrink: 0;
+        }
+        .teacher-cell .tname { font-size: 0.78rem; color: #0f172a; font-weight: 500; }
+        .teacher-cell .tname.unassigned { color: #94a3b8; font-style: italic; }
+
+        .due-cell { display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: #1e2f3f; }
+        .due-cell .due-icon { color: #94a3b8; }
+
+        .action-group { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+        .action-group .act-btn {
+          display: inline-flex; align-items: center; gap: 2px;
+          padding: 0.15rem 0.4rem; background: #f8fafc;
+          border: 1px solid #e2e8f0; border-radius: 5px;
+          color: #64748b; font-size: 0.6rem; font-weight: 500; cursor: pointer;
+          transition: all 0.15s ease; font-family: 'Inter', sans-serif;
+        }
+        .action-group .act-btn:hover { background: #e2e8f0; color: #0f172a; }
+        .action-group .act-btn.edit:hover { background: #ede9fe; color: #7c3aed; border-color: #c4b5fd; }
+        .action-group .act-btn.delete:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+        .action-group .act-btn.view:hover { background: #dbeafe; color: #2563eb; border-color: #93c5fd; }
+        .action-group .act-btn.download:hover { background: #d1fae5; color: #059669; border-color: #6ee7b7; }
+        .action-group .act-btn.view-only { opacity: 0.5; cursor: default; }
+        .action-group .act-btn.view-only:hover { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+
+        .pagination-bar {
+          display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+          padding: 0.4rem 0.8rem; background: #f8faff;
+          border-top: 1px solid #d0d7e2; border-radius: 0 0 12px 12px;
+          font-size: 0.75rem; color: #1f3b5c;
+        }
+        .pagination-bar .info { color: #3f6490; font-size: 0.75rem; }
+        .pagination-bar .pages { display: flex; gap: 0.15rem; }
+        .pagination-bar .pages button {
+          background: white; border: 1px solid #d0d7e2; padding: 0.15rem 0.6rem;
+          border-radius: 5px; font-weight: 500; font-size: 0.7rem;
+          color: #1f3b5c; cursor: pointer; transition: 0.1s;
+        }
+        .pagination-bar .pages button:hover { background: #eef3fa; }
+        .pagination-bar .pages button.active { background: #7c3aed; color: white; border-color: #7c3aed; }
+        .pagination-bar .pages button:disabled { opacity: 0.4; cursor: default; background: #f0f3f8; }
+
+        .footer-note {
+          margin-top: 1rem; text-align: center; color: #94a3b8; font-size: 0.7rem;
+          border-top: 1px solid #e2e8f0; padding-top: 1rem;
+        }
+
+        .empty-state { text-align: center; padding: 3rem; color: #64748b; background: white; border-radius: 12px; border: 1px solid #d0d7e2; }
+
+        .modal-overlay {
+          position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
+          backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
+          z-index: 1000; padding: 1rem;
+        }
+        .modal {
+          background: white; border-radius: 16px; width: 100%; max-width: 560px;
+          max-height: 90vh; overflow-y: auto; animation: modalIn 0.25s ease;
+          box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+        }
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.95) translateY(16px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .modal-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 1.1rem 1.4rem; border-bottom: 1px solid #e2e8f0;
+        }
+        .modal-header h2 { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+        .modal-close { background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0.3rem; border-radius: 8px; transition: background 0.2s ease; }
+        .modal-close:hover { background: #f1f5f9; }
+        .modal-body { padding: 1.4rem; }
+        .modal-body .form-group { margin-bottom: 0.8rem; }
+        .modal-body .form-group label {
+          display: block; font-size: 0.7rem; font-weight: 600; color: #475569;
+          text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 0.2rem;
+        }
+        .modal-body .form-group input,
+        .modal-body .form-group select,
+        .modal-body .form-group textarea {
+          width: 100%; padding: 0.5rem 0.8rem; background: #f8fafc;
+          border: 1px solid #e2e8f0; border-radius: 10px; color: #0f172a;
+          font-size: 0.85rem; font-family: 'Inter', sans-serif; transition: all 0.2s ease;
+        }
+        .modal-body .form-group input:focus,
+        .modal-body .form-group select:focus,
+        .modal-body .form-group textarea:focus {
+          outline: none; border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+        .modal-body .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+        .modal-footer {
+          display: flex; gap: 0.8rem; justify-content: flex-end;
+          padding: 1.1rem 1.4rem; border-top: 1px solid #e2e8f0;
+        }
+        .btn-success {
+          background: linear-gradient(135deg, #059669, #10b981);
+          color: white; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);
+        }
+        .btn-success:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4); }
+        .btn-ghost { background: transparent; color: #475569; border: 1px solid #e2e8f0; }
+        .btn-ghost:hover { background: #f8fafc; }
+
+        .attachment-list { display: flex; flex-direction: column; gap: 0.4rem; }
+        .attachment-item {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0.4rem 0.6rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+        }
+        .attachment-item .att-name { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: #0f172a; }
+        .attachment-remove { background: transparent; border: none; color: #b33a3a; cursor: pointer; padding: 0.25rem; }
+        .attachment-remove:hover { color: #8a2a2a; }
+
+        .completion-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; }
+        .completion-item { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #f8faff; border: 1px solid #e2e8f0; border-radius: 0.5rem; }
+        .student-info { display: flex; align-items: center; gap: 0.6rem; }
+        .student-avatar { width: 32px; height: 32px; border-radius: 50%; background: #1a3b5d; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.8rem; }
+        .student-name { font-size: 0.8rem; font-weight: 600; color: #0b2a44; }
+        .student-code { font-size: 0.65rem; color: #6a8aa8; }
+        .completion-status { display: flex; align-items: center; gap: 0.4rem; }
+        .status-indicator { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
         .status-completed { background: #22c55e; }
-        .mark-complete-btn { padding: 0.35rem 0.75rem; background: rgba(34, 197, 94, 0.2); border: none; border-radius: 0.25rem; color: #22c55e; font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; }
-        .mark-complete-btn:hover { background: rgba(34, 197, 94, 0.3); }
-        
-        .task-delete-btn { padding: 0.35rem; background: rgba(239, 68, 68, 0.1); border: none; border-radius: 0.25rem; color: #ef4444; cursor: pointer; }
-        .task-delete-btn:hover { background: rgba(239, 68, 68, 0.2); }
-        
-        .task-attachments { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); }
-        .attachment-count { font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 0.25rem; }
-        
-        .file-upload-area { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
-        .attachments-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
-        .attachment-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: 0.375rem; font-size: 0.8rem; }
-        .attachment-name { flex: 1; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .attachment-remove { background: transparent; border: none; color: #ef4444; cursor: pointer; padding: 0.25rem; }
-        .attachment-remove:hover { color: #f87171; }
-        
-        .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+        .status-pending { background: #f59e0b; }
+        .mark-complete-btn { background: #1a3b5d; color: white; border: none; padding: 0.25rem 0.6rem; border-radius: 0.375rem; font-size: 0.7rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem; }
+        .mark-complete-btn:hover { background: #12304b; }
+
+        .task-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem; }
+        .task-detail-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem 0.7rem; }
+        .task-detail-item .td-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.3px; color: #64748b; font-weight: 600; }
+        .task-detail-item .td-value { font-size: 0.85rem; font-weight: 600; color: #0f172a; margin-top: 0.1rem; }
+
+        .download-menu { position: relative; }
+        .download-menu .menu {
+          position: absolute; right: 0; top: 100%; margin-top: 4px;
+          background: white; border: 1px solid #e2e8f0; border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 0.3rem; z-index: 50; min-width: 150px;
+        }
+        .download-menu .menu button {
+          display: flex; align-items: center; gap: 0.4rem; width: 100%;
+          padding: 0.4rem 0.6rem; background: transparent; border: none; border-radius: 6px;
+          font-size: 0.75rem; color: #1e2f3f; cursor: pointer; font-family: 'Inter', sans-serif;
+        }
+        .download-menu .menu button:hover { background: #f1f5f9; }
+
+        @media (max-width: 768px) {
+          .classroom-page { padding: 0.8rem; }
+          .page-title h1 { font-size: 1.1rem; }
+          .page-title .sub { display: none; }
+          .stats-compact { gap: 0.2rem 0.8rem; padding: 0.2rem 0.8rem; }
+          .stats-compact .stat-item .num { font-size: 0.95rem; }
+          .stats-compact .stat-item .label { font-size: 0.55rem; }
+          .stats-compact .stat-item .icon { width: 24px; height: 24px; font-size: 0.65rem; }
+          .filters-bar { flex-direction: column; align-items: stretch; }
+          .filters-bar .search-wrap { min-width: unset; }
+          .filters-bar select { min-width: unset; }
+          .filters-bar .result-count { margin-left: 0; }
+          .excel-table { min-width: 850px; font-size: 0.75rem; }
+          .excel-table thead th,
+          .excel-table tbody td { padding: 0.35rem 0.4rem; }
+          .action-group .act-btn { font-size: 0.55rem; padding: 0.1rem 0.3rem; }
+          .modal-body .form-row { grid-template-columns: 1fr; }
+          .task-detail-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
-      
-      <div className="page-header">
-        <h1 className="page-title">
-          <span className="page-title-icon">
-            <BookOpen size={20} color="white" />
-          </span>
-          Classroom
-        </h1>
-        {canAssignTasks && (
-          <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
-            <Plus size={16} /> Assign Task
-          </button>
-        )}
-      </div>
-      
-      {/* Class Selector */}
-      <div className="class-selector">
-        <select
-          className="class-select"
-          value={selectedClass}
-          onChange={(e) => setSelectedClass(e.target.value)}
-        >
-          {classes.map(cls => (
-            <option key={cls.id} value={cls.name}>{cls.name}</option>
-          ))}
-        </select>
-        <span style={{ color: '#64748b', fontSize: '0.875rem' }}>
-          {students.length} students
-        </span>
-      </div>
-      
-      {/* Task Type Cards */}
-      <div className="task-type-cards">
-        {getTaskCounts().map(type => {
-          const Icon = type.icon;
-          return (
-            <div
-              key={type.value}
-              className={`type-card ${filterType === type.value ? 'active' : ''}`}
-              style={{ '--card-color': type.color }}
-              onClick={() => setFilterType(filterType === type.value ? '' : type.value)}
-            >
-              <div className="type-card-header">
-                <div className="type-icon" style={{ backgroundColor: `${type.color}20` }}>
-                  <Icon size={20} color={type.color} />
-                </div>
-                <span className="type-label">{type.label}</span>
-              </div>
-              <div className="type-count" style={{ color: type.color }}>{type.count}</div>
+
+      <div className="app-wrapper">
+        {/* HEADER */}
+        <header className="page-header">
+          <div className="page-title">
+            <div className="icon-wrap"><BookOpen size={18} /></div>
+            <div>
+              <h1>Classroom <span className="sub">· Tasks</span></h1>
             </div>
-          );
-        })}
-      </div>
-      
-      {/* Tasks Panel */}
-      <div className="panel">
-        <div className="panel-header">
-          <span className="panel-title">
-            {filterType ? `${getTaskTypeInfo(filterType).label} Tasks` : 'All Tasks'} for {selectedClass}
+          </div>
+          <div className="header-actions">
+            <button className="btn btn-outline" onClick={loadTasks}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+            {canAssignTasks && (
+              <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }} data-testid="add-task-btn">
+                <Plus size={14} /> Assign Task
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* STATS - COMPACT ONE LINE */}
+        <div className="stats-compact">
+          <span className="stat-item">
+            <span className="icon purple"><BookOpen size={14} /></span>
+            <span className="num">{tasks.length}</span>
+            <span className="label">Tasks</span>
+          </span>
+          <span className="divider">|</span>
+          <span className="stat-item">
+            <span className="icon blue"><Users size={14} /></span>
+            <span className="num">{totalStudents}</span>
+            <span className="label">Students</span>
+          </span>
+          <span className="divider">|</span>
+          <span className="stat-item">
+            <span className="icon green"><Check size={14} /></span>
+            <span className="num">{totalCompleted}</span>
+            <span className="label">Completed</span>
+          </span>
+          <span className="divider">|</span>
+          <span className="stat-item">
+            <span className="icon orange"><Clock size={14} /></span>
+            <span className="num">{avgProgress}%</span>
+            <span className="label">Progress</span>
           </span>
         </div>
-        
-        {loading ? (
-          <div className="empty-state">Loading tasks...</div>
-        ) : tasks.length === 0 ? (
-          <div className="empty-state">
-            <BookOpen size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-            <p>No tasks assigned yet</p>
-            {canAssignTasks && <p style={{ fontSize: '0.875rem' }}>Click "Assign Task" to create one</p>}
+
+        {/* FILTERS */}
+        <div className="filters-bar">
+          <div className="search-wrap">
+            <Search className="search-icon" size={14} />
+            <input
+              type="text"
+              placeholder="Search by task, teacher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              data-testid="task-search"
+            />
           </div>
-        ) : (
-          <div className="tasks-grid">
-            {tasks.map(task => {
-              const typeInfo = getTaskTypeInfo(task.task_type);
-              const Icon = typeInfo.icon;
-              return (
-                <div key={task.id} className="task-card">
-                  <div className="task-header">
-                    <div>
-                      <span 
-                        className="task-type-badge"
-                        style={{ backgroundColor: `${typeInfo.color}20`, color: typeInfo.color }}
-                      >
-                        <Icon size={12} /> {typeInfo.label}
-                      </span>
-                    </div>
-                    {canAssignTasks && (
-                      <button 
-                        className="task-delete-btn"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
-                        title="Delete task"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <div className="task-title" onClick={() => handleViewTask(task)}>{task.title}</div>
-                  <div className="task-subject">{task.subject_name}</div>
-                  <div className="task-description">{task.description}</div>
-                  {task.attachments && task.attachments.length > 0 && (
-                    <div className="task-attachments">
-                      <span className="attachment-count">
-                        <FileText size={12} /> {task.attachments.length} file(s) attached
-                      </span>
-                    </div>
-                  )}
-                  <div className="task-footer">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {task.due_date && (
-                        <div className="task-due">
-                          <Clock size={12} /> Due: {task.due_date}
-                        </div>
-                      )}
-                      <div className="task-progress">
-                        <Users size={12} /> {task.assigned_to?.length || students.length}
-                      </div>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setShowTaskFormatMenu(showTaskFormatMenu === task.id ? null : task.id); }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          padding: '0.3rem 0.5rem',
-                          background: 'rgba(14, 165, 233, 0.2)',
-                          color: '#38bdf8',
-                          border: '1px solid rgba(14, 165, 233, 0.3)',
-                          borderRadius: '0.375rem',
-                          cursor: 'pointer',
-                          fontSize: '0.65rem'
-                        }}
-                      >
-                        <Download size={10} /> Download ▾
-                      </button>
-                      {showTaskFormatMenu === task.id && (
-                        <>
-                          <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setShowTaskFormatMenu(null)} />
-                          <div style={{
-                            position: 'absolute', bottom: '100%', right: 0, marginBottom: '0.25rem',
-                            background: '#1e293b', border: '1px solid rgba(51, 65, 85, 0.5)',
-                            borderRadius: '0.5rem', overflow: 'hidden', zIndex: 20, minWidth: '160px',
-                            boxShadow: '0 10px 25px rgba(0,0,0,0.3)'
-                          }}>
-                            <div onClick={() => handleDownloadTask(task, 'docx')}
-                              style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#f8fafc', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid rgba(51, 65, 85, 0.3)' }}
-                              onMouseEnter={e => e.target.style.background = 'rgba(59, 130, 246, 0.2)'} onMouseLeave={e => e.target.style.background = 'transparent'}>
-                              <FileText size={12} /> Word Document (.doc)
-                            </div>
-                            <div onClick={() => handleDownloadTask(task, 'pdf')}
-                              style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#f8fafc', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid rgba(51, 65, 85, 0.3)' }}
-                              onMouseEnter={e => e.target.style.background = 'rgba(59, 130, 246, 0.2)'} onMouseLeave={e => e.target.style.background = 'transparent'}>
-                              <FileText size={12} /> PDF Document (.pdf)
-                            </div>
-                            <div onClick={() => handleDownloadTask(task, 'png')}
-                              style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#f8fafc', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid rgba(51, 65, 85, 0.3)' }}
-                              onMouseEnter={e => e.target.style.background = 'rgba(59, 130, 246, 0.2)'} onMouseLeave={e => e.target.style.background = 'transparent'}>
-                              <Image size={12} /> PNG Image (.png)
-                            </div>
-                            <div onClick={() => handleDownloadTask(task, 'jpeg')}
-                              style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#f8fafc', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid rgba(51, 65, 85, 0.3)' }}
-                              onMouseEnter={e => e.target.style.background = 'rgba(59, 130, 246, 0.2)'} onMouseLeave={e => e.target.style.background = 'transparent'}>
-                              <Image size={12} /> JPEG Image (.jpg)
-                            </div>
-                            <div onClick={() => handleDownloadTask(task, 'webp')}
-                              style={{ padding: '0.5rem 0.8rem', cursor: 'pointer', color: '#f8fafc', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                              onMouseEnter={e => e.target.style.background = 'rgba(59, 130, 246, 0.2)'} onMouseLeave={e => e.target.style.background = 'transparent'}>
-                              <Image size={12} /> WebP Image (.webp)
-                            </div>
+          <span className="filter-label">Class</span>
+          <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} data-testid="class-select">
+            {classes.map(c => (
+              <option key={c.id} value={c.name}>{c.name}</option>
+            ))}
+          </select>
+          <span className="filter-label">Type</span>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} data-testid="type-filter">
+            <option value="">All</option>
+            {TASK_TYPES.map(t => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+          <span className="filter-label">Subject</span>
+          <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
+            <option value="">All</option>
+            {subjectOptions.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <span className="result-count"><Filter size={12} /> {filteredTasks.length} results</span>
+        </div>
+
+        {/* EXCEL TABLE */}
+        <div className="excel-container">
+          <table className="excel-table">
+            <thead>
+              <tr>
+                <th className="col-id">#</th>
+                <th className="col-name">Task</th>
+                <th className="col-type">Type</th>
+                <th className="col-subject">Subject</th>
+                <th className="col-class">Class</th>
+                <th className="col-teacher">Given By</th>
+                <th className="col-due">Due Date</th>
+                <th className="col-progress">Progress</th>
+                <th className="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="9" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Loading tasks...</td></tr>
+              ) : filteredTasks.length === 0 ? (
+                <tr><td colSpan="9" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>No tasks found for this class.</td></tr>
+              ) : (
+                filteredTasks.map((task, index) => {
+                  const typeInfo = getTaskTypeInfo(task.task_type);
+                  const progress = getProgress(task);
+                  const progressColor = progress >= 100 ? 'green' : progress >= 70 ? 'orange' : 'red';
+                  return (
+                    <tr key={task.id}>
+                      <td className="col-id">{index + 1}</td>
+                      <td className="col-name">{task.title}</td>
+                      <td>
+                        <span className={`type-badge ${task.task_type}`}>{typeInfo.label}</span>
+                      </td>
+                      <td>
+                        <span className="subject-badge">{task.subject_name || '—'}</span>
+                      </td>
+                      <td>{task.class_name}</td>
+                      <td>
+                        <div className="teacher-cell">
+                          <div className="avatar" style={{ background: `linear-gradient(135deg, ${typeInfo.color}, ${typeInfo.color}cc)` }}>
+                            {(task.assigned_by_name || 'T').charAt(0)}
                           </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                          <span className="tname">{task.assigned_by_name || 'Not Assigned'}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="due-cell">
+                          <Calendar className="due-icon" size={12} />
+                          {task.due_date || '—'}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="capacity-bar">
+                          <div className="bar-track"><div className={`fill ${progressColor}`} style={{ width: `${progress}%` }}></div></div>
+                          <span className="count">{progress}%</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="action-group">
+                          <button className="act-btn view" onClick={() => handleViewTask(task)} data-testid={`view-task-${task.id}`} title="View task details">
+                            <Eye size={11} /> View
+                          </button>
+                          <div className="download-menu">
+                            <button className="act-btn download" onClick={() => setShowTaskFormatMenu(showTaskFormatMenu === task.id ? null : task.id)} title="Download">
+                              <Download size={11} /> DL
+                            </button>
+                            {showTaskFormatMenu === task.id && (
+                              <div className="menu">
+                                <button onClick={() => handleDownloadTask(task, 'pdf')}><Download size={12} /> PDF</button>
+                                <button onClick={() => handleDownloadTask(task, 'docx')}><FileText size={12} /> DOC</button>
+                                <button onClick={() => handleDownloadTask(task, 'png')}><Image size={12} /> PNG</button>
+                                <button onClick={() => handleDownloadTask(task, 'jpeg')}><Image size={12} /> JPEG</button>
+                                <button onClick={() => handleDownloadTask(task, 'webp')}><Image size={12} /> WebP</button>
+                              </div>
+                            )}
+                          </div>
+                          {canAssignTasks && (
+                            <button className="act-btn delete" onClick={() => handleDeleteTask(task.id)} data-testid={`delete-task-${task.id}`} title="Delete task">
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+
+          {/* PAGINATION */}
+          <div className="pagination-bar">
+            <span className="info"><Info size={12} /> {filteredTasks.length} records · page 1 of 1</span>
+            <div className="pages">
+              <button disabled><span>‹</span></button>
+              <button className="active">1</button>
+              <button disabled><span>›</span></button>
+            </div>
           </div>
-        )}
+        </div>
+
       </div>
-      
-      {/* Create Task Modal */}
+
+
+      {/* Assign Task Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">Assign New Task</h2>
+              <h2><Plus size={18} style={{ color: '#8b5cf6', marginRight: 6, verticalAlign: 'middle' }} /> Assign New Task</h2>
               <button className="modal-close" onClick={() => setShowModal(false)}>
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
             <form onSubmit={handleCreateTask}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="form-label">Task Type</label>
-                  <div className="task-type-selector">
-                    {TASK_TYPES.map(type => {
-                      const Icon = type.icon;
-                      return (
-                        <div
-                          key={type.value}
-                          className={`type-option ${formData.task_type === type.value ? 'selected' : ''}`}
-                          style={{ '--type-color': type.color }}
-                          onClick={() => setFormData({...formData, task_type: type.value})}
-                        >
-                          <Icon size={20} color={type.color} />
-                          <div className="type-option-label">{type.label}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div className="form-group">
-                  <label className="form-label">Title *</label>
+                  <label>Task Title *</label>
                   <input
                     type="text"
-                    className="form-input"
                     value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     required
-                    placeholder="Enter task title"
+                    data-testid="task-title-input"
+                    placeholder="e.g. Chapter 3 Exercises"
                   />
                 </div>
-                
                 <div className="form-group">
-                  <label className="form-label">Description *</label>
+                  <label>Description</label>
                   <textarea
-                    className="form-textarea"
+                    rows="3"
                     value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    required
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Describe the task..."
                   />
                 </div>
-                
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Class</label>
+                    <label>Task Type *</label>
                     <select
-                      className="form-select"
-                      value={formData.class_name || selectedClass}
-                      onChange={(e) => setFormData({...formData, class_name: e.target.value})}
+                      value={formData.task_type}
+                      onChange={(e) => setFormData({ ...formData, task_type: e.target.value })}
+                      required
                     >
-                      {classes.map(cls => (
-                        <option key={cls.id} value={cls.name}>{cls.name}</option>
+                      {TASK_TYPES.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Subject</label>
+                    <label>Subject *</label>
                     <select
-                      className="form-select"
                       value={formData.subject_id}
-                      onChange={(e) => setFormData({...formData, subject_id: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, subject_id: e.target.value })}
+                      required
                     >
                       <option value="">Select Subject</option>
-                      {subjects.map(subject => (
-                        <option key={subject.id} value={subject.id}>{subject.name}</option>
+                      {subjects.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
                   </div>
                 </div>
-                
-                <div className="form-group">
-                  <label className="form-label">Due Date</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={formData.due_date}
-                    onChange={(e) => setFormData({...formData, due_date: e.target.value})}
-                  />
-                </div>
-                
-                {/* File Upload Section */}
-                <div className="form-group">
-                  <label className="form-label">Attachments (Optional)</label>
-                  <div className="file-upload-area">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept="image/*,.pdf,.doc,.docx"
-                      multiple
-                      style={{ display: 'none' }}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingFile}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Class *</label>
+                    <select
+                      value={formData.class_name}
+                      onChange={(e) => setFormData({ ...formData, class_name: e.target.value })}
+                      required
                     >
-                      {uploadingFile ? 'Uploading...' : (
-                        <>
-                          <Upload size={16} /> Upload Files
-                        </>
-                      )}
-                    </button>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>
-                      Images, PDF, DOC (max 5MB each)
-                    </span>
+                      {classes.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
-                  
+                  <div className="form-group">
+                    <label>Due Date *</label>
+                    <input
+                      type="date"
+                      value={formData.due_date}
+                      onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Attachments</label>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx"
+                    onChange={handleFileUpload}
+                    style={{ padding: '0.4rem', fontSize: '0.75rem' }}
+                  />
+                  {uploadingFile && <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem' }}>Uploading...</div>}
                   {formData.attachments.length > 0 && (
-                    <div className="attachments-list">
-                      {formData.attachments.map((file, index) => (
-                        <div key={index} className="attachment-item">
-                          {file.type.startsWith('image/') ? (
-                            <Image size={14} />
-                          ) : (
-                            <FileText size={14} />
-                          )}
-                          <span className="attachment-name">{file.name}</span>
-                          <button
-                            type="button"
-                            className="attachment-remove"
-                            onClick={() => removeAttachment(index)}
-                          >
-                            <X size={12} />
+                    <div className="attachment-list" style={{ marginTop: '0.5rem' }}>
+                      {formData.attachments.map((att, idx) => (
+                        <div key={idx} className="attachment-item">
+                          <span className="att-name"><FileText size={12} /> {att.name}</span>
+                          <button type="button" className="attachment-remove" onClick={() => removeAttachment(idx)}>
+                            <X size={14} />
                           </button>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-                
-                <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.5rem' }}>
-                  This task will be assigned to all students in {formData.class_name || selectedClass}
-                </p>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  <Send size={16} /> Assign Task
+                <button type="submit" className="btn btn-success" data-testid="submit-task-btn">
+                  <Send size={14} /> Assign Task
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-      
+
       {/* View Task Modal */}
       {showViewModal && selectedTask && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2 className="modal-title">{selectedTask.title}</h2>
+              <h2><Eye size={18} style={{ color: '#8b5cf6', marginRight: 6, verticalAlign: 'middle' }} /> Task Details</h2>
               <button className="modal-close" onClick={() => setShowViewModal(false)}>
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
             <div className="modal-body">
-              <div style={{ marginBottom: '1rem' }}>
-                <span 
-                  className="task-type-badge"
-                  style={{ 
-                    backgroundColor: `${getTaskTypeInfo(selectedTask.task_type).color}20`, 
-                    color: getTaskTypeInfo(selectedTask.task_type).color 
-                  }}
-                >
-                  {getTaskTypeInfo(selectedTask.task_type).label}
-                </span>
-                {selectedTask.subject_name && (
-                  <span style={{ marginLeft: '0.5rem', color: '#64748b', fontSize: '0.875rem' }}>
-                    {selectedTask.subject_name}
-                  </span>
-                )}
+              <div className="task-detail-grid">
+                <div className="task-detail-item">
+                  <div className="td-label">Title</div>
+                  <div className="td-value">{selectedTask.title}</div>
+                </div>
+                <div className="task-detail-item">
+                  <div className="td-label">Type</div>
+                  <div className="td-value">{getTaskTypeInfo(selectedTask.task_type).label}</div>
+                </div>
+                <div className="task-detail-item">
+                  <div className="td-label">Subject</div>
+                  <div className="td-value">{selectedTask.subject_name || '—'}</div>
+                </div>
+                <div className="task-detail-item">
+                  <div className="td-label">Class</div>
+                  <div className="td-value">{selectedTask.class_name}</div>
+                </div>
+                <div className="task-detail-item">
+                  <div className="td-label">Given By</div>
+                  <div className="td-value">{selectedTask.assigned_by_name || '—'}</div>
+                </div>
+                <div className="task-detail-item">
+                  <div className="td-label">Due Date</div>
+                  <div className="td-value">{selectedTask.due_date || '—'}</div>
+                </div>
               </div>
-              
-              <p style={{ color: '#94a3b8', marginBottom: '1rem' }}>{selectedTask.description}</p>
-              
-              {selectedTask.due_date && (
-                <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>
-                  Due: {selectedTask.due_date}
+              <div className="form-group">
+                <label>Description</label>
+                <p style={{ fontSize: '0.85rem', color: '#1e2f3f', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  {selectedTask.description || 'No description provided.'}
                 </p>
-              )}
-              
-              {/* Display attachments in view modal */}
-              {selectedTask.attachments && selectedTask.attachments.length > 0 && (
-                <div style={{ 
-                  marginBottom: '1rem',
-                  padding: '0.75rem', 
-                  background: 'rgba(59, 130, 246, 0.1)', 
-                  borderRadius: '0.5rem',
-                  border: '1px solid rgba(59, 130, 246, 0.2)'
-                }}>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <FileText size={12} /> {selectedTask.attachments.length} attachment(s)
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    {selectedTask.attachments.map((att, idx) => {
-                      if (typeof att === 'string' && att.startsWith('data:image/')) {
-                        return (
-                          <div key={idx} style={{ position: 'relative' }}>
-                            <img 
-                              src={att} 
-                              alt={`Attachment ${idx + 1}`}
-                              style={{ 
-                                width: '100px', 
-                                height: '100px', 
-                                objectFit: 'cover', 
-                                borderRadius: '0.375rem',
-                                cursor: 'pointer',
-                                border: '1px solid rgba(255,255,255,0.1)'
-                              }}
-                              onClick={() => window.open(att, '_blank')}
-                            />
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={idx} style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          padding: '0.25rem 0.5rem',
-                          background: 'rgba(51, 65, 85, 0.5)',
-                          borderRadius: '0.25rem',
-                          fontSize: '0.75rem',
-                          color: '#94a3b8'
-                        }}>
-                          <FileText size={12} />
-                          <span>File {idx + 1}</span>
-                          <ExternalLink size={10} style={{ cursor: 'pointer' }} onClick={() => window.open(att, '_blank')} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              
-              
-              <div style={{ 
-                display: 'flex', 
-                gap: '1rem', 
-                padding: '1rem', 
-                background: 'rgba(51, 65, 85, 0.3)', 
-                borderRadius: '0.5rem',
-                marginBottom: '1rem'
-              }}>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#f8fafc' }}>
-                    {selectedTask.total_students}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase' }}>Total</div>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#22c55e' }}>
-                    {selectedTask.completed_count}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase' }}>Completed</div>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#f59e0b' }}>
-                    {selectedTask.total_students - selectedTask.completed_count}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase' }}>Pending</div>
-                </div>
               </div>
-              
-              <h4 style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.75rem' }}>Student Progress</h4>
-              <div className="completion-list">
-                {selectedTask.completions?.map(comp => (
-                  <div key={comp.id} className="completion-item">
-                    <div className="student-info">
-                      <div className="student-avatar">
-                        {comp.student_name?.charAt(0)}
+              {selectedTask.attachments && selectedTask.attachments.length > 0 && (
+                <div className="form-group">
+                  <label>Attachments</label>
+                  <div className="attachment-list">
+                    {selectedTask.attachments.map((att, idx) => (
+                      <div key={idx} className="attachment-item">
+                        <span className="att-name"><FileText size={12} /> Attachment {idx + 1}</span>
+                        <a href={att} target="_blank" rel="noopener noreferrer" style={{ color: '#8b5cf6', fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <ExternalLink size={12} /> Open
+                        </a>
                       </div>
-                      <div>
-                        <div className="student-name">{comp.student_name}</div>
-                        <div className="student-code">{comp.admission_no}</div>
-                      </div>
-                    </div>
-                    <div className="completion-status">
-                      {comp.status === 'completed' ? (
-                        <>
-                          <span className="status-indicator status-completed" />
-                          <span style={{ color: '#22c55e', fontSize: '0.8rem' }}>Completed</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="status-indicator status-pending" />
-                          {canAssignTasks && (
-                            <button 
-                              className="mark-complete-btn"
-                              onClick={() => handleMarkCompletion(comp.student_id, 'completed')}
-                            >
-                              <Check size={12} /> Mark Complete
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+              )}
+              <div className="form-group">
+                <label>Student Progress ({selectedTask.completed_count || 0}/{selectedTask.total_students || 0})</label>
+                <div className="completion-list">
+                  {(selectedTask.students || []).map(student => (
+                    <div key={student.id} className="completion-item">
+                      <div className="student-info">
+                        <div className="student-avatar">{(student.name || 'S').charAt(0)}</div>
+                        <div>
+                          <div className="student-name">{student.name}</div>
+                          <div className="student-code">{student.admission_number || student.student_code || ''}</div>
+                        </div>
+                      </div>
+                      <div className="completion-status">
+                        <span className={`status-indicator ${student.completed ? 'status-completed' : 'status-pending'}`}></span>
+                        <span style={{ fontSize: '0.7rem', color: student.completed ? '#059669' : '#d97706', fontWeight: 600 }}>
+                          {student.completed ? 'Completed' : 'Pending'}
+                        </span>
+                        {canAssignTasks && (
+                          <button
+                            className="mark-complete-btn"
+                            onClick={() => handleMarkCompletion(student.id, !student.completed)}
+                          >
+                            <Check size={12} /> {student.completed ? 'Undo' : 'Mark'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowViewModal(false)}>
-                Close
+              <button className="btn btn-ghost" onClick={() => setShowViewModal(false)}>Close</button>
+              <button className="btn btn-primary" onClick={() => handleDownloadTask(selectedTask, 'pdf')}>
+                <Download size={14} /> Download
               </button>
             </div>
           </div>
@@ -1018,3 +1170,4 @@ function Classroom() {
 }
 
 export default Classroom;
+

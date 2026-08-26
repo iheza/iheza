@@ -67,9 +67,10 @@ function Home() {
         
         .home-header {
           text-align: center;
-          margin-bottom: 4rem;
-          padding-top: 3rem;
+          margin-bottom: 2rem;
+          padding-top: 2rem;
         }
+
         
         .logo-container {
           display: flex;
@@ -91,7 +92,7 @@ function Home() {
         }
         
         .home-title {
-          font-size: 3rem;
+          font-size: 2rem;
           font-weight: 800;
           background: linear-gradient(135deg, #0f4c81 0%, #1a5f9e 100%);
           -webkit-background-clip: text;
@@ -100,11 +101,12 @@ function Home() {
         }
         
         .home-subtitle {
-          font-size: 1.125rem;
+          font-size: 0.9rem;
           color: #475569;
           max-width: 600px;
           margin: 0 auto;
         }
+
         
         .status-badge {
           display: inline-flex;
@@ -140,64 +142,87 @@ function Home() {
         
         .portals-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 4rem;
+          grid-template-columns: repeat(4, auto);
+          justify-content: center;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
         }
         
         .portal-card {
           background: rgba(255, 255, 255, 0.9);
           backdrop-filter: blur(12px);
           border: 1px solid rgba(203, 213, 225, 0.8);
-          border-radius: 1rem;
-          padding: 1.5rem;
+          border-radius: 0.75rem;
+          padding: 0.5rem 1rem;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: all 0.2s ease;
           display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          flex-direction: row;
+          align-items: center;
+          justify-content: center;
+          gap: 0.6rem;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+          min-height: 100px;
+          width: fit-content;
         }
         
         .portal-card:hover {
-          transform: translateY(-4px);
+          transform: translateY(-2px);
           border-color: var(--portal-color);
-          box-shadow: 0 12px 40px rgba(15, 76, 129, 0.15);
+          box-shadow: 0 4px 12px rgba(15, 76, 129, 0.15);
         }
         
         .portal-icon-wrapper {
-          width: 56px;
-          height: 56px;
-          border-radius: 12px;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
           background: var(--portal-color);
           opacity: 0.9;
+          flex-shrink: 0;
         }
         
         .portal-name {
-          font-size: 1.25rem;
-          font-weight: 700;
+          font-size: 1rem;
+          font-weight: 600;
           color: #0f4c81;
+          line-height: 1;
+          white-space: nowrap;
         }
+
+
         
         .portal-description {
-          font-size: 0.875rem;
-          color: #475569;
+          display: none;
         }
         
         .portal-arrow {
-          margin-top: auto;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          color: var(--portal-color);
-          font-weight: 600;
-          font-size: 0.875rem;
+          display: none;
         }
+
+        @media (max-width: 768px) {
+          .portal-card {
+            min-height: 50px;
+            padding: 0.25rem 0.5rem;
+            gap: 0.3rem;
+          }
+          
+          .portal-icon-wrapper {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+          }
+          
+          .portal-name {
+            font-size: 0.7rem;
+          }
+        }
+
         
         .quick-actions {
+
           text-align: center;
           padding: 2rem;
           background: rgba(255, 255, 255, 0.7);
@@ -234,6 +259,30 @@ function Home() {
             </div>
           </div>
           <h1 className="home-title">IHEZA</h1>
+          <div className="portals-grid">
+            {portals.map((portal) => {
+              const Icon = portal.icon;
+              return (
+                <div
+                  key={portal.id}
+                  className="portal-card"
+                  style={{ '--portal-color': portal.color }}
+                  onClick={() => handlePortalClick(portal.id)}
+                  data-testid={`portal-${portal.id}`}
+                >
+                  <div className="portal-icon-wrapper">
+                    <Icon size={8} color="white" />
+                  </div>
+
+                  <div className="portal-name">{portal.name}</div>
+                  <div className="portal-description">{portal.description}</div>
+                  <div className="portal-arrow">
+                    Enter Portal →
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <p className="home-subtitle">
             The Institute of Holistic Education of Zanzibar - Comprehensive School Management System
           </p>
@@ -257,35 +306,7 @@ function Home() {
             </div>
           </div>
         )}
-        
-        <section>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem', color: '#f8fafc' }}>
-            Select Your Portal
-          </h2>
-          <div className="portals-grid">
-            {portals.map((portal) => {
-              const Icon = portal.icon;
-              return (
-                <div
-                  key={portal.id}
-                  className="portal-card"
-                  style={{ '--portal-color': portal.color }}
-                  onClick={() => handlePortalClick(portal.id)}
-                  data-testid={`portal-${portal.id}`}
-                >
-                  <div className="portal-icon-wrapper">
-                    <Icon size={28} color="white" />
-                  </div>
-                  <div className="portal-name">{portal.name}</div>
-                  <div className="portal-description">{portal.description}</div>
-                  <div className="portal-arrow">
-                    Enter Portal →
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+
         
         <footer className="footer">
           <p>© 2025 IHEZA - The Institute of Holistic Education of Zanzibar</p>

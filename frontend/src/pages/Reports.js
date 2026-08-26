@@ -1,19 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
+
 import { dataService } from '../services/dataService';
 import { studentService } from '../services/studentService';
 import { apiClient } from '../services/authService';
 import { toast } from '../hooks/useSoundEnabledToast';
-import { BarChart3, Users, Calendar, DollarSign, Download, Search, Filter, RefreshCw, Plus, FileText } from 'lucide-react';
+import { Users, Calendar, DollarSign, Download, Search, Filter, RefreshCw, FileText } from 'lucide-react';
+
 import ChainToggle from '../components/ChainToggle';
 import { API_URL } from '../config/api';
 import { exportReportCard, exportAttendanceReport } from '../utils/docExport';
 
 function Reports() {
   const currentUser = useSelector(selectCurrentUser);
-  const [activeTab, setActiveTab] = useState('attendance');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'attendance');
+
+  // Keep activeTab in sync with the URL query param so that navigating
+  // between the sidebar report sub-items (Attendance / Financial / Academic)
+  // updates the displayed report without needing a full page reload.
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'attendance';
+    setActiveTab(tab);
+  }, [searchParams]);
+
   const [attendanceReport, setAttendanceReport] = useState(null);
+
   const [detailedAttendance, setDetailedAttendance] = useState(null);
   const [feesReport, setFeesReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -119,14 +133,9 @@ function Reports() {
     }
   };
 
-  // Generate current month for default
-  const getCurrentMonth = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  };
-
   return (
     <div className="reports-page">
+
       <ChainToggle selectedChain={selectedChain} onChainChange={(chain) => {
         setSelectedChain(chain);
         loadReports(chain);
@@ -136,63 +145,8 @@ function Reports() {
           padding: 1.5rem;
         }
         
-        .page-header {
-          margin-bottom: 1.5rem;
-        }
-        
-        .page-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #f8fafc;
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        
-        .page-title-icon {
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .tabs {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 1.5rem;
-          padding: 0.25rem;
-          background: rgba(51, 65, 85, 0.3);
-          border-radius: 0.75rem;
-          width: fit-content;
-        }
-        
-        .tab {
-          padding: 0.75rem 1.5rem;
-          background: transparent;
-          border: none;
-          border-radius: 0.5rem;
-          color: #94a3b8;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        
-        .tab:hover {
-          color: #f8fafc;
-        }
-        
-        .tab.active {
-          background: rgba(139, 92, 246, 0.2);
-          color: #a78bfa;
-        }
-        
         .filters-section {
+
           background: rgba(30, 41, 59, 0.8);
           border: 1px solid rgba(51, 65, 85, 0.5);
           border-radius: 1rem;
@@ -460,42 +414,8 @@ function Reports() {
         }
       `}</style>
       
-      <div className="page-header">
-        <h1 className="page-title">
-          <span className="page-title-icon">
-            <BarChart3 size={20} color="white" />
-          </span>
-          Reports & Analytics
-        </h1>
-      </div>
-      
-      <div className="tabs">
-        <button 
-          className={`tab ${activeTab === 'attendance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('attendance')}
-          data-testid="reports-tab-attendance"
-        >
-          <Calendar size={18} /> Attendance
-        </button>
-        {canViewFinancialReports && (
-          <button 
-            className={`tab ${activeTab === 'financial' ? 'active' : ''}`}
-            onClick={() => setActiveTab('financial')}
-            data-testid="reports-tab-financial"
-          >
-            <DollarSign size={18} /> Financial Reports
-          </button>
-        )}
-        <button 
-          className={`tab ${activeTab === 'academic' ? 'active' : ''}`}
-          onClick={() => setActiveTab('academic')}
-          data-testid="reports-tab-academic"
-        >
-          <Users size={18} /> Academic
-        </button>
-      </div>
-      
       {activeTab === 'attendance' && (
+
         <>
           {/* Filters Section */}
           <div className="filters-section">
@@ -698,6 +618,7 @@ function Reports() {
 function FinancialReportsTab({ currentUser, selectedChain }) {
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -721,8 +642,11 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
     { value: 'all', label: 'All Status' },
     { value: 'paid', label: 'Fully Paid' },
     { value: 'partial', label: 'Partial' },
-    { value: 'unpaid', label: 'Unpaid' }
+    { value: 'unpaid', label: 'Unpaid' },
+    { value: 'graduated', label: 'Graduated' },
+    { value: 'left', label: 'Left School' }
   ];
+
 
   useEffect(() => {
     loadAllStudentFees();
@@ -761,10 +685,17 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
         // Fall back to the old shapes for safety.
         if (data && data.students) {
           setStudents(data.students);
+          // Store the backend-computed summary so the active totals
+          // (which EXCLUDE graduated / left-school students) are used.
+          if (data.summary) {
+            setSummary(data.summary);
+          }
         } else if (Array.isArray(data)) {
           setStudents(data);
+          setSummary(null);
         } else {
           setStudents([]);
+          setSummary(null);
         }
       }
     } catch (error) {
@@ -773,7 +704,6 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
       setLoading(false);
     }
   };
-
 
   const applyFilters = () => {
     let result = [...students];
@@ -790,7 +720,14 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
     
     // Status filter
     if (statusFilter !== 'all') {
-      result = result.filter(s => s.status === statusFilter);
+      // Graduated / left-school students are identified by their admission
+      // status (student_status), not their fee status. All other filters use
+      // the fee payment status.
+      if (statusFilter === 'graduated' || statusFilter === 'left') {
+        result = result.filter(s => (s.student_status || '').toLowerCase() === statusFilter);
+      } else {
+        result = result.filter(s => s.status === statusFilter);
+      }
     }
     
     // Fee type filter - uses the fee_type from student data
@@ -800,6 +737,7 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
     
     setFilteredStudents(result);
   };
+
 
   const handleSaveSpecialDetails = async (e) => {
     e.preventDefault();
@@ -842,8 +780,12 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
     csv += 'Name,Admission No,Class,Total Fee,Paid,Outstanding,Status,Fee Type\n';
     
     filteredStudents.forEach(s => {
-      csv += `"${s.name}","${s.admission_no}","${s.class_name}",${s.total_fees || 0},${s.total_paid || s.paid || 0},${s.balance || s.outstanding || 0},"${s.status}","${s.fee_type || 'tuition'}"\n`;
+      const displayStatus = ['graduated', 'left'].includes((s.student_status || '').toLowerCase())
+        ? ((s.student_status || '').toLowerCase() === 'graduated' ? 'Graduated' : 'Left School')
+        : (s.status === 'paid' ? 'Fully Paid' : s.status === 'partial' ? 'Partial' : 'Unpaid');
+      csv += `"${s.name}","${s.admission_no}","${s.class_name}",${s.total_fees || 0},${s.total_paid || s.paid || 0},${s.balance || s.outstanding || 0},"${displayStatus}","${s.fee_type || 'tuition'}"\n`;
     });
+
     
     csv += `\nTotal Students,${totals.totalStudents}\n`;
     csv += `Total Expected,${totals.totalExpected}\n`;
@@ -901,7 +843,8 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
                 <td>TZS ${(s.total_fees || 0).toLocaleString()}</td>
                 <td style="color: green;">TZS ${(s.total_paid || s.paid || 0).toLocaleString()}</td>
                 <td style="color: red;">TZS ${(s.balance || s.outstanding || 0).toLocaleString()}</td>
-                <td class="${s.status}">${s.status === 'paid' ? 'Fully Paid' : s.status === 'partial' ? 'Partial' : 'Unpaid'}</td>
+                <td class="${['graduated', 'left'].includes((s.student_status || '').toLowerCase()) ? (s.student_status || '').toLowerCase() : s.status}">${['graduated', 'left'].includes((s.student_status || '').toLowerCase()) ? ((s.student_status || '').toLowerCase() === 'graduated' ? 'Graduated' : 'Left School') : (s.status === 'paid' ? 'Fully Paid' : s.status === 'partial' ? 'Partial' : 'Unpaid')}</td>
+
               </tr>
             `).join('')}
           </tbody>
@@ -918,16 +861,36 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
     a.click();
   };
 
-  // Calculate totals
-  const totals = {
+  // Calculate totals.
+  // When the backend summary is available, use it for the ACTIVE student
+  // totals (which EXCLUDE graduated / left-school students). This keeps the
+  // financial report consistent with the admission status: when a student is
+  // marked graduated or left school, they are removed from the outstanding
+  // balance and active student counts. The per-student table still shows them
+  // (so the school can see what they owe), but they no longer affect the
+  // headline analytics.
+  const totals = summary ? {
+    totalStudents: summary.total_students || 0,
+    totalExpected: summary.total_expected || 0,
+    totalCollected: summary.total_collected || 0,
+    totalOutstanding: summary.outstanding_balance || 0,
+    paidCount: summary.paid_count || 0,
+    partialCount: summary.partial_count || 0,
+    unpaidCount: summary.unpaid_count || 0,
+    graduatedCount: summary.graduated_count || 0,
+    leftCount: summary.left_count || 0
+  } : {
     totalStudents: filteredStudents.length,
     totalExpected: filteredStudents.reduce((sum, s) => sum + (s.total_fees || 0), 0),
     totalCollected: filteredStudents.reduce((sum, s) => sum + (s.total_paid || s.paid || 0), 0),
     totalOutstanding: filteredStudents.reduce((sum, s) => sum + (s.balance || s.outstanding || 0), 0),
     paidCount: filteredStudents.filter(s => s.status === 'paid').length,
     partialCount: filteredStudents.filter(s => s.status === 'partial').length,
-    unpaidCount: filteredStudents.filter(s => s.status === 'unpaid').length
+    unpaidCount: filteredStudents.filter(s => s.status === 'unpaid').length,
+    graduatedCount: filteredStudents.filter(s => (s.student_status || '').toLowerCase() === 'graduated').length,
+    leftCount: filteredStudents.filter(s => (s.student_status || '').toLowerCase() === 'left').length
   };
+
 
   return (
     <div>
@@ -1049,6 +1012,16 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
           color: #991b1b;
         }
         
+        .fin-status-badge.graduated {
+          background: #dbeafe;
+          color: #1e40af;
+        }
+        
+        .fin-status-badge.left {
+          background: #f3e8ff;
+          color: #6b21a8;
+        }
+        
         .fin-btn {
           display: inline-flex;
           align-items: center;
@@ -1135,6 +1108,7 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
         .fin-btn-secondary:hover {
           background: #e2e8f0;
         }
+
       `}</style>
       
       {/* Summary Stats */}
@@ -1236,10 +1210,17 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
                   <td style={{ color: '#22c55e', fontWeight: 500 }}>TZS {(student.total_paid || student.paid || 0).toLocaleString()}</td>
                   <td style={{ color: '#ef4444', fontWeight: 500 }}>TZS {(student.balance || student.outstanding || 0).toLocaleString()}</td>
                   <td>
-                    <span className={`fin-status-badge ${student.status}`}>
-                      {student.status === 'paid' ? 'Fully Paid' : student.status === 'partial' ? 'Partial' : 'Unpaid'}
-                    </span>
+                    {['graduated', 'left'].includes((student.student_status || '').toLowerCase()) ? (
+                      <span className={`fin-status-badge ${(student.student_status || '').toLowerCase()}`}>
+                        {(student.student_status || '').toLowerCase() === 'graduated' ? 'Graduated' : 'Left School'}
+                      </span>
+                    ) : (
+                      <span className={`fin-status-badge ${student.status}`}>
+                        {student.status === 'paid' ? 'Fully Paid' : student.status === 'partial' ? 'Partial' : 'Unpaid'}
+                      </span>
+                    )}
                   </td>
+
                   {isSecretary && (
                     <td>
                       <button 

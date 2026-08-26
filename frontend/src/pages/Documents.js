@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
-import { Upload, File, Image, FileText, Trash2, Download, Eye, X, BarChart3, TrendingUp, Users, FolderOpen, Calendar, Award } from 'lucide-react';
+import { Upload, File, Image, FileText, Trash2, Download, Eye, X, BarChart3, TrendingUp, Users, FolderOpen, Calendar, Award, Search, RefreshCw, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
 import { API_URL } from '../config/api';
 import ChainToggle from '../components/ChainToggle';
 
@@ -16,6 +16,11 @@ const Documents = () => {
   const [selectedChain, setSelectedChain] = useState('');
   const [filterSource, setFilterSource] = useState(null); // Clickable filter from analytics
   const [filterTeacher, setFilterTeacher] = useState(null); // Clickable filter from analytics
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const fileInputRef = useRef(null);
   
   // Only principals can upload, delete, or clear documents
@@ -133,17 +138,34 @@ const Documents = () => {
 
       try {
         const base64 = await fileToBase64(file);
+        // Determine document category based on the active tab.
+        // When uploading from the "Examination Reports" tab, categorize the file
+        // as an examination report so it appears in the Examination Reports
+        // component/tab instead of the Projects (uploaded files) tab.
+        const isExamReportUpload = activeTab === 'examination_reports';
         const docData = {
           id: Date.now() + '_' + i,
           name: file.name,
           type: file.type,
           size: file.size,
           data: base64,
-          source: 'upload',
+          source: isExamReportUpload ? 'examination_report' : 'upload',
           uploaded_by: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email || 'Unknown' : localStorage.getItem('userName') || 'Unknown',
-          uploadedAt: new Date().toISOString()
+          uploadedAt: new Date().toISOString(),
+          ...(isExamReportUpload && {
+            chain: currentUser?.chain || localStorage.getItem('userChain') || 'IHEZA',
+            metadata: {
+              year: new Date().getFullYear().toString(),
+              term: examReportFilter.term || '',
+              termLabel: examReportFilter.term ? (examReportFilter.term === '1' ? 'First Term' : examReportFilter.term === '2' ? 'Second Term' : examReportFilter.term === '3' ? 'Third Term' : 'Final') : '',
+              schoolName: currentUser?.school_name || currentUser?.school || currentUser?.chain || 'IHEZA',
+              preparedBy: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email || 'Unknown' : 'Unknown',
+              uploadedFrom: 'documents'
+            }
+          })
         };
         newDocs.push(docData);
+
 
         // Also upload to backend API for persistence
         try {
@@ -1256,7 +1278,35 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
     URL.revokeObjectURL(url);
   };
 
-  // ============ RENDER DOCUMENTS LIST ============
+  // ============ RENDER DOCUMENTS LIST (Excel-style table) ============
+
+  const getDocTypeBadge = (type) => {
+    if (type.startsWith('image/')) return { label: 'Image', cls: 'image' };
+    if (type.includes('pdf')) return { label: 'PDF', cls: 'pdf' };
+    if (type.includes('word') || type.includes('document')) return { label: 'Word', cls: 'word' };
+    return { label: 'Other', cls: 'other' };
+  };
+
+  const getSourceBadge = (source) => {
+    const labels = {
+      'upload': 'Uploaded',
+      'lesson_plan': 'Lesson Plan',
+      'scheme_of_work': 'Scheme of Work',
+      'subject_evaluation': 'Subject Eval',
+      'assessment': 'Assessment',
+      'report_card': 'Report Card',
+      'examination_report': 'Exam Report'
+    };
+    const cls = source || 'other';
+    return { label: labels[source] || (source || 'Other').replace(/_/g, ' '), cls };
+  };
+
+  const getDocIconClass = (type) => {
+    if (type.startsWith('image/')) return 'image';
+    if (type.includes('pdf')) return 'pdf';
+    if (type.includes('word') || type.includes('document')) return 'word';
+    return 'file';
+  };
 
   const renderDocumentsList = (docs) => (
     docs.length === 0 ? (
@@ -1266,62 +1316,100 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
         <p>Click "Upload Documents" to add JPEG, PNG, PDF, or Word files</p>
       </div>
     ) : (
-      <div className="documents-grid">
-        {docs.map((doc) => (
-          <div key={doc.id} className="document-card">
-            <div className="document-icon">
-              {getFileIcon(doc.type)}
-            </div>
-            <div className="document-name">{doc.name}</div>
-            <div className="document-meta">
-              {getFileTypeLabel(doc.type)} • {formatFileSize(doc.size)} • {new Date(doc.uploadedAt).toLocaleDateString()}
-              {doc.source && doc.source !== 'upload' && (
-                <span style={{ 
-                  display: 'inline-block', 
-                  marginLeft: '6px',
-                  padding: '1px 6px', 
-                  borderRadius: '4px', 
-                  fontSize: '9px',
-                  background: '#dbeafe',
-                  color: '#1d4ed8',
-                  fontWeight: '500'
-                }}>
-                  {doc.source.replace(/_/g, ' ')}
-                </span>
-              )}
-            </div>
-            <div className="document-actions">
+      <div className="excel-container">
+        <table className="excel-table">
+          <thead>
+            <tr>
+              <th className="col-id">#</th>
+              <th className="col-name">Document</th>
+              <th className="col-type">Type</th>
+              <th className="col-source">Source</th>
+              <th className="col-size">Size</th>
+              <th className="col-uploaded">Uploaded By</th>
+              <th className="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((doc, idx) => {
+              const typeBadge = getDocTypeBadge(doc.type);
+              const sourceBadge = getSourceBadge(doc.source);
+              const iconCls = getDocIconClass(doc.type);
+              const uploadedBy = doc.uploaded_by || doc.metadata?.teacher || 'Unknown';
+              return (
+                <tr key={doc.id}>
+                  <td className="col-id">{(currentPage - 1) * pageSize + idx + 1}</td>
+                  <td className="col-name">
+                    <div className="doc-cell">
+                      <div className={`icon ${iconCls}`}>
+                        {iconCls === 'image' ? <Image size={16} /> : iconCls === 'pdf' ? <FileText size={16} /> : iconCls === 'word' ? <FileText size={16} /> : <File size={16} />}
+                      </div>
+                      <div className="info">
+                        <div className="name">{doc.name}</div>
+                        <div className="meta">
+                          {new Date(doc.uploadedAt).toLocaleDateString()}
+                          {doc.chain && ` · ${doc.chain}`}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td><span className={`type-badge ${typeBadge.cls}`}>{typeBadge.label}</span></td>
+                  <td><span className={`source-badge ${sourceBadge.cls}`}>{sourceBadge.label}</span></td>
+                  <td>{formatFileSize(doc.size)}</td>
+                  <td style={{ fontSize: '0.8rem' }}>{uploadedBy}</td>
+                  <td className="col-actions">
+                    <div className="action-group">
+                      <button className="act-btn preview" onClick={() => previewDocument(doc)} title="Preview">
+                        <Eye size={12} /> Preview
+                      </button>
+                      <button className="act-btn download" onClick={() => downloadDocument(doc)} title="Download">
+                        <Download size={12} />
+                      </button>
+                      {canManageDocuments && (
+                        <button className="act-btn delete" onClick={() => deleteDocument(doc.id)} title="Delete">
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {/* Pagination */}
+        <div className="pagination-bar">
+          <span className="info">
+            {docs.length} record(s) · page {currentPage} of {Math.max(1, Math.ceil(docs.length / pageSize))}
+          </span>
+          <div className="pages">
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            {Array.from({ length: Math.max(1, Math.ceil(docs.length / pageSize)) }, (_, i) => i + 1).map(pg => (
               <button 
-                className="doc-action-btn"
-                onClick={() => previewDocument(doc)}
-                title="Preview"
+                key={pg}
+                className={pg === currentPage ? 'active' : ''}
+                onClick={() => setCurrentPage(pg)}
               >
-                <Eye size={14} /> Preview
+                {pg}
               </button>
-              <button 
-                className="doc-action-btn"
-                onClick={() => downloadDocument(doc)}
-                title="Download"
-              >
-                <Download size={14} /> Download
-              </button>
-              {canManageDocuments && (
-                <button 
-                  className="doc-action-btn delete"
-                  onClick={() => deleteDocument(doc.id)}
-                  title="Delete"
-                >
-                  <Trash2 size={14} /> Delete
-                </button>
-              )}
-            </div>
+            ))}
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(docs.length / pageSize), p + 1))}
+              disabled={currentPage >= Math.ceil(docs.length / pageSize)}
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
-        ))}
+        </div>
       </div>
     )
   );
 
-  // Filter documents based on active tab, chain, and analytics filters
+  // Filter documents based on active tab, chain, analytics filters, search, type, and source
   const filteredDocs = (() => {
     // First apply chain filter
     const chainFiltered = selectedChain
@@ -1343,13 +1431,41 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
       });
     }
     
+    // Apply search query filter
+    let searchFiltered = teacherFiltered;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      searchFiltered = teacherFiltered.filter(d => 
+        (d.name || '').toLowerCase().includes(q) ||
+        (d.uploaded_by || '').toLowerCase().includes(q) ||
+        (d.metadata?.teacher || '').toLowerCase().includes(q)
+      );
+    }
+    
+    // Apply type filter
+    let typeFiltered = searchFiltered;
+    if (typeFilter) {
+      typeFiltered = searchFiltered.filter(d => {
+        if (typeFilter === 'image') return d.type.startsWith('image/');
+        if (typeFilter === 'pdf') return d.type.includes('pdf');
+        if (typeFilter === 'word') return d.type.includes('word') || d.type.includes('document');
+        return true;
+      });
+    }
+    
+    // Apply source filter
+    let sourceFiltered2 = typeFiltered;
+    if (sourceFilter) {
+      sourceFiltered2 = typeFiltered.filter(d => d.source === sourceFilter);
+    }
+    
     // Then apply tab filter
     if (activeTab === 'projects') {
-      return teacherFiltered.filter(d => d.source === 'upload');
+      return sourceFiltered2.filter(d => d.source === 'upload');
     } else if (activeTab === 'report_cards') {
-      return teacherFiltered.filter(d => d.source === 'report_card');
+      return sourceFiltered2.filter(d => d.source === 'report_card');
     } else if (activeTab === 'examination_reports') {
-      let examDocs = teacherFiltered.filter(d => d.source === 'examination_report');
+      let examDocs = sourceFiltered2.filter(d => d.source === 'examination_report');
       // Apply year filter
       if (examReportFilter.year) {
         examDocs = examDocs.filter(d => d.metadata?.year === examReportFilter.year);
@@ -1360,8 +1476,19 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
       }
       return examDocs;
     }
-    return teacherFiltered;
+    return sourceFiltered2;
   })();
+  
+  // Apply pagination to filtered docs
+  const paginatedDocs = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredDocs.slice(start, start + pageSize);
+  }, [filteredDocs, currentPage, pageSize]);
+  
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, typeFilter, sourceFilter, activeTab, selectedChain, filterSource, filterTeacher]);
   // Show filter indicator when analytics filters are active
   const hasAnalyticsFilter = filterSource || filterTeacher;
   const getFilterLabel = () => {
@@ -1695,6 +1822,363 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
           font-weight: 700;
           margin: 0 0 20px 0;
         }
+        /* ---------- STATS COMPACT (ONE LINE) ---------- */
+        .stats-compact {
+          display: flex;
+          align-items: center;
+          gap: 0.3rem 1.2rem;
+          flex-wrap: wrap;
+          background: white;
+          padding: 0.25rem 1rem;
+          border-radius: 10px;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 0.8rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .stats-compact .stat-item {
+          display: flex;
+          align-items: center;
+          gap: 0.3rem;
+          padding: 0.1rem 0.2rem;
+        }
+        .stats-compact .stat-item .icon {
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.7rem;
+        }
+        .stats-compact .stat-item .icon.blue { background: #dbeafe; color: #2563eb; }
+        .stats-compact .stat-item .icon.green { background: #d1fae5; color: #059669; }
+        .stats-compact .stat-item .icon.purple { background: #ede9fe; color: #7c3aed; }
+        .stats-compact .stat-item .icon.orange { background: #fef3c7; color: #d97706; }
+        .stats-compact .stat-item .icon.red { background: #fee2e2; color: #dc2626; }
+        .stats-compact .stat-item .num {
+          font-size: 1rem;
+          font-weight: 700;
+          color: #0f172a;
+          line-height: 1.2;
+        }
+        .stats-compact .stat-item .label {
+          font-size: 0.6rem;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          font-weight: 500;
+        }
+        .stats-compact .divider {
+          color: #e2e8f0;
+          font-size: 0.8rem;
+        }
+        /* ---------- FILTERS BAR ---------- */
+        .filters-bar {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem 0.8rem;
+          flex-wrap: nowrap;
+          background: white;
+          padding: 0.2rem 0.8rem;
+          border-radius: 10px;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 0.8rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          overflow-x: auto;
+        }
+        .filters-bar .search-wrap {
+          flex: 1;
+          min-width: 140px;
+          max-width: 220px;
+          position: relative;
+          flex-shrink: 1;
+        }
+        .filters-bar .search-wrap input {
+          width: 100%;
+          padding: 0.25rem 0.4rem 0.25rem 1.8rem;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          color: #0f172a;
+          font-size: 0.75rem;
+          font-family: inherit;
+          transition: all 0.2s ease;
+        }
+        .filters-bar .search-wrap input:focus {
+          outline: none;
+          border-color: #0284c7;
+          box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+        }
+        .filters-bar .search-wrap .search-icon {
+          position: absolute;
+          left: 0.5rem;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #94a3b8;
+          font-size: 0.65rem;
+        }
+        .filters-bar .filter-group {
+          display: flex;
+          align-items: center;
+          gap: 0.2rem;
+          flex-shrink: 0;
+        }
+        .filters-bar .filter-group .filter-label {
+          font-size: 0.6rem;
+          color: #64748b;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+        }
+        .filters-bar .filter-group select {
+          padding: 0.2rem 0.5rem;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          color: #0f172a;
+          font-size: 0.75rem;
+          font-family: inherit;
+          cursor: pointer;
+          min-width: 70px;
+          max-width: 110px;
+        }
+        .filters-bar .filter-group select:focus {
+          outline: none;
+          border-color: #0284c7;
+        }
+        .filters-bar .result-count {
+          font-size: 0.7rem;
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          gap: 0.3rem;
+          flex-shrink: 0;
+          margin-left: auto;
+          white-space: nowrap;
+        }
+        /* ---------- EXCEL TABLE ---------- */
+        .excel-container {
+          overflow-x: auto;
+          border-radius: 12px;
+          border: 1px solid #d0d7e2;
+          background: white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .excel-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-family: inherit;
+          font-size: 0.82rem;
+          min-width: 1000px;
+        }
+        .excel-table thead th {
+          background: #e8edf4;
+          color: #1f3b5c;
+          font-weight: 600;
+          text-transform: uppercase;
+          font-size: 0.65rem;
+          letter-spacing: 0.4px;
+          padding: 0.5rem 0.7rem;
+          border-right: 1px solid #d0d7e2;
+          border-bottom: 2px solid #b8c6d8;
+          text-align: left;
+          white-space: nowrap;
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
+        .excel-table thead th:last-child {
+          border-right: none;
+        }
+        .excel-table tbody td {
+          padding: 0.4rem 0.7rem;
+          border-right: 1px solid #e2e8f0;
+          border-bottom: 1px solid #e2e8f0;
+          vertical-align: middle;
+          color: #1e2f3f;
+          background: white;
+        }
+        .excel-table tbody td:last-child {
+          border-right: none;
+        }
+        .excel-table tbody tr:nth-child(even) td {
+          background: #f8faff;
+        }
+        .excel-table tbody tr:hover td {
+          background: #e8f0fe;
+        }
+        .excel-table .col-id { width: 35px; text-align: center; }
+        .excel-table .col-name { min-width: 180px; }
+        .excel-table .col-type { width: 100px; }
+        .excel-table .col-source { width: 120px; }
+        .excel-table .col-size { width: 80px; }
+        .excel-table .col-uploaded { width: 140px; }
+        .excel-table .col-actions { width: 160px; }
+        .doc-cell {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .doc-cell .icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.9rem;
+          flex-shrink: 0;
+        }
+        .doc-cell .icon.image { background: #dbeafe; color: #2563eb; }
+        .doc-cell .icon.pdf { background: #fee2e2; color: #dc2626; }
+        .doc-cell .icon.word { background: #dbeafe; color: #1d4ed8; }
+        .doc-cell .icon.file { background: #f1f5f9; color: #64748b; }
+        .doc-cell .info .name {
+          font-weight: 600;
+          color: #0f172a;
+          font-size: 0.85rem;
+        }
+        .doc-cell .info .meta {
+          font-size: 0.6rem;
+          color: #94a3b8;
+        }
+        .type-badge {
+          display: inline-block;
+          padding: 0.05rem 0.4rem;
+          border-radius: 20px;
+          font-size: 0.6rem;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        .type-badge.image { background: #dbeafe; color: #2563eb; }
+        .type-badge.pdf { background: #fee2e2; color: #dc2626; }
+        .type-badge.word { background: #dbeafe; color: #1d4ed8; }
+        .type-badge.other { background: #f1f5f9; color: #64748b; }
+        .source-badge {
+          display: inline-block;
+          padding: 0.05rem 0.4rem;
+          border-radius: 20px;
+          font-size: 0.6rem;
+          font-weight: 600;
+        }
+        .source-badge.upload { background: #d1fae5; color: #059669; }
+        .source-badge.lesson_plan { background: #ede9fe; color: #7c3aed; }
+        .source-badge.scheme_of_work { background: #fef3c7; color: #d97706; }
+        .source-badge.report_card { background: #dbeafe; color: #2563eb; }
+        .source-badge.examination_report { background: #fce7f3; color: #db2777; }
+        .source-badge.other { background: #f1f5f9; color: #64748b; }
+        .action-group {
+          display: flex;
+          gap: 0.2rem;
+          flex-wrap: wrap;
+        }
+        .action-group .act-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          padding: 0.1rem 0.35rem;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          color: #64748b;
+          font-size: 0.6rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          font-family: inherit;
+        }
+        .action-group .act-btn:hover {
+          background: #e2e8f0;
+          color: #0f172a;
+        }
+        .action-group .act-btn.preview:hover {
+          background: #dbeafe;
+          color: #2563eb;
+          border-color: #bfdbfe;
+        }
+        .action-group .act-btn.download:hover {
+          background: #d1fae5;
+          color: #059669;
+          border-color: #a7f3d0;
+        }
+        .action-group .act-btn.delete:hover {
+          background: #fee2e2;
+          color: #dc2626;
+          border-color: #fca5a5;
+        }
+        /* ---------- PAGINATION ---------- */
+        .pagination-bar {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0.3rem 0.8rem;
+          background: #f8faff;
+          border-top: 1px solid #d0d7e2;
+          border-radius: 0 0 12px 12px;
+          font-size: 0.75rem;
+          color: #1f3b5c;
+        }
+        .pagination-bar .info {
+          color: #3f6490;
+          font-size: 0.7rem;
+        }
+        .pagination-bar .pages {
+          display: flex;
+          gap: 0.15rem;
+        }
+        .pagination-bar .pages button {
+          background: white;
+          border: 1px solid #d0d7e2;
+          padding: 0.1rem 0.5rem;
+          border-radius: 4px;
+          font-weight: 500;
+          font-size: 0.65rem;
+          color: #1f3b5c;
+          cursor: pointer;
+          transition: 0.1s;
+          display: flex;
+          align-items: center;
+        }
+        .pagination-bar .pages button:hover {
+          background: #eef3fa;
+        }
+        .pagination-bar .pages button.active {
+          background: #0284c7;
+          color: white;
+          border-color: #0284c7;
+        }
+        .pagination-bar .pages button:disabled {
+          opacity: 0.4;
+          cursor: default;
+          background: #f0f3f8;
+        }
+        @media (max-width: 900px) {
+          .filters-bar {
+            flex-wrap: wrap;
+            gap: 0.3rem 0.6rem;
+          }
+          .filters-bar .search-wrap {
+            min-width: 120px;
+            max-width: unset;
+            flex: 1 1 100%;
+          }
+          .filters-bar .filter-group select {
+            min-width: 60px;
+            max-width: unset;
+          }
+        }
+        @media (max-width: 768px) {
+          .stats-compact { gap: 0.2rem 0.6rem; padding: 0.2rem 0.6rem; }
+          .stats-compact .stat-item .num { font-size: 0.9rem; }
+          .stats-compact .stat-item .label { font-size: 0.5rem; }
+          .stats-compact .stat-item .icon { width: 22px; height: 22px; font-size: 0.6rem; }
+          .filters-bar { padding: 0.3rem 0.6rem; }
+          .excel-table { min-width: 850px; font-size: 0.75rem; }
+          .excel-table thead th,
+          .excel-table tbody td { padding: 0.3rem 0.4rem; }
+          .action-group .act-btn { font-size: 0.5rem; padding: 0.1rem 0.25rem; }
+        }
       `}</style>
 
       {/* Header */}
@@ -1743,6 +2227,75 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
       <ChainToggle selectedChain={selectedChain} onChainChange={(chain) => {
         setSelectedChain(chain);
       }} />
+
+      {/* Stats Compact Bar */}
+      <div className="stats-compact">
+        <span className="stat-item">
+          <span className="icon blue"><File size={14} /></span>
+          <span className="num">{documents.length}</span>
+          <span className="label">Total</span>
+        </span>
+        <span className="divider">|</span>
+        <span className="stat-item">
+          <span className="icon green"><Upload size={14} /></span>
+          <span className="num">{documents.filter(d => d.source === 'upload').length}</span>
+          <span className="label">Uploaded</span>
+        </span>
+        <span className="divider">|</span>
+        <span className="stat-item">
+          <span className="icon purple"><FileText size={14} /></span>
+          <span className="num">{documents.filter(d => d.source !== 'upload').length}</span>
+          <span className="label">Auto-Saved</span>
+        </span>
+        <span className="divider">|</span>
+        <span className="stat-item">
+          <span className="icon orange"><Calendar size={14} /></span>
+          <span className="num">{analytics.thisWeek}</span>
+          <span className="label">This Week</span>
+        </span>
+        <span className="divider">|</span>
+        <span className="stat-item">
+          <span className="icon red"><TrendingUp size={14} /></span>
+          <span className="num">{analytics.thisMonth}</span>
+          <span className="label">This Month</span>
+        </span>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="filters-bar">
+        <div className="search-wrap">
+          <Search size={12} className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Search documents..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="filter-group">
+          <span className="filter-label">Type</span>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="">All</option>
+            <option value="image">Image</option>
+            <option value="pdf">PDF</option>
+            <option value="word">Word</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <span className="filter-label">Source</span>
+          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+            <option value="">All</option>
+            <option value="upload">Uploaded</option>
+            <option value="lesson_plan">Lesson Plan</option>
+            <option value="scheme_of_work">Scheme of Work</option>
+            <option value="report_card">Report Card</option>
+            <option value="examination_report">Exam Report</option>
+          </select>
+        </div>
+        <span className="result-count">
+          <Search size={12} /> {filteredDocs.length} result(s)
+        </span>
+      </div>
 
       {/* Tabs */}
       <div className="tabs-container">
@@ -1903,7 +2456,7 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
           {renderAnalytics()}
         </div>
       ) : (
-        renderDocumentsList(filteredDocs)
+        renderDocumentsList(paginatedDocs)
       )}
 
       {/* Preview Overlay */}

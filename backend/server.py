@@ -10,9 +10,14 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, validator
 from typing import List, Optional, Dict, Any
 import uuid
+import asyncio
+import json
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
+from pywebpush import webpush, WebPushException
+
+
 
 # Import modular routes
 from routes.users import router as users_router
@@ -1118,7 +1123,292 @@ def can_register(registrar_role: str, target_role: str) -> bool:
     role_info = ROLES.get(registrar_role, {})
     return target_role in role_info.get('can_register', [])
 
+# ============ WEB PUSH NOTIFICATIONS ============
+
+# VAPID configuration loaded from .env
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_SUBJECT = os.environ.get('VAPID_SUBJECT', 'mailto:admin@iheza.online')
+
+# Fee reminder scheduler config
+TERM_MONTHS = int(os.environ.get('TERM_MONTHS', '3'))
+FEE_REMINDER_MIN_PERCENT = float(os.environ.get('FEE_REMINDER_MIN_PERCENT', '20'))
+FEE_REMINDER_COOLDOWN_DAYS = int(os.environ.get('FEE_REMINDER_COOLDOWN_DAYS', '7'))
+FEE_REMINDER_GRACE_DAYS = int(os.environ.get('FEE_REMINDER_GRACE_DAYS', '14'))
+FEE_REMINDER_INTERVAL_HOURS = int(os.environ.get('FEE_REMINDER_INTERVAL_HOURS', '24'))
+
+
+class PushSubscription(BaseModel):
+    """A Web Push subscription for a user"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    chain: str
+    endpoint: str
+    keys: Dict[str, str]  # {p256dh, auth}
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+async def send_push_notification(user_id: str, title: str, body: str, url: str = "/portal/student-portal", icon: str = "/logo192.png", badge: str = "/logo192.png"):
+    """Send a Web Push notification to all subscriptions for a user.
+
+    Returns the number of successful sends. Failed subscriptions (expired,
+    invalid) are removed from the database so they don't cause repeated errors.
+    """
+    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+        logger.warning("VAPID keys not configured - skipping push notification")
+        return 0
+
+    # Find all subscriptions for this user
+    subs = await db.push_subscriptions.find({"user_id": user_id}, {"_id": 0}).to_list(50)
+    if not subs:
+        return 0
+
+    payload = {
+        "title": title,
+        "body": body,
+        "url": url,
+        "icon": icon,
+        "badge": badge,
+    }
+
+    sent = 0
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub["endpoint"],
+                    "keys": sub.get("keys", {}),
+                },
+                data=json.dumps(payload),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_SUBJECT},
+                ttl=86400,  # 24 hours
+            )
+            sent += 1
+        except WebPushException as e:
+            # If the subscription is gone (410) or invalid (404), remove it
+            if e.response and e.response.status_code in (404, 410):
+                logger.info(f"Removing expired push subscription for user {user_id}")
+                await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
+            else:
+                logger.warning(f"Push notification failed for user {user_id}: {e}")
+        except Exception as e:
+            logger.warning(f"Push notification error for user {user_id}: {e}")
+
+    return sent
+
+
+async def send_push_to_students(student_ids: List[str], title: str, body: str, url: str = "/portal/student-portal"):
+    """Send a push notification to multiple students."""
+    for sid in student_ids:
+        try:
+            await send_push_notification(sid, title, body, url)
+        except Exception as e:
+            logger.warning(f"Failed to notify student {sid}: {e}")
+
+
+@api_router.post("/push/subscribe")
+async def subscribe_push(subscription: PushSubscription, current_user: dict = Depends(get_current_user)):
+    """Save a Web Push subscription for the current user."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user_id = current_user.get("sub")
+    chain = current_user.get("chain", "")
+
+    # Remove any existing subscription with the same endpoint (avoid duplicates)
+    await db.push_subscriptions.delete_many({"endpoint": subscription.endpoint})
+
+    sub_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "chain": chain,
+        "endpoint": subscription.endpoint,
+        "keys": subscription.keys,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.push_subscriptions.insert_one(sub_doc)
+
+    return {"success": True, "message": "Subscribed to push notifications"}
+
+
+@api_router.post("/push/unsubscribe")
+async def unsubscribe_push(data: Dict, current_user: dict = Depends(get_current_user)):
+    """Remove a Web Push subscription."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    endpoint = data.get("endpoint", "")
+    if endpoint:
+        await db.push_subscriptions.delete_many({"endpoint": endpoint})
+
+    return {"success": True, "message": "Unsubscribed from push notifications"}
+
+
+@api_router.get("/push/vapid-public-key")
+async def get_vapid_public_key():
+    """Return the VAPID public key for the frontend to subscribe."""
+    return {"publicKey": VAPID_PUBLIC_KEY}
+
+
+@api_router.post("/push/send")
+async def send_push_manual(data: Dict, current_user: dict = Depends(get_current_user)):
+    """Manually send a push notification to a user (for testing/admin)."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user_id = data.get("user_id", "")
+    title = data.get("title", "Notification")
+    body = data.get("body", "")
+    url = data.get("url", "/portal/student-portal")
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    sent = await send_push_notification(user_id, title, body, url)
+    return {"success": True, "sent": sent}
+
+
+# ============ FEE REMINDER SCHEDULER ============
+
+async def run_fee_reminder_check():
+    """Check all students for outstanding fees and send reminders to those
+    who are behind on their expected payment schedule.
+
+    Logic:
+      - T = total fee for the term
+      - M = term duration in months (TERM_MONTHS)
+      - E = months elapsed since term start
+      - Expected remaining = T * (1 - E/M)
+      - Trigger reminder when: remaining balance > expected remaining
+        AND remaining balance >= FEE_REMINDER_MIN_PERCENT% of T
+        AND cooldown period has passed since last reminder
+    """
+    logger.info("Running fee reminder scheduler...")
+    now = datetime.now(timezone.utc)
+
+    # Determine term start (approximate: start of current term based on month)
+    month = now.month
+    if month <= 4:
+        term_start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+    elif month <= 8:
+        term_start = datetime(now.year, 5, 1, tzinfo=timezone.utc)
+    else:
+        term_start = datetime(now.year, 9, 1, tzinfo=timezone.utc)
+
+    # Grace period: don't remind within the first FEE_REMINDER_GRACE_DAYS days
+    days_since_start = (now - term_start).days
+    if days_since_start < FEE_REMINDER_GRACE_DAYS:
+        logger.info(f"Within grace period ({days_since_start} days) - skipping fee reminders")
+        return
+
+    # Months elapsed (fractional)
+    months_elapsed = days_since_start / 30.0
+    expected_remaining_ratio = max(0.0, 1.0 - (months_elapsed / TERM_MONTHS))
+
+    # Get all students
+    students = await db.students.find({}, {"_id": 0, "password_hash": 0}).to_list(5000)
+
+    reminded = 0
+    for student in students:
+        student_id = student.get("id")
+        if not student_id:
+            continue
+
+        chain = student.get("chain")
+        class_name = student.get("class_name")
+
+        # Get student's fee record
+        student_fee = await db.student_fees.find_one({"student_id": student_id}, {"_id": 0})
+
+        # Get payments
+        payments = await db.payments.find({"student_id": student_id}, {"_id": 0}).to_list(100)
+        total_paid = sum(p.get("amount", 0) for p in payments)
+
+        # Determine total fees
+        if student_fee and student_fee.get("amount"):
+            total_fees = student_fee.get("amount", 0)
+        else:
+            fee_structures = await db.fee_structures.find({
+                "chain": chain,
+                "status": "active",
+                "$or": [{"class_name": class_name}, {"class_name": None}, {"class_name": ""}]
+            }, {"_id": 0}).to_list(50)
+            total_fees = sum(f.get("amount", 0) for f in fee_structures)
+
+        if total_fees <= 0:
+            continue
+
+        balance = total_fees - total_paid
+        if balance <= 0:
+            continue  # Fully paid
+
+        # Check minimum balance threshold
+        min_balance = total_fees * (FEE_REMINDER_MIN_PERCENT / 100.0)
+        if balance < min_balance:
+            continue
+
+        # Check if behind schedule
+        expected_remaining = total_fees * expected_remaining_ratio
+        if balance <= expected_remaining:
+            continue  # On track
+
+        # Check cooldown - look for a recent reminder record
+        last_reminder = await db.fee_reminders.find_one(
+            {"student_id": student_id},
+            {"_id": 0}
+        ).sort("sent_at", -1)
+        if last_reminder:
+            last_sent = last_reminder.get("sent_at")
+            if last_sent:
+                try:
+                    last_dt = datetime.fromisoformat(str(last_sent).replace('Z', '+00:00'))
+                    if (now - last_dt).days < FEE_REMINDER_COOLDOWN_DAYS:
+                        continue  # Within cooldown
+                except Exception:
+                    pass
+
+        # Send the reminder
+        student_name = f"{student.get('first_name', '')} {student.get('last_name', '')}".strip() or "Student"
+        title = "Fee Reminder"
+        body = f"Dear {student_name}, your outstanding fee balance is TZS {balance:,.0f}. Please settle it before the term ends."
+        sent = await send_push_notification(student_id, title, body, "/portal/student-portal")
+
+        # Record the reminder (even if push failed, to respect cooldown)
+        await db.fee_reminders.insert_one({
+            "id": str(uuid.uuid4()),
+            "student_id": student_id,
+            "balance": balance,
+            "total_fees": total_fees,
+            "sent_at": now.isoformat(),
+            "push_sent": sent,
+        })
+        reminded += 1
+
+    logger.info(f"Fee reminder scheduler complete - reminded {reminded} students")
+
+
+async def fee_reminder_loop():
+    """Background task that runs the fee reminder check periodically."""
+    while True:
+        try:
+            await run_fee_reminder_check()
+        except Exception as e:
+            logger.error(f"Fee reminder scheduler error: {e}")
+        await asyncio.sleep(FEE_REMINDER_INTERVAL_HOURS * 3600)
+
+
+@app.on_event("startup")
+async def start_fee_reminder_scheduler():
+    """Start the fee reminder background task on app startup."""
+    asyncio.create_task(fee_reminder_loop())
+    logger.info("Fee reminder scheduler started")
+
 # ============ AUTH ROUTES ============
+
 
 @api_router.post("/auth", response_model=LoginResponse)
 async def login(request: LoginRequest):
@@ -1674,6 +1964,37 @@ async def upload_staff_profile_pic(
 
 # ============ STUDENTS ROUTES ============
 
+def _json_safe(value):
+    """
+    Recursively convert a MongoDB document value into a JSON-serializable
+    Python type. Handles nested datetime, ObjectId, Decimal, bytes, and
+    other BSON types that FastAPI/Starlette cannot serialize natively.
+    This prevents the origin server from crashing (which Cloudflare reports
+    as a 520 error) when a single document contains an unexpected type.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    # MongoDB ObjectId
+    if hasattr(value, '__str__') and type(value).__name__ == 'ObjectId':
+        return str(value)
+    # Decimal / bytes / other BSON types
+    if isinstance(value, bytes):
+        return value.decode('utf-8', errors='replace')
+    if hasattr(value, 'to_decimal'):
+        return float(value)
+    # Fallback: try to stringify anything else
+    try:
+        return str(value)
+    except Exception:
+        return None
+
+
 @api_router.get("/students", response_model=List[Dict])
 async def get_students(class_name: Optional[str] = None, chain: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     if not current_user:
@@ -1688,14 +2009,24 @@ async def get_students(class_name: Optional[str] = None, chain: Optional[str] = 
     
     if class_name:
         query["class_name"] = class_name
-    students = await db.students.find(query, {"password_hash": 0}).to_list(1000)
+    # Exclude _id and password_hash from the projection so we never have to
+    # deal with raw ObjectId values leaking into the response.
+    students = await db.students.find(query, {"_id": 0, "password_hash": 0}).to_list(1000)
     result = []
     for s in students:
-        # Preserve the original UUID id field, only fall back to _id if no id exists
-        if not s.get("id"):
-            s["id"] = str(s.get("_id"))
-        result.append(serialize_doc(s))
+        try:
+            # Preserve the original UUID id field, only fall back to _id if no id exists
+            if not s.get("id"):
+                s["id"] = str(s.get("_id"))
+            # Use the recursive JSON-safe serializer so nested datetime,
+            # ObjectId, Decimal, etc. never crash the response.
+            result.append(_json_safe(s))
+        except Exception as e:
+            # Never let a single malformed document take down the whole request.
+            logger.warning(f"Skipping student with unserializable data: {e}")
+            continue
     return result
+
 
 @api_router.post("/students", response_model=Dict)
 async def create_student(student: StudentCreate, current_user: dict = Depends(get_current_user)):
@@ -2545,7 +2876,7 @@ async def get_fee_structures(
 @api_router.post("/fee-structures", response_model=Dict)
 async def create_fee_structure(structure: FeeStructure, current_user: dict = Depends(get_current_user)):
     # Only secretary and principal can create fee structures
-    if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
+    if current_user and current_user.get('role') not in ['secretary', 'principal', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary or principal can manage fee structures")
     
     structure_doc = structure.model_dump()
@@ -2557,7 +2888,7 @@ async def create_fee_structure(structure: FeeStructure, current_user: dict = Dep
 
 @api_router.put("/fee-structures/{structure_id}")
 async def update_fee_structure(structure_id: str, updates: Dict, current_user: dict = Depends(get_current_user)):
-    if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
+    if current_user and current_user.get('role') not in ['secretary', 'principal', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary or principal can manage fee structures")
     
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -2569,7 +2900,7 @@ async def update_fee_structure(structure_id: str, updates: Dict, current_user: d
 
 @api_router.delete("/fee-structures/{structure_id}")
 async def delete_fee_structure(structure_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
+    if current_user and current_user.get('role') not in ['secretary', 'principal', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary or principal can manage fee structures")
     
     # Move to bin before soft deleting
@@ -2877,7 +3208,7 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_use
 
 @api_router.post("/payments", response_model=Dict)
 async def record_payment(payment: Payment, current_user: dict = Depends(get_current_user)):
-    if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
+    if current_user and current_user.get('role') not in ['secretary', 'principal', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary or principal can record payments")
     
     payment_doc = payment.model_dump()
@@ -2938,7 +3269,7 @@ async def record_payment(payment: Payment, current_user: dict = Depends(get_curr
 @api_router.put("/payments/{payment_id}", response_model=Dict)
 async def update_payment(payment_id: str, payment_data: Dict, current_user: dict = Depends(get_current_user)):
     """Update an existing payment record"""
-    if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
+    if current_user and current_user.get('role') not in ['secretary', 'principal', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary or principal can update payments")
     
     # Find existing payment
@@ -2992,6 +3323,20 @@ async def upload_payment_receipt(payment_id: str, data: Dict, current_user: dict
     if not receipt_image.startswith("data:image/"):
         raise HTTPException(status_code=400, detail="Invalid image format. Must be a base64 data URL")
     
+    # Enforce max image size of 500 KB (0.5 MB)
+    try:
+        # Strip the data URL prefix (e.g. "data:image/jpeg;base64,") to get the raw base64
+        base64_part = receipt_image.split(",", 1)[1] if "," in receipt_image else receipt_image
+        # Decode base64 to get the actual byte size of the image
+        import base64 as _b64
+        decoded_size = len(_b64.b64decode(base64_part))
+        if decoded_size > 500 * 1024:
+            raise HTTPException(status_code=400, detail="Image must be less than 500KB")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+    
     result = await db.payments.update_one(
         {"id": payment_id},
         {"$set": {
@@ -3000,6 +3345,7 @@ async def upload_payment_receipt(payment_id: str, data: Dict, current_user: dict
             "receipt_updated_by": current_user.get("id")
         }}
     )
+
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -3010,7 +3356,7 @@ async def upload_payment_receipt(payment_id: str, data: Dict, current_user: dict
 @api_router.delete("/payments/{payment_id}")
 async def delete_payment(payment_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a payment record"""
-    if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
+    if current_user and current_user.get('role') not in ['secretary', 'principal', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary or principal can delete payments")
     
     # Find existing payment
@@ -3177,7 +3523,7 @@ async def update_student_total_fees(student_id: str, request: Request, current_u
     """Update total fees for a student - Secretary/Principal only"""
     
     user_role = current_user.get("role", "").lower()
-    if user_role not in ["secretary", "principal", "director", "coordinator"]:
+    if user_role not in ["secretary", "principal", "coordinator"]:
         raise HTTPException(status_code=403, detail="Not authorized to update fees")
     
     # Get student - try by id first, then by admission_no (for DLP students)
@@ -3266,8 +3612,23 @@ async def upload_student_receipt(student_id: str, data: Dict, current_user: dict
     if not receipt_image.startswith("data:image/"):
         raise HTTPException(status_code=400, detail="Invalid image format. Must be a base64 data URL")
     
+    # Enforce max image size of 500 KB (0.5 MB)
+    try:
+        # Strip the data URL prefix (e.g. "data:image/jpeg;base64,") to get the raw base64
+        base64_part = receipt_image.split(",", 1)[1] if "," in receipt_image else receipt_image
+        # Decode base64 to get the actual byte size of the image
+        import base64 as _b64
+        decoded_size = len(_b64.b64decode(base64_part))
+        if decoded_size > 500 * 1024:
+            raise HTTPException(status_code=400, detail="Image must be less than 500KB")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+    
     # Check if student_fees record exists
     student_fee = await db.student_fees.find_one({"student_id": student_id})
+
     
     if student_fee:
         # Get existing receipt images array or create new one
@@ -3457,12 +3818,21 @@ async def get_all_student_fees(
     # safely cover all related records in a single batched query (no N+1).
     lookup_limit = max(500, page_size * 3)
     
-    # Get fee records for this page's students only
+    # Get fee records for this page's students only.
+    # IMPORTANT: We project OUT the receipt_image / receipt_images fields here.
+    # Those base64 blobs are 1-5 MB each and are NOT needed for the table rows
+    # (the full images are fetched on demand via /api/student-fees/{id}).
+    # Loading them for every student on the page makes the response enormous
+    # and causes Nginx proxy_read_timeout (504) / Cloudflare buffer (520) errors.
     try:
-        fee_records = await db.student_fees.find(page_student_filter, {"_id": 0}).to_list(lookup_limit)
+        fee_records = await db.student_fees.find(
+            page_student_filter,
+            {"_id": 0, "receipt_image": 0, "receipt_images": 0}
+        ).to_list(lookup_limit)
     except Exception:
         fee_records = []
     fee_map = {f["student_id"]: f for f in fee_records}
+
     
     # Get special details for this page's students only
     try:
@@ -3482,9 +3852,19 @@ async def get_all_student_fees(
         if sid not in special_fee_map:
             special_fee_map[sid] = sf.get("fee_type", "tuition")
     
-    # Get payments for this page's students only
+    # Get payments for this page's students only.
+    # IMPORTANT: We project OUT the receipt_image field here. Each payment's
+    # receipt_image is a 1-5 MB base64 blob, and with page_size=1000 the
+    # lookup_limit is 3000 — loading all of them into memory makes the response
+    # enormous and causes Nginx proxy_read_timeout (504) / Cloudflare buffer
+    # (520) errors. The table only needs student_id, amount, fee_type, and
+    # created_at. The full receipt images are fetched on demand via
+    # /api/student-fees/{id}.
     try:
-        payments = await db.payments.find(page_student_filter, {"_id": 0}).to_list(lookup_limit)
+        payments = await db.payments.find(
+            page_student_filter,
+            {"_id": 0, "receipt_image": 0}
+        ).to_list(lookup_limit)
     except Exception:
         payments = []
     payment_map = {}
@@ -3499,6 +3879,7 @@ async def get_all_student_fees(
         paid_totals[sid] += p.get("amount", 0)
         if p.get("fee_type"):
             fee_type_from_payment[sid] = p.get("fee_type")
+
     
     # Pre-fetch fee structures for chains that might need fallback.
     # Instead of querying per-student (N+1), batch-fetch all active fee
@@ -3646,11 +4027,21 @@ async def get_all_student_fees(
             "balance": outstanding,
             "outstanding": outstanding,
             "status": fee_status,
+            # Admission status (active / graduated / left / suspended / transferred).
+            # Used by the All Students table to show graduated / left-school badges
+            # and to exclude those students from active analytics.
+            "student_status": (student.get("status") or "active").lower(),
             "last_payment_date": last_payment_date,
             "receipt_count": receipt_count,
+
+            # Include ONLY the latest receipt image (not the full array) so the
+            # All Students table can render the "View Receipt" button. The full
+            # set of images is fetched on demand via /api/student-fees/{id}.
+            "receipt_image": latest_receipt_image,
             "special_notes": student_special.get("special_notes", ""),
             "fee_type": fee_type
         })
+
     
     # Sort by name
     result.sort(key=lambda x: x["name"])
@@ -3761,10 +4152,13 @@ async def get_financial_report_students(
                 "collection_rate": 0,
                 "paid_count": 0,
                 "partial_count": 0,
-                "unpaid_count": 0
+                "unpaid_count": 0,
+                "graduated_count": 0,
+                "left_count": 0
             },
             "students": []
         }
+
 
     # Collect all possible student identifiers for batched lookups (no N+1)
     student_ids = []
@@ -3838,6 +4232,8 @@ async def get_financial_report_students(
     paid_count = 0
     partial_count = 0
     unpaid_count = 0
+    graduated_count = 0
+    left_count = 0
 
     for student in students:
         actual_mongo_id = str(student.get("_id", ""))
@@ -3845,6 +4241,10 @@ async def get_financial_report_students(
         student_id = student.get("id") or adm_no
         if not student_id:
             continue
+
+        # Determine the student's admission status (graduated / left / active)
+        student_status = (student.get("status") or "active").lower()
+        is_inactive = student_status in ("graduated", "left")
 
         # Resolve fee record across all possible identifiers
         fee_record = fee_map.get(student_id) or fee_map.get(adm_no) or fee_map.get(actual_mongo_id) or {}
@@ -3875,16 +4275,26 @@ async def get_financial_report_students(
         else:
             fee_status = "unpaid"
 
-        # Tally summary counts
-        if fee_status == "paid":
-            paid_count += 1
-        elif fee_status == "partial":
-            partial_count += 1
-        elif fee_status == "unpaid":
-            unpaid_count += 1
+        # Tally summary counts.
+        # Graduated / left students are KEPT in the per-student table (so the
+        # school can still see what they owe) but are EXCLUDED from the active
+        # student totals (total_students, total_expected, total_collected,
+        # outstanding_balance, paid/partial/unpaid counts).
+        if is_inactive:
+            if student_status == "graduated":
+                graduated_count += 1
+            else:
+                left_count += 1
+        else:
+            if fee_status == "paid":
+                paid_count += 1
+            elif fee_status == "partial":
+                partial_count += 1
+            elif fee_status == "unpaid":
+                unpaid_count += 1
 
-        total_expected += total_fee
-        total_collected += paid_amount
+            total_expected += total_fee
+            total_collected += paid_amount
 
         fee_type = fee_type_from_payment.get(student_id) or special_fee_map.get(student_id, "tuition")
 
@@ -3900,6 +4310,7 @@ async def get_financial_report_students(
             "balance": outstanding,
             "outstanding": outstanding,
             "status": fee_status,
+            "student_status": student_status,
             "fee_type": fee_type
         })
 
@@ -3907,17 +4318,20 @@ async def get_financial_report_students(
 
     return {
         "summary": {
-            "total_students": len(result),
+            "total_students": len(result) - graduated_count - left_count,
             "total_expected": total_expected,
             "total_collected": total_collected,
             "outstanding_balance": total_expected - total_collected,
             "collection_rate": round((total_collected / total_expected * 100), 2) if total_expected > 0 else 0,
             "paid_count": paid_count,
             "partial_count": partial_count,
-            "unpaid_count": unpaid_count
+            "unpaid_count": unpaid_count,
+            "graduated_count": graduated_count,
+            "left_count": left_count
         },
         "students": result
     }
+
 
 
 # ============ REPORT CARDS ROUTES ============
@@ -3980,6 +4394,9 @@ async def create_report_card(report: ReportCard, current_user: dict = Depends(ge
     report_doc.pop('_id', None)
     return report_doc
 
+
+
+
 @api_router.put("/report-cards/{report_id}")
 async def update_report_card(report_id: str, updates: Dict, current_user: dict = Depends(get_current_user)):
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -4003,7 +4420,27 @@ async def send_report_card(report_id: str, current_user: dict = Depends(get_curr
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Report card not found")
     
+    # Send push notification to the student
+    report = await db.report_cards.find_one({"id": report_id}, {"_id": 0})
+    if report:
+        student_id = report.get("student_id")
+        if student_id:
+            student = await db.students.find_one({"id": student_id}, {"_id": 0, "password_hash": 0})
+            student_name = f"{student.get('first_name', '')} {student.get('last_name', '')}".strip() if student else "Student"
+            term = report.get("term", "")
+            academic_year = report.get("academic_year", "")
+            try:
+                await send_push_notification(
+                    student_id,
+                    "Report Card Ready",
+                    f"Dear {student_name}, your report card for Term {term} ({academic_year}) is now available.",
+                    "/portal/student-portal"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send report card push notification: {e}")
+    
     return {"success": True, "message": "Report card sent to student portal"}
+
 
 # ============ SCHOOL SETTINGS API ============
 # School settings (name, logo) stored in a single document in 'school_settings' collection
@@ -4329,9 +4766,15 @@ async def get_staff_tasks(
     current_user: dict = Depends(get_current_user)
 ):
     """Get staff tasks (Principal assigns to staff)"""
-    query = get_chain_filter(current_user) if current_user else {}
+    # When querying by a specific assignee, do NOT apply the chain filter.
+    # This ensures a task assigned to a user (e.g. a principal assigned by a
+    # director) is always visible to that user, even if the task's chain
+    # differs from the assignee's own chain (e.g. director chain 'IHEZA' vs
+    # principal school chain 'DUP').
     if assigned_to:
-        query["assigned_to"] = assigned_to
+        query = {"assigned_to": assigned_to}
+    else:
+        query = get_chain_filter(current_user) if current_user else {}
     if status:
         query["status"] = status
     
@@ -4470,8 +4913,23 @@ async def create_student_task(task: StudentTask, current_user: dict = Depends(ge
         }
         await db.student_task_completions.insert_one(completion)
     
+    # Send push notifications to assigned students
+    try:
+        task_title = task_doc.get("title", "New Task")
+        task_type = task_doc.get("task_type", "task")
+        subject_name = task_doc.get("subject_name", "")
+        body = f"New {task_type}: {task_title}"
+        if subject_name:
+            body += f" ({subject_name})"
+        if task_doc.get("due_date"):
+            body += f" - Due: {task_doc['due_date']}"
+        await send_push_to_students(student_ids, "New Task Assigned", body, "/portal/student-portal")
+    except Exception as e:
+        logger.warning(f"Failed to send task push notifications: {e}")
+    
     task_doc.pop('_id', None)
     return task_doc
+
 
 @api_router.get("/student-tasks/{task_id}")
 async def get_student_task(task_id: str, current_user: dict = Depends(get_current_user)):
@@ -4825,7 +5283,24 @@ async def create_announcement(announcement: Announcement, current_user: dict = D
     
     await db.announcements.insert_one(announcement_doc)
     announcement_doc.pop('_id', None)
+    
+    # Send push notifications to students in the announcement's chain
+    try:
+        chain = announcement_doc.get("chain")
+        if chain:
+            # Get all students in this chain
+            students = await db.students.find({"chain": chain}, {"id": 1}).to_list(2000)
+            student_ids = [s["id"] for s in students]
+            if student_ids:
+                title = announcement_doc.get("title", "New Announcement")
+                content = announcement_doc.get("content", "")
+                body = content[:120] + ("..." if len(content) > 120 else "")
+                await send_push_to_students(student_ids, title, body, "/portal/student-portal")
+    except Exception as e:
+        logger.warning(f"Failed to send announcement push notifications: {e}")
+    
     return announcement_doc
+
 
 @api_router.get("/announcements/{announcement_id}")
 async def get_announcement(announcement_id: str, current_user: dict = Depends(get_current_user)):
@@ -5245,7 +5720,26 @@ async def get_student_announcements(current_user: dict = Depends(get_current_use
             "chain": student_chain
         }, {"_id": 0}).sort("created_at", -1).to_list(50)
     
-    return [serialize_doc(a) for a in announcements]
+    # Resolve creator names: created_by may be a UUID, so look up the actual user name
+    result = []
+    for a in announcements:
+        a = dict(a)
+        creator_name = a.get('created_by_name')
+        # If no stored name, try to resolve from users collection
+        if not creator_name:
+            creator_id = a.get('created_by')
+            if creator_id:
+                creator = await db.users.find_one(
+                    {"$or": [{"id": creator_id}, {"sub": creator_id}, {"access_code": creator_id}]},
+                    {"_id": 0, "name": 1, "first_name": 1, "last_name": 1}
+                )
+                if creator:
+                    creator_name = creator.get('name') or f"{creator.get('first_name', '')} {creator.get('last_name', '')}".strip()
+        a['created_by_name'] = creator_name or 'Unknown'
+        result.append(serialize_doc(a))
+    
+    return result
+
 
 # ============ EXPENSES ============
 
@@ -6416,6 +6910,420 @@ async def root_health_check():
     except Exception:
         # Gracefully degrade: still return 200 so the LB keeps the app up
         return {"status": "healthy", "database": "unreachable"}
+
+# ============ ADMISSION MODELS & ENDPOINTS ============
+
+class AdmissionRecord(BaseModel):
+    """Student admission application record"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # Applicant info
+    student_name: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    place_of_birth: Optional[str] = None
+    height_cm: Optional[str] = None
+    weight_kg: Optional[str] = None
+    nationality: Optional[str] = None
+    # Address & contact
+    mkoa: Optional[str] = None
+    wilaya: Optional[str] = None
+    shehia: Optional[str] = None
+    correspondence_address: Optional[str] = None
+    phone_1: Optional[str] = None
+    phone_2: Optional[str] = None
+    tribe: Optional[str] = None
+    religion: Optional[str] = None
+    # Last school & medical
+    last_school: Optional[str] = None
+    last_school_year: Optional[str] = None
+    final_exam_result: Optional[str] = None
+    medical_info: Optional[str] = None
+    # Parent / guardian
+    father_name: Optional[str] = None
+    father_profession: Optional[str] = None
+    mother_name: Optional[str] = None
+    mother_profession: Optional[str] = None
+    emergency_contact_1: Optional[str] = None
+    emergency_contact_2: Optional[str] = None
+    # Consent & signature
+    guardian_1_name: Optional[str] = None
+    guardian_1_signature: Optional[str] = None
+    guardian_2_name: Optional[str] = None
+    guardian_2_signature: Optional[str] = None
+    # Admission metadata
+    admission_date: Optional[str] = None
+    passport_photo: Optional[str] = None  # base64 data URI
+    status: str = "pending"  # pending, approved, rejected
+    chain: Optional[str] = None
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+@api_router.get("/admissions")
+async def get_admissions(
+    chain: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all admission records. Directors/Coordinators see all chains; others see their own chain.
+    
+    This endpoint merges records from BOTH the `admissions` collection AND the `students` collection,
+    so that students registered via the Students component automatically appear in the Admission list.
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    query = {}
+    if chain:
+        query["chain"] = chain
+    else:
+        query = get_chain_filter(current_user)
+    
+    # 1. Fetch admission records from the admissions collection
+    admissions = await db.admissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    admission_list = [serialize_doc(a) for a in admissions]
+    
+    # 2. Fetch students from the students collection and merge them in
+    #    This ensures students added via the Students component appear in the Admission list.
+    students_query = dict(query)
+    students = await db.students.find(students_query, {"_id": 0, "password_hash": 0}).to_list(2000)
+    
+    # Build a set of existing admission student names (case-insensitive) to avoid duplicates
+    existing_names = set()
+    for a in admission_list:
+        name = (a.get('student_name') or '').strip().lower()
+        if name:
+            existing_names.add(name)
+    
+    # Also track existing admission numbers to avoid duplicates
+    existing_admission_nos = set()
+    for a in admission_list:
+        an = (a.get('admission_no') or '').strip().upper()
+        if an:
+            existing_admission_nos.add(an)
+    
+    for s in students:
+        # Build a full student name
+        first = s.get('first_name') or ''
+        last = s.get('last_name') or ''
+        full_name = f"{first} {last}".strip()
+        admission_no = (s.get('admission_no') or '').upper()
+        
+        # Skip if this student already has an admission record (avoid duplicates)
+        if admission_no and admission_no in existing_admission_nos:
+            continue
+        if full_name and full_name.lower() in existing_names:
+            continue
+        
+        # Map student fields to admission fields so the Admission UI can display them
+        student_as_admission = {
+            "id": s.get('id') or str(uuid.uuid4()),
+            "student_name": full_name or s.get('student_name') or 'Unnamed',
+            "gender": (s.get('gender') or '').lower(),
+            "date_of_birth": s.get('date_of_birth') or '',
+            "place_of_birth": s.get('place_of_birth') or '',
+            "height_cm": s.get('height_cm') or '',
+            "weight_kg": s.get('weight_kg') or '',
+            "nationality": s.get('nationality') or '',
+            "mkoa": s.get('mkoa') or '',
+            "wilaya": s.get('wilaya') or '',
+            "shehia": s.get('shehia') or '',
+            "correspondence_address": s.get('correspondence_address') or '',
+            "phone_1": s.get('parent_phone') or s.get('phone_1') or '',
+            "phone_2": s.get('phone_2') or '',
+            "tribe": s.get('tribe') or '',
+            "religion": s.get('religion') or '',
+            "last_school": s.get('last_school') or '',
+            "last_school_year": s.get('last_school_year') or '',
+            "final_exam_result": s.get('final_exam_result') or '',
+            "medical_info": s.get('medical_info') or '',
+            "father_name": s.get('father_name') or '',
+            "father_profession": s.get('father_profession') or '',
+            "mother_name": s.get('mother_name') or '',
+            "mother_profession": s.get('mother_profession') or '',
+            "emergency_contact_1": s.get('emergency_contact_1') or '',
+            "emergency_contact_2": s.get('emergency_contact_2') or '',
+            "guardian_1_name": s.get('guardian_1_name') or s.get('parent_name') or '',
+            "guardian_1_signature": s.get('guardian_1_signature') or '',
+            "guardian_2_name": s.get('guardian_2_name') or '',
+            "guardian_2_signature": s.get('guardian_2_signature') or '',
+            "admission_date": s.get('admission_date') or '',
+            "passport_photo": s.get('passport_photo') or '',
+            "status": s.get('status') or 'approved',
+            "chain": s.get('chain') or '',
+            "class_name": s.get('class_name') or '',
+            "admission_no": admission_no,
+            "first_name": first,
+            "last_name": last,
+            "parent_name": s.get('parent_name') or '',
+            "parent_phone": s.get('parent_phone') or '',
+            "source": "students",  # Mark as coming from the students collection
+            "created_at": s.get('created_at') or datetime.now(timezone.utc).isoformat(),
+            "updated_at": s.get('updated_at') or datetime.now(timezone.utc).isoformat(),
+        }
+        admission_list.append(student_as_admission)
+    
+    # Sort merged list by created_at descending (newest first)
+    def sort_key(item):
+        created = item.get('created_at') or ''
+        # created_at may be a datetime or ISO string
+        if isinstance(created, datetime):
+            return created.timestamp()
+        try:
+            return datetime.fromisoformat(str(created).replace('Z', '+00:00')).timestamp()
+        except Exception:
+            return 0
+    
+    admission_list.sort(key=sort_key, reverse=True)
+    
+    return admission_list
+
+@api_router.get("/admissions/{admission_id}")
+async def get_admission(admission_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a single admission record by ID"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    admission = await db.admissions.find_one({"id": admission_id}, {"_id": 0})
+    if not admission:
+        raise HTTPException(status_code=404, detail="Admission record not found")
+    return serialize_doc(admission)
+
+@api_router.post("/admissions")
+async def create_admission(payload: Dict, current_user: dict = Depends(get_current_user)):
+    """Create a new admission record. Allowed for secretary, principal, director, coordinator.
+    
+    This endpoint ALSO creates a student record in the `students` collection so that
+    students admitted via the Admission form automatically appear in the Students component.
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    role = current_user.get('role', '').lower()
+    if role not in ['secretary', 'principal', 'director', 'coordinator']:
+        raise HTTPException(status_code=403, detail="Not authorized to create admission records")
+    
+    # Determine chain
+    chain = payload.get("chain") or current_user.get("chain") or ''
+    
+    # Build admission_no from chain + student_number + year if not provided
+    admission_no = payload.get("admission_no") or ''
+    if not admission_no:
+        student_number = payload.get("student_number") or ''
+        admission_year = payload.get("admission_year") or str(datetime.now().year)
+        if chain and student_number:
+            admission_no = f"{chain}/STU{str(student_number).zfill(4)}/{admission_year}"
+    
+    # Build first_name / last_name from student_name if not provided
+    first_name = payload.get("first_name") or ''
+    last_name = payload.get("last_name") or ''
+    student_name = payload.get("student_name") or ''
+    if not first_name and not last_name and student_name:
+        parts = student_name.strip().split(' ', 1)
+        first_name = parts[0] if parts else ''
+        last_name = parts[1] if len(parts) > 1 else ''
+    
+    admission = {
+        "id": str(uuid.uuid4()),
+        "student_name": student_name or f"{first_name} {last_name}".strip(),
+        "first_name": first_name,
+        "last_name": last_name,
+        "admission_no": admission_no,
+        "chain": chain,
+        "class_name": payload.get("class_name"),
+        "parent_name": payload.get("parent_name"),
+        "parent_phone": payload.get("parent_phone"),
+        "date_of_birth": payload.get("date_of_birth"),
+        "place_of_birth": payload.get("place_of_birth"),
+        "height_cm": payload.get("height_cm"),
+        "weight_kg": payload.get("weight_kg"),
+        "nationality": payload.get("nationality"),
+        "mkoa": payload.get("mkoa"),
+        "wilaya": payload.get("wilaya"),
+        "shehia": payload.get("shehia"),
+        "correspondence_address": payload.get("correspondence_address"),
+        "phone_1": payload.get("phone_1"),
+        "phone_2": payload.get("phone_2"),
+        "tribe": payload.get("tribe"),
+        "religion": payload.get("religion"),
+        "last_school": payload.get("last_school"),
+        "last_school_year": payload.get("last_school_year"),
+        "final_exam_result": payload.get("final_exam_result"),
+        "medical_info": payload.get("medical_info"),
+        "father_name": payload.get("father_name"),
+        "father_profession": payload.get("father_profession"),
+        "mother_name": payload.get("mother_name"),
+        "mother_profession": payload.get("mother_profession"),
+        "emergency_contact_1": payload.get("emergency_contact_1"),
+        "emergency_contact_2": payload.get("emergency_contact_2"),
+        "guardian_1_name": payload.get("guardian_1_name"),
+        "guardian_1_signature": payload.get("guardian_1_signature"),
+        "guardian_2_name": payload.get("guardian_2_name"),
+        "guardian_2_signature": payload.get("guardian_2_signature"),
+        "admission_date": payload.get("admission_date"),
+        "passport_photo": payload.get("passport_photo"),
+        "status": payload.get("status", "pending"),
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name") or f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    
+    await db.admissions.insert_one(admission)
+    
+    # ALSO create a student record so the student appears in the Students component
+    # Only if we have enough info (first_name, last_name, chain)
+    if first_name and last_name and chain:
+        # Check if a student with this admission_no already exists
+        if admission_no:
+            existing_student = await db.students.find_one({"admission_no": admission_no.upper()})
+            if not existing_student:
+                student_doc = {
+                    "id": str(uuid.uuid4()),
+                    "admission_no": admission_no.upper(),
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "gender": (payload.get("gender") or '').upper(),
+                    "date_of_birth": payload.get("date_of_birth"),
+                    "class_id": payload.get("class_id"),
+                    "class_name": payload.get("class_name"),
+                    "admission_date": payload.get("admission_date") or datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                    "status": "active",
+                    "chain": chain,
+                    "parent_name": payload.get("parent_name"),
+                    "parent_phone": payload.get("parent_phone"),
+                    "password_hash": hash_password(payload.get("password") or f"{chain.lower()}{admission_no.replace(chr(47), '').replace('STU', '').replace(chain, '')}"),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.students.insert_one(student_doc)
+    
+    return serialize_doc(admission)
+
+
+@api_router.put("/admissions/{admission_id}")
+async def update_admission(admission_id: str, payload: Dict, current_user: dict = Depends(get_current_user)):
+    """Update an existing admission record. Allowed for secretary, principal, director, coordinator.
+    
+    If the admission record came from the `students` collection (source: "students"),
+    this endpoint ALSO updates the corresponding student record so both stay in sync.
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    role = current_user.get('role', '').lower()
+    if role not in ['secretary', 'principal', 'director', 'coordinator']:
+        raise HTTPException(status_code=403, detail="Not authorized to update admission records")
+    
+    # First check if this is a student-sourced admission (from the students collection)
+    # The admission_id might be a student's UUID id
+    student = await db.students.find_one({"id": admission_id}, {"_id": 0, "password_hash": 0})
+    
+    if student:
+        # This is a student-sourced admission - update the student record
+        student_updates = {}
+        
+        # Map admission fields to student fields
+        first_name = payload.get("first_name") or ''
+        last_name = payload.get("last_name") or ''
+        student_name = payload.get("student_name") or ''
+        if not first_name and not last_name and student_name:
+            parts = student_name.strip().split(' ', 1)
+            first_name = parts[0] if parts else ''
+            last_name = parts[1] if len(parts) > 1 else ''
+        
+        if first_name:
+            student_updates["first_name"] = first_name
+        if last_name:
+            student_updates["last_name"] = last_name
+        if payload.get("gender") is not None:
+            student_updates["gender"] = (payload.get("gender") or '').upper()
+        if payload.get("date_of_birth") is not None:
+            student_updates["date_of_birth"] = payload.get("date_of_birth")
+        if payload.get("class_name") is not None:
+            student_updates["class_name"] = payload.get("class_name")
+        if payload.get("parent_name") is not None:
+            student_updates["parent_name"] = payload.get("parent_name")
+        if payload.get("parent_phone") is not None:
+            student_updates["parent_phone"] = payload.get("parent_phone")
+        if payload.get("chain") is not None:
+            student_updates["chain"] = payload.get("chain")
+        if payload.get("admission_date") is not None:
+            student_updates["admission_date"] = payload.get("admission_date")
+        if payload.get("passport_photo") is not None:
+            student_updates["passport_photo"] = payload.get("passport_photo")
+        if payload.get("status") is not None:
+            student_updates["status"] = payload.get("status")
+        if payload.get("password"):
+            student_updates["password_hash"] = hash_password(payload.get("password"))
+        
+        student_updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        await db.students.update_one({"id": admission_id}, {"$set": student_updates})
+        
+        # Also check if there's an admission record for this student and update it
+        admission_record = await db.admissions.find_one({"admission_no": student.get("admission_no", "").upper()})
+        if admission_record:
+            admission_update = {k: v for k, v in payload.items() if k not in ("id", "_id", "created_at", "created_by")}
+            admission_update["updated_at"] = datetime.now(timezone.utc)
+            await db.admissions.update_one({"id": admission_record["id"]}, {"$set": admission_update})
+        
+        updated_student = await db.students.find_one({"id": admission_id}, {"_id": 0, "password_hash": 0})
+        return serialize_doc(updated_student)
+    
+    # Otherwise, update the admission record in the admissions collection
+    existing = await db.admissions.find_one({"id": admission_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Admission record not found")
+    
+    update_data = {k: v for k, v in payload.items() if k not in ("id", "_id", "created_at", "created_by")}
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    await db.admissions.update_one({"id": admission_id}, {"$set": update_data})
+    updated = await db.admissions.find_one({"id": admission_id}, {"_id": 0})
+    return serialize_doc(updated)
+
+@api_router.delete("/admissions/{admission_id}")
+async def delete_admission(admission_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete an admission record. Allowed for secretary, principal, director, coordinator.
+    
+    If the admission record came from the `students` collection (source: "students"),
+    this endpoint ALSO deletes the corresponding student record so both stay in sync.
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    role = current_user.get('role', '').lower()
+    if role not in ['secretary', 'principal', 'director', 'coordinator']:
+        raise HTTPException(status_code=403, detail="Not authorized to delete admission records")
+    
+    # First check if this is a student-sourced admission (from the students collection)
+    student = await db.students.find_one({"id": admission_id}, {"_id": 0})
+    if student:
+        # Move the student to the bin before deleting (so it can be restored)
+        try:
+            await move_to_bin("students", admission_id, current_user or {})
+        except Exception as e:
+            print(f"Warning: Failed to move student to bin: {e}")
+            # Continue with deletion even if bin move fails
+        
+        # Delete the student record
+        await db.students.delete_one({"id": admission_id})
+        
+        # Also delete any admission record for this student
+        admission_record = await db.admissions.find_one({"admission_no": student.get("admission_no", "").upper()})
+        if admission_record:
+            await db.admissions.delete_one({"id": admission_record["id"]})
+        
+        return {"success": True, "message": "Student moved to bin"}
+    
+    # Otherwise, delete the admission record from the admissions collection
+    result = await db.admissions.delete_one({"id": admission_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Admission record not found")
+    return {"success": True, "message": "Admission record deleted"}
+
+
 
 # Include routers
 app.include_router(api_router)

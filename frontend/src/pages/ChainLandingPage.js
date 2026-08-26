@@ -316,13 +316,14 @@ function ChainLandingPage() {
   const portals = allPortals.filter(p => !hiddenPortals.includes(p.id));
 
   return (
-    <div className="chain-landing-page">
+    <div className={`chain-landing-page ${chainCodeUpper === 'DUP' ? 'chain-dup-page' : ''}`}>
       <style>{`
         .chain-landing-page {
           min-height: 100vh;
           background: white;
           color: #1e293b;
         }
+
         
         .chain-header {
           padding: 1rem 1rem;
@@ -434,22 +435,25 @@ function ChainLandingPage() {
         .portals-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 0.75rem;
-          margin-top: 0.75rem;
+          gap: 0.25rem;
+          margin-top: 0.25rem;
         }
         
         .portal-card {
           background: white;
-          border-radius: 0.375rem;
-          padding: 0.5rem;
+          border-radius: 0.25rem;
+          padding: 0.15rem 0.1rem;
           border: 1px solid #e2e8f0;
           transition: all 0.2s ease;
           cursor: pointer;
           display: flex;
-          flex-direction: column;
+          flex-direction: row;
           align-items: center;
+          justify-content: center;
+          gap: 0.2rem;
           text-align: center;
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+          min-height: 30px;
         }
         
         .portal-card:hover {
@@ -465,45 +469,79 @@ function ChainLandingPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 0.25rem;
+          flex-shrink: 0;
           color: white;
         }
         
         .portal-title {
-          font-size: 0.65rem;
+          font-size: 0.55rem;
           font-weight: 600;
-          margin-bottom: 0.1rem;
           color: #1e293b;
+          line-height: 1;
+          white-space: nowrap;
         }
         
         .portal-description {
-          font-size: 0.5rem;
-          color: #64748b;
-          margin-bottom: 0.25rem;
-          line-height: 1.1;
+          display: none;
         }
         
         .portal-button {
-          padding: 0.25rem 0.75rem;
-          background: #3b82f6;
-          border: 1px solid #3b82f6;
-          border-radius: 0.25rem;
-          color: white;
-          font-size: 0.6rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
+          display: none;
         }
-        
-        .portal-button:hover {
-          background: #2563eb;
-          border-color: #2563eb;
+
+        /* ============================================
+           CHAIN-SPECIFIC PORTAL GRID LAYOUTS
+           ============================================ */
+
+        /* DLP & LALE chains: 6 portals in 2 equal rows of 3, 50px cards (PC view) */
+        .portals-grid.chain-dlp,
+        .portals-grid.chain-lale {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0.5rem;
         }
+
+        .portals-grid.chain-dlp .portal-card,
+        .portals-grid.chain-lale .portal-card {
+          min-height: 50px;
+          padding: 0.25rem 0.5rem;
+        }
+
+        .portals-grid.chain-dlp .portal-icon,
+        .portals-grid.chain-lale .portal-icon {
+          width: 20px;
+          height: 20px;
+        }
+
+        .portals-grid.chain-dlp .portal-title,
+        .portals-grid.chain-lale .portal-title {
+          font-size: 0.7rem;
+        }
+
+        /* DUP chain: light blue background to distinguish from DLP/LALE */
+        .chain-landing-page.chain-dup-page {
+          background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+        }
+
+        .chain-landing-page.chain-dup-page .chain-header {
+          background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+          border-bottom: 1px solid #7dd3fc;
+        }
+
+        .chain-landing-page.chain-dup-page .portal-card {
+          background: #f0f9ff;
+          border-color: #7dd3fc;
+        }
+
+        .chain-landing-page.chain-dup-page .chain-description {
+          background: #f0f9ff;
+          border-color: #7dd3fc;
+        }
+
+
+
         
         .chain-description {
+
           background: #f8fafc;
           border-radius: 0.5rem;
           padding: 0.75rem;
@@ -560,6 +598,39 @@ function ChainLandingPage() {
           
           .portals-grid {
             grid-template-columns: repeat(2, 1fr);
+            gap: 0.4rem;
+          }
+
+          /* DLP & LALE chains on mobile: 2 rows of 3 */
+          .portals-grid.chain-dlp,
+          .portals-grid.chain-lale {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.4rem;
+          }
+
+          /* DUP chain on mobile: 3 rows (3+3+2), last 2 centered */
+          .portals-grid.chain-dup {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+            gap: 0.4rem !important;
+          }
+
+          .portals-grid.chain-dup .portal-card {
+            min-height: 50px;
+            padding: 0.25rem 0.5rem;
+            width: calc(33.333% - 0.3rem) !important;
+            flex-shrink: 0;
+            box-sizing: border-box;
+          }
+
+          .portals-grid.chain-dup .portal-icon {
+            width: 20px;
+            height: 20px;
+          }
+
+          .portals-grid.chain-dup .portal-title {
+            font-size: 0.7rem;
           }
           
           .chain-info {
@@ -568,6 +639,7 @@ function ChainLandingPage() {
             justify-content: center;
             gap: 1rem;
           }
+
           
           .info-item {
             min-width: 100px;
@@ -582,45 +654,48 @@ function ChainLandingPage() {
           }
           
           .portal-card {
-            padding: 0.4rem;
+            padding: 0.15rem 0.1rem;
+            min-height: 30px;
           }
           
           .portal-title {
-            font-size: 0.6rem;
-          }
-          
-          .portal-description {
-            font-size: 0.45rem;
-          }
-          
-          .portal-button {
-            padding: 0.2rem 0.5rem;
             font-size: 0.5rem;
           }
         }
         
         @media (max-width: 480px) {
           .portals-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.3rem;
+          }
+
+          /* DUP chain on very small screens: keep 3 columns (3+3+2), last 2 centered */
+          .portals-grid.chain-dup {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+            gap: 0.3rem !important;
+          }
+          
+          .portals-grid.chain-dup .portal-card {
+            width: calc(33.333% - 0.25rem) !important;
+            flex-shrink: 0;
+            box-sizing: border-box;
           }
           
           .portal-card {
-            padding: 0.5rem;
+            padding: 0.15rem 0.1rem;
+            min-height: 32px;
           }
           
           .portal-title {
-            font-size: 0.7rem;
-          }
-          
-          .portal-description {
-            font-size: 0.55rem;
-          }
-          
-          .portal-button {
-            padding: 0.25rem 0.75rem;
-            font-size: 0.6rem;
+            font-size: 0.5rem;
           }
         }
+
+
+
+
 
         /* PWA Install Section Styles */
         .pwa-install-section {
@@ -778,8 +853,9 @@ function ChainLandingPage() {
         <div className="portal-section">
           <h2 className="section-title">Select Your Portal</h2>
           
-          <div className="portals-grid">
+          <div className={`portals-grid chain-${chainCodeUpper.toLowerCase()}`}>
             {portals.map((portal) => {
+
               const Icon = portal.icon;
               return (
                 <div 

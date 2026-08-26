@@ -1,7 +1,8 @@
 // Service Worker for IHEZA School Management System
 // Version-based cache to ensure updates are applied immediately
 // Bump this version on EVERY deployment to force cache refresh
-const CACHE_VERSION = 'v9-20260708';  // BUMPED: fixed SW catch-all returning empty responses
+const CACHE_VERSION = 'v11-20260825';  // BUMPED: force cache refresh for DUP chain mobile layout fix (3+3+2)
+
 const CACHE_NAME = `iheza-cache-${CACHE_VERSION}`;
 
 // Only cache truly static assets that rarely change
@@ -142,3 +143,67 @@ self.addEventListener('message', (event) => {
     });
   }
 });
+
+// ============ PUSH NOTIFICATIONS ============
+
+// Handle incoming push notifications
+self.addEventListener('push', (event) => {
+  console.log('[SW] Push notification received');
+
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    console.warn('[SW] Could not parse push data:', e);
+    data = { title: 'IHEZA Notification', body: 'You have a new notification' };
+  }
+
+  const title = data.title || 'IHEZA Notification';
+  const options = {
+    body: data.body || '',
+    icon: data.icon || '/logo192.png',
+    badge: data.badge || '/logo192.png',
+    data: {
+      url: data.url || '/',
+      timestamp: Date.now()
+    },
+    vibrate: [100, 50, 100],
+    tag: data.tag || 'iheza-notification'
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+// Handle notification click - open the app at the notification's URL
+self.addEventListener('notificationclick', (event) => {
+  console.log('[SW] Notification clicked');
+
+  event.notification.close();
+
+  const url = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // If a window is already open, focus it and navigate to the URL
+        for (const client of clientList) {
+          if ('focus' in client) {
+            client.navigate(url);
+            return client.focus();
+          }
+        }
+        // Otherwise open a new window
+        if (clients.openWindow) {
+          return clients.openWindow(url);
+        }
+      })
+  );
+});
+
+// Handle notification close
+self.addEventListener('notificationclose', (event) => {
+  console.log('[SW] Notification closed');
+});
+
