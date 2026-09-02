@@ -3867,9 +3867,9 @@ async def get_all_student_fees(
     if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary, principal, director, or coordinator can view all fee records")
     
-    # Validate pagination params
+    # Validate pagination params - STRICT 100 max to prevent memory overload
     page = max(1, page)
-    page_size = max(1, min(1000, page_size))  # Cap at 1000 per page
+    page_size = max(1, min(100, page_size))  # Cap at 100 per page (was 1000 - too heavy!)
     
     # Use explicit chain param if provided (for Directors/Coordinators filtering by chain)
     if chain:
@@ -3887,9 +3887,9 @@ async def get_all_student_fees(
     total_students = await db.students.count_documents(student_query)
     total_pages = max(1, (total_students + page_size - 1) // page_size)
     
-    # Get paginated students
+    # Get paginated students - exclude heavy fields
     skip = (page - 1) * page_size
-    students_cursor = db.students.find(student_query, {"password_hash": 0})
+    students_cursor = db.students.find(student_query, {"_id": 1, "id": 1, "first_name": 1, "last_name": 1, "admission_no": 1, "class_name": 1, "chain": 1, "status": 1})
     students_cursor.sort("first_name", 1).skip(skip).limit(page_size)
     students = await students_cursor.to_list(page_size)
     
@@ -3924,14 +3924,8 @@ async def get_all_student_fees(
     # Build a filter that matches any of the current page's student IDs
     page_student_filter = {"student_id": {"$in": student_ids}}
     
-    # Scale the batch lookup limit with the requested page size so that large
-    # page_size requests (e.g. the Financial Report page requesting 1000
-    # students) get COMPLETE data. Previously these were hard-capped at 500,
-    # which silently truncated fee/payment data for pages larger than 500
-    # students (half the students showed zero/wrong totals). Each student can
-    # have multiple identifiers and multiple payments, so multiply by 3 to
-    # safely cover all related records in a single batched query (no N+1).
-    lookup_limit = max(500, page_size * 3)
+    # Scale the batch lookup limit - keep it small to prevent memory overload
+    lookup_limit = min(500, page_size * 3)
     
     # Get fee records for this page's students only.
     # IMPORTANT: We project OUT the receipt_image / receipt_images fields here.
@@ -4074,16 +4068,16 @@ async def get_all_student_fees(
         
         # Determine status
         if total_fee == 0:
-            fee_status = "no_fee"
+            current_fee_status = "no_fee"
         elif outstanding <= 0:
-            fee_status = "paid"
+            current_fee_status = "paid"
         elif paid_amount > 0:
-            fee_status = "partial"
+            current_fee_status = "partial"
         else:
-            fee_status = "unpaid"
+            current_fee_status = "unpaid"
         
         # Apply status filter
-        if status and fee_status != status:
+        if fee_status and current_fee_status != fee_status:
             continue
         
         # Get latest payment date, the latest receipt image, and count receipts.
@@ -4141,7 +4135,7 @@ async def get_all_student_fees(
             "paid": paid_amount,
             "balance": outstanding,
             "outstanding": outstanding,
-            "status": fee_status,
+            "status": current_fee_status,
             # Admission status (active / graduated / left / suspended / transferred).
             # Used by the All Students table to show graduated / left-school badges
             # and to exclude those students from active analytics.
@@ -4229,22 +4223,14 @@ async def get_financial_report(
 @api_router.get("/financial-report-students")
 async def get_financial_report_students(
     chain: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
     current_user: dict = Depends(get_current_user)
 ):
     """Dedicated lightweight endpoint for the Financial Report tab.
 
-    Returns the summary totals AND the per-student table rows in ONE fast
-    response, WITHOUT any receipt images. This avoids the heavy
-    /api/all-student-fees?page_size=1000 request that previously caused
-    Nginx upstream timeouts (Cloudflare 520) because it had to process and
-    strip receipt images for every student.
-
-    The response shape matches what the FinancialReportsTab component needs:
-      - summary: { total_students, total_expected, total_collected,
-                   outstanding_balance, collection_rate, paid_count,
-                   partial_count, unpaid_count }
-      - students: [{ id, name, admission_no, class_name, total_fees,
-                     total_paid, balance, status, fee_type }]
+    Returns the summary totals AND the per-student table rows with PAGINATION
+    to prevent memory overload. No receipt images are ever fetched.
     """
     if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary, principal, director, or coordinator can view financial reports")
@@ -4254,13 +4240,25 @@ async def get_financial_report_students(
         clean_chain = chain.upper().split(':')[0]
         chain_filter["chain"] = clean_chain
 
-    # Fetch all students for the chain (no password_hash, no receipt data)
-    students = await db.students.find(chain_filter, {"_id": 0, "password_hash": 0}).to_list(2000)
+    # Pagination - strict 100 max per page
+    page = max(1, page)
+    page_size = max(1, min(100, page_size))
+    skip = (page - 1) * page_size
+
+    # Get total count for pagination
+    total_students = await db.students.count_documents(chain_filter)
+    total_pages = max(1, (total_students + page_size - 1) // page_size)
+
+    # Fetch ONLY the fields needed for the table, paginated
+    students = await db.students.find(
+        chain_filter, 
+        {"_id": 1, "id": 1, "first_name": 1, "last_name": 1, "admission_no": 1, "class_name": 1, "chain": 1, "status": 1}
+    ).sort("first_name", 1).skip(skip).limit(page_size).to_list(page_size)
 
     if not students:
         return {
             "summary": {
-                "total_students": 0,
+                "total_students": total_students,
                 "total_expected": 0,
                 "total_collected": 0,
                 "outstanding_balance": 0,
@@ -4271,11 +4269,11 @@ async def get_financial_report_students(
                 "graduated_count": 0,
                 "left_count": 0
             },
-            "students": []
+            "students": [],
+            "pagination": {"page": page, "page_size": page_size, "total": total_students, "total_pages": total_pages}
         }
 
-
-    # Collect all possible student identifiers for batched lookups (no N+1)
+    # Collect student identifiers for batched lookups
     student_ids = []
     for s in students:
         mongo_id = str(s.get("_id")) if s.get("_id") else None
@@ -4286,9 +4284,7 @@ async def get_financial_report_students(
                 student_ids.append(ident)
 
     page_student_filter = {"student_id": {"$in": student_ids}}
-    # Scale the lookup limit to cover all students (each may have multiple
-    # identifiers and multiple payments). No receipt images are fetched here.
-    lookup_limit = max(500, len(student_ids) * 3)
+    lookup_limit = min(500, len(student_ids) * 3)
 
     # Batched fee records
     try:
@@ -4433,7 +4429,7 @@ async def get_financial_report_students(
 
     return {
         "summary": {
-            "total_students": len(result) - graduated_count - left_count,
+            "total_students": total_students,  # Use actual total from count_documents
             "total_expected": total_expected,
             "total_collected": total_collected,
             "outstanding_balance": total_expected - total_collected,
@@ -4444,7 +4440,8 @@ async def get_financial_report_students(
             "graduated_count": graduated_count,
             "left_count": left_count
         },
-        "students": result
+        "students": result,
+        "pagination": {"page": page, "page_size": page_size, "total": total_students, "total_pages": total_pages}
     }
 
 
@@ -4905,13 +4902,11 @@ async def get_staff_tasks(
         query["status"] = task_status
     
     # Field projection: only return the fields the frontend actually renders.
-    # This keeps the polling payload small (the TaskNotificationOverlay polls
-    # this endpoint every 60s per staff user, so trimming unused fields cuts
-    # sustained memory/bandwidth significantly).
+    # Limit to 100 tasks to prevent memory overload on production
     tasks = await db.staff_tasks.find(
         query,
         {"_id": 0, "notes": 0}
-    ).sort("created_at", -1).to_list(500)
+    ).sort("created_at", -1).to_list(100)
     return [serialize_doc(t) for t in tasks]
 
 

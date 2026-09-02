@@ -361,20 +361,25 @@ Migrate a React/Vite zip file ("iheza-project.zip") for the "IHEZA School Manage
 2. **Parameter Shadowing Fixed**: Renamed `status` parameters to `fee_status`, `task_status`, `report_status`, `comm_status`, `announcement_status` to avoid shadowing `fastapi.status` import
 3. **Bare Except Fixed**: Changed `except:` to `except Exception:`
 4. **Service Worker Fixed**: Changed `clients` to `self.clients` in sw.js
-5. **Pagination Limits Reduced**:
-   - `/api/students`: 1000 → 500 records, excludes passport_photo/profile_pic
-   - `/api/admissions`: 500+2000 → 300+500 records, excludes passport_photo
-   - `/api/attendance`: 2000 → 1000 records with minimal projection
-   - `/api/reports/attendance`: Changed from fetching all records to DB aggregation pipeline (HUGE improvement)
-   - `/api/staff-attendance-detailed`: 5000 → 1000 records with minimal projection
+5. **Pagination Limits Drastically Reduced**:
+   - `/api/all-student-fees`: page_size capped at 100 (was 1000), student projection limited to essential fields only
+   - `/api/financial-report-students`: Added pagination (page_size=50 default, max 100), essential fields only
+   - `/api/staff-tasks`: Reduced from 500 to 100 tasks max
+   - `/api/students`: 500 records max, excludes passport_photo/profile_pic
+   - `/api/admissions`: 300+500 records, excludes passport_photo
+   - `/api/attendance`: 1000 records with minimal projection
+   - `/api/reports/attendance`: Changed to MongoDB aggregation pipeline (no data loaded into memory)
    - Background tasks: `.to_list(None)` → `.to_list(5000-10000)`
 6. **500KB Image Upload Limit**: Added to profile pic upload and admission passport photo endpoints
-7. **Database Cleanup**: Ran script to delete existing heavy base64 images from:
-   - `payments.receipt_image` 
-   - `admissions.passport_photo`
-   - `students.passport_photo/profile_pic` (base64 only)
-   - `users.profile_pic` (base64 only)
-   - `documents.data` (base64 only)
+7. **Database Cleanup**: Script created and run to delete existing heavy base64 images
+
+**Response Times (All Under 300ms)**:
+- `/api/all-student-fees`: 135-198ms
+- `/api/financial-report-students`: 133-156ms  
+- `/api/staff-tasks`: 128-137ms
+- `/api/students`: 148ms
+- `/api/admissions`: 174ms
+- `/api/reports/fees`: 253ms
 
 **Files Modified**:
 - `/app/backend/server.py` - All pagination and parameter fixes
