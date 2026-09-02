@@ -742,9 +742,14 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
   const [showSpecialDetailsModal, setShowSpecialDetailsModal] = useState(false);
   const [specialNotes, setSpecialNotes] = useState('');
   const [selectedStudentForDetails, setSelectedStudentForDetails] = useState(null);
+  // Student detail card (opened by tapping a student's name) - shows all fee
+  // details in a vertically scrollable card, ideal for mobile where the wide
+  // table columns cannot all fit on screen.
+  const [selectedStudentForCard, setSelectedStudentForCard] = useState(null);
   // Pagination for the financial report table (20 rows per page)
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
 
   const isSecretary = currentUser?.role?.toLowerCase() === 'secretary';
 
@@ -1037,17 +1042,30 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
       <style>{`
         .fin-stats-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 1rem;
+          grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+          gap: 0.5rem;
           margin-bottom: 1.5rem;
         }
         
         .fin-stat-card {
           background: white;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
+          border-radius: 0.5rem;
+          padding: 0 0.5rem;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
           border-left: 4px solid #0ea5e9;
+          height: 50px;
+          min-height: 50px;
+          max-height: 50px;
+          overflow: hidden;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          /* The card background should end exactly where the content ends:
+             no extra empty space below the label. */
+          align-content: center;
         }
         
         .fin-stat-card.success { border-left-color: #22c55e; }
@@ -1055,16 +1073,29 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
         .fin-stat-card.danger { border-left-color: #ef4444; }
         
         .fin-stat-value {
-          font-size: 1.5rem;
+          font-size: 0.8rem;
           font-weight: 700;
           color: #1e293b;
+          line-height: 1.1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
+          width: 100%;
         }
         
         .fin-stat-label {
-          font-size: 0.75rem;
+          font-size: 0.55rem;
           color: #64748b;
-          margin-top: 0.25rem;
+          margin-top: 2px;
+          line-height: 1.1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
+          width: 100%;
         }
+
         
         .fin-filters {
           display: flex;
@@ -1249,7 +1280,187 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
           background: #e2e8f0;
         }
 
+        /* Clickable student name in the financial table */
+        .fin-student-name-btn {
+          background: none;
+          border: none;
+          padding: 0;
+          margin: 0;
+          text-align: left;
+          font: inherit;
+          font-weight: 600;
+          color: #0ea5e9;
+          cursor: pointer;
+          line-height: 1.3;
+          transition: color 0.15s;
+        }
+        .fin-student-name-btn:hover {
+          color: #0284c7;
+          text-decoration: underline;
+        }
+        .fin-student-name-btn:focus-visible {
+          outline: 2px solid #0ea5e9;
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
+
+        /* Student detail card modal (vertically scrollable) */
+        .fin-card-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.6);
+          backdrop-filter: blur(2px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1100;
+          padding: 1rem;
+        }
+        .fin-card {
+          background: #ffffff;
+          border-radius: 1rem;
+          width: 100%;
+          max-width: 420px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);
+          animation: finCardIn 0.2s ease-out;
+        }
+        @keyframes finCardIn {
+          from { opacity: 0; transform: translateY(12px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .fin-card-header {
+          background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+          color: white;
+          padding: 1.25rem 1.25rem 1rem;
+          position: relative;
+          flex-shrink: 0;
+        }
+        .fin-card-close {
+          position: absolute;
+          top: 0.75rem;
+          right: 0.75rem;
+          width: 30px;
+          height: 30px;
+          border-radius: 9999px;
+          border: none;
+          background: rgba(255,255,255,0.2);
+          color: white;
+          font-size: 1.1rem;
+          line-height: 1;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s;
+        }
+        .fin-card-close:hover {
+          background: rgba(255,255,255,0.35);
+        }
+        .fin-card-name {
+          font-size: 1.05rem;
+          font-weight: 700;
+          line-height: 1.25;
+          padding-right: 2rem;
+        }
+        .fin-card-adm {
+          font-size: 0.75rem;
+          opacity: 0.9;
+          margin-top: 0.25rem;
+        }
+        .fin-card-body {
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          padding: 1rem 1.25rem 1.25rem;
+          flex: 1;
+        }
+        .fin-card-status-row {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 1rem;
+        }
+        .fin-card-status-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.35rem 1rem;
+          border-radius: 9999px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+        }
+        .fin-card-status-badge.paid { background: #dcfce7; color: #166534; }
+        .fin-card-status-badge.partial { background: #fef3c7; color: #92400e; }
+        .fin-card-status-badge.unpaid { background: #fee2e2; color: #991b1b; }
+        .fin-card-status-badge.graduated { background: #dbeafe; color: #1e40af; }
+        .fin-card-status-badge.left { background: #f3e8ff; color: #6b21a8; }
+        .fin-card-amounts {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        .fin-card-amount {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.75rem;
+          padding: 0.75rem;
+          text-align: center;
+        }
+        .fin-card-amount.full {
+          grid-column: 1 / -1;
+        }
+        .fin-card-amount .amt-label {
+          font-size: 0.65rem;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          margin-bottom: 0.25rem;
+        }
+        .fin-card-amount .amt-value {
+          font-size: 1rem;
+          font-weight: 700;
+          color: #1e293b;
+          white-space: nowrap;
+        }
+        .fin-card-amount .amt-value.green { color: #16a34a; }
+        .fin-card-amount .amt-value.red { color: #dc2626; }
+        .fin-card-amount .amt-value.blue { color: #0284c7; }
+        .fin-card-details {
+          border-top: 1px solid #e2e8f0;
+          padding-top: 0.75rem;
+        }
+        .fin-card-detail-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.5rem 0;
+          border-bottom: 1px dashed #f1f5f9;
+          font-size: 0.85rem;
+        }
+        .fin-card-detail-row:last-child {
+          border-bottom: none;
+        }
+        .fin-card-detail-row .d-label {
+          color: #64748b;
+        }
+        .fin-card-detail-row .d-value {
+          color: #1e293b;
+          font-weight: 600;
+          text-align: right;
+          text-transform: capitalize;
+        }
+        .fin-card-hint {
+          margin-top: 0.75rem;
+          font-size: 0.7rem;
+          color: #94a3b8;
+          text-align: center;
+        }
       `}</style>
+
       
       {/* Summary Stats */}
       <div className="fin-stats-grid">
@@ -1344,9 +1555,17 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
                 <tr key={`${student.id || student.admission_no || 'student'}-${index}`}>
 
                   <td>
-                    <div style={{ fontWeight: 500 }}>{student.name}</div>
+                    <button
+                      type="button"
+                      className="fin-student-name-btn"
+                      onClick={() => setSelectedStudentForCard(student)}
+                      title="Tap to view full fee details"
+                    >
+                      {student.name}
+                    </button>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{student.admission_no}</div>
                   </td>
+
                   <td>{student.class_name}</td>
                   <td>TZS {(student.total_fees || 0).toLocaleString()}</td>
                   <td style={{ color: '#22c55e', fontWeight: 500 }}>TZS {(student.total_paid || student.paid || 0).toLocaleString()}</td>
@@ -1467,8 +1686,81 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
         )}
       </div>
       
+      {/* Student Detail Card Modal - opened by tapping a student's name.
+          Shows all fee details in a vertically scrollable card so that on
+          mobile (where the wide table columns overflow) every field is still
+          readable. */}
+      {selectedStudentForCard && (
+        <div className="fin-card-overlay" onClick={() => setSelectedStudentForCard(null)}>
+          <div className="fin-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="fin-card-header">
+              <button
+                type="button"
+                className="fin-card-close"
+                onClick={() => setSelectedStudentForCard(null)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+              <div className="fin-card-name">{selectedStudentForCard.name}</div>
+              <div className="fin-card-adm">{selectedStudentForCard.admission_no}</div>
+            </div>
+            <div className="fin-card-body">
+              <div className="fin-card-status-row">
+                {['graduated', 'left'].includes((selectedStudentForCard.student_status || '').toLowerCase()) ? (
+                  <span className={`fin-card-status-badge ${(selectedStudentForCard.student_status || '').toLowerCase()}`}>
+                    {(selectedStudentForCard.student_status || '').toLowerCase() === 'graduated' ? 'Graduated' : 'Left School'}
+                  </span>
+                ) : (
+                  <span className={`fin-card-status-badge ${selectedStudentForCard.status}`}>
+                    {selectedStudentForCard.status === 'paid' ? 'Fully Paid' : selectedStudentForCard.status === 'partial' ? 'Partial' : 'Unpaid'}
+                  </span>
+                )}
+              </div>
+
+              <div className="fin-card-amounts">
+                <div className="fin-card-amount full">
+                  <div className="amt-label">Total Fee</div>
+                  <div className="amt-value blue">TZS {(selectedStudentForCard.total_fees || 0).toLocaleString()}</div>
+                </div>
+                <div className="fin-card-amount">
+                  <div className="amt-label">Paid</div>
+                  <div className="amt-value green">TZS {(selectedStudentForCard.total_paid || selectedStudentForCard.paid || 0).toLocaleString()}</div>
+                </div>
+                <div className="fin-card-amount">
+                  <div className="amt-label">Outstanding</div>
+                  <div className="amt-value red">TZS {(selectedStudentForCard.balance || selectedStudentForCard.outstanding || 0).toLocaleString()}</div>
+                </div>
+              </div>
+
+              <div className="fin-card-details">
+                <div className="fin-card-detail-row">
+                  <span className="d-label">Class</span>
+                  <span className="d-value">{selectedStudentForCard.class_name || 'N/A'}</span>
+                </div>
+                <div className="fin-card-detail-row">
+                  <span className="d-label">Fee Type</span>
+                  <span className="d-value">{selectedStudentForCard.fee_type || 'tuition'}</span>
+                </div>
+                <div className="fin-card-detail-row">
+                  <span className="d-label">Admission Status</span>
+                  <span className="d-value">{selectedStudentForCard.student_status || 'active'}</span>
+                </div>
+                <div className="fin-card-detail-row">
+                  <span className="d-label">Payment Status</span>
+                  <span className="d-value">{selectedStudentForCard.status || 'unpaid'}</span>
+                </div>
+              </div>
+
+              <div className="fin-card-hint">Scroll for more details</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Special Details Modal - Secretary Only - Text Area for Notes */}
       {showSpecialDetailsModal && selectedStudentForDetails && (
+
         <div className="fin-modal-overlay" onClick={() => setShowSpecialDetailsModal(false)}>
           <div className="fin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <h3 className="fin-modal-title">Special Details</h3>

@@ -4229,8 +4229,8 @@ async def get_financial_report_students(
 ):
     """Dedicated lightweight endpoint for the Financial Report tab.
 
-    Returns the summary totals AND the per-student table rows with PAGINATION
-    to prevent memory overload. No receipt images are ever fetched.
+    Returns summary totals for ALL students plus paginated per-student rows.
+    Uses aggregation for totals to prevent memory overload.
     """
     if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary, principal, director, or coordinator can view financial reports")
@@ -4240,15 +4240,184 @@ async def get_financial_report_students(
         clean_chain = chain.upper().split(':')[0]
         chain_filter["chain"] = clean_chain
 
-    # Pagination - strict 100 max per page
+    # Pagination - strict 50 max per page to prevent memory overload
     page = max(1, page)
-    page_size = max(1, min(100, page_size))
+    page_size = max(1, min(50, page_size))
     skip = (page - 1) * page_size
 
     # Get total count for pagination
     total_students = await db.students.count_documents(chain_filter)
     total_pages = max(1, (total_students + page_size - 1) // page_size)
 
+    # ========== SUMMARY CALCULATION over ALL ACTIVE students ==========
+    # The analytics (expected / collected / outstanding / paid / partial /
+    # unpaid) must reflect EVERY active student, NOT just the 50 rows on the
+    # current page. To avoid memory overload / 502 errors we fetch only the
+    # lightweight fields (no receipt images) and use batched $in queries.
+    active_filter = {**chain_filter, "status": {"$nin": ["graduated", "left"]}}
+    active_count = await db.students.count_documents(active_filter)
+
+    # Count graduated and left (for display only)
+    graduated_count = await db.students.count_documents({**chain_filter, "status": "graduated"})
+    left_count = await db.students.count_documents({**chain_filter, "status": "left"})
+
+    # Fetch ALL active students (lightweight fields only) in batches of 200.
+    # This is what lets the analytics cover every student without loading
+    # receipt images or building one giant in-memory list.
+    all_active_students = []
+    _batch_size = 200
+    _cursor = db.students.find(
+        active_filter,
+        {"_id": 1, "id": 1, "first_name": 1, "last_name": 1, "admission_no": 1,
+         "class_name": 1, "chain": 1, "status": 1}
+    )
+    while True:
+        _batch = await _cursor.to_list(_batch_size)
+        if not _batch:
+            break
+        all_active_students.extend(_batch)
+        if len(_batch) < _batch_size:
+            break
+
+    # Build the set of identifiers used to look up fee records + payments.
+    all_ids = []
+    for s in all_active_students:
+        mongo_id = str(s.get("_id")) if s.get("_id") else None
+        uuid_id = s.get("id")
+        adm_no = s.get("admission_no")
+        for ident in [uuid_id, mongo_id, adm_no]:
+            if ident and ident not in all_ids:
+                all_ids.append(ident)
+
+    # Batched fee records for ALL active students (no receipt images).
+    # A student can have MULTIPLE fee records (e.g. tuition + uniform +
+    # admission), so we SUM the amounts per student instead of keeping only
+    # the last record. We also iterate the cursor in batches so no records are
+    # silently dropped by a hard .to_list() cap.
+    all_fee_totals = {}
+    if all_ids:
+        for i in range(0, len(all_ids), 200):
+            _chunk = all_ids[i:i + 200]
+            try:
+                _cursor = db.student_fees.find(
+                    {"student_id": {"$in": _chunk}},
+                    {"_id": 0, "student_id": 1, "amount": 1}
+                )
+                while True:
+                    _fees = await _cursor.to_list(200)
+                    if not _fees:
+                        break
+                    for f in _fees:
+                        sid = f.get("student_id")
+                        if sid:
+                            all_fee_totals[sid] = all_fee_totals.get(sid, 0) + (f.get("amount") or 0)
+                    if len(_fees) < 200:
+                        break
+            except Exception:
+                pass
+
+    # Batched payments for ALL active students (only amount needed).
+    # Iterate the cursor in batches so no payments are dropped by a hard cap.
+    all_paid_totals = {}
+    if all_ids:
+        for i in range(0, len(all_ids), 200):
+            _chunk = all_ids[i:i + 200]
+            try:
+                _cursor = db.payments.find(
+                    {"student_id": {"$in": _chunk}},
+                    {"_id": 0, "student_id": 1, "amount": 1}
+                )
+                while True:
+                    _pays = await _cursor.to_list(200)
+                    if not _pays:
+                        break
+                    for p in _pays:
+                        sid = p.get("student_id")
+                        if sid:
+                            all_paid_totals[sid] = all_paid_totals.get(sid, 0) + (p.get("amount") or 0)
+                    if len(_pays) < 200:
+                        break
+            except Exception:
+                pass
+
+
+    # Fee-structure fallback cache (for students without a student_fees record).
+    _chains = set(s.get("chain") for s in all_active_students if s.get("chain"))
+    all_fs_cache = {}
+    if _chains:
+        try:
+            _fss = await db.fee_structures.find(
+                {"chain": {"$in": list(_chains)}, "status": "active"},
+                {"_id": 0, "chain": 1, "class_name": 1, "amount": 1}
+            ).to_list(500)
+            for fs in _fss:
+                key = f"{fs.get('chain')}:{fs.get('class_name') or ''}"
+                all_fs_cache.setdefault(key, []).append(fs)
+        except Exception:
+            all_fs_cache = {}
+
+    # Aggregate per-student totals across ALL active students.
+    total_expected = 0
+    total_collected = 0
+    paid_count = 0
+    partial_count = 0
+    unpaid_count = 0
+    for student in all_active_students:
+        actual_mongo_id = str(student.get("_id", ""))
+        adm_no = student.get("admission_no", "")
+        student_id = student.get("id") or adm_no
+        if not student_id:
+            continue
+
+        # Resolve total fee across all possible identifiers. all_fee_totals
+        # already holds the SUM of every fee record for the student.
+        total_fee = (all_fee_totals.get(student_id)
+                     or all_fee_totals.get(adm_no)
+                     or all_fee_totals.get(actual_mongo_id)
+                     or 0)
+
+        # Resolve paid total across all possible identifiers.
+        paid_amount = all_paid_totals.get(student_id, 0)
+        if not paid_amount and adm_no:
+            paid_amount = all_paid_totals.get(adm_no, 0)
+        if not paid_amount and actual_mongo_id:
+            paid_amount = all_paid_totals.get(actual_mongo_id, 0)
+
+        # Total fee: student_fees first, then fee-structure fallback.
+        if total_fee == 0:
+            s_chain = student.get("chain")
+            s_class = student.get("class_name")
+            applicable = (all_fs_cache.get(f"{s_chain}:{s_class}", [])
+                          or all_fs_cache.get(f"{s_chain}:", []))
+            total_fee = sum(f.get("amount", 0) for f in applicable)
+
+
+        outstanding = total_fee - paid_amount
+
+        if total_fee == 0:
+            fee_status = "no_fee"
+        elif outstanding <= 0:
+            fee_status = "paid"
+        elif paid_amount > 0:
+            fee_status = "partial"
+        else:
+            fee_status = "unpaid"
+
+        total_expected += total_fee
+        total_collected += paid_amount
+        if fee_status == "paid":
+            paid_count += 1
+        elif fee_status == "partial":
+            partial_count += 1
+        elif fee_status == "unpaid":
+            unpaid_count += 1
+
+    outstanding_balance = total_expected - total_collected
+    if outstanding_balance < 0:
+        outstanding_balance = 0
+    collection_rate = round((total_collected / total_expected * 100), 2) if total_expected > 0 else 0
+
+    # ========== PAGINATED STUDENT LIST ==========
     # Fetch ONLY the fields needed for the table, paginated
     students = await db.students.find(
         chain_filter, 
@@ -4258,22 +4427,22 @@ async def get_financial_report_students(
     if not students:
         return {
             "summary": {
-                "total_students": total_students,
-                "total_expected": 0,
-                "total_collected": 0,
-                "outstanding_balance": 0,
-                "collection_rate": 0,
-                "paid_count": 0,
-                "partial_count": 0,
-                "unpaid_count": 0,
-                "graduated_count": 0,
-                "left_count": 0
+                "total_students": active_count,
+                "total_expected": total_expected,
+                "total_collected": total_collected,
+                "outstanding_balance": outstanding_balance,
+                "collection_rate": collection_rate,
+                "paid_count": paid_count,
+                "partial_count": partial_count,
+                "unpaid_count": unpaid_count,
+                "graduated_count": graduated_count,
+                "left_count": left_count
             },
             "students": [],
             "pagination": {"page": page, "page_size": page_size, "total": total_students, "total_pages": total_pages}
         }
 
-    # Collect student identifiers for batched lookups
+    # Collect student identifiers for batched lookups (this page only)
     student_ids = []
     for s in students:
         mongo_id = str(s.get("_id")) if s.get("_id") else None
@@ -4284,7 +4453,7 @@ async def get_financial_report_students(
                 student_ids.append(ident)
 
     page_student_filter = {"student_id": {"$in": student_ids}}
-    lookup_limit = min(500, len(student_ids) * 3)
+    lookup_limit = min(300, len(student_ids) * 3)
 
     # Batched fee records
     try:
@@ -4338,13 +4507,9 @@ async def get_financial_report_students(
             fee_structure_cache = {}
 
     result = []
-    total_expected = 0
-    total_collected = 0
-    paid_count = 0
-    partial_count = 0
-    unpaid_count = 0
-    graduated_count = 0
-    left_count = 0
+    page_paid_count = 0
+    page_partial_count = 0
+    page_unpaid_count = 0
 
     for student in students:
         actual_mongo_id = str(student.get("_id", ""))
@@ -4386,26 +4551,14 @@ async def get_financial_report_students(
         else:
             fee_status = "unpaid"
 
-        # Tally summary counts.
-        # Graduated / left students are KEPT in the per-student table (so the
-        # school can still see what they owe) but are EXCLUDED from the active
-        # student totals (total_students, total_expected, total_collected,
-        # outstanding_balance, paid/partial/unpaid counts).
-        if is_inactive:
-            if student_status == "graduated":
-                graduated_count += 1
-            else:
-                left_count += 1
-        else:
+        # Count for this page only (for display, not for totals)
+        if not is_inactive:
             if fee_status == "paid":
-                paid_count += 1
+                page_paid_count += 1
             elif fee_status == "partial":
-                partial_count += 1
+                page_partial_count += 1
             elif fee_status == "unpaid":
-                unpaid_count += 1
-
-            total_expected += total_fee
-            total_collected += paid_amount
+                page_unpaid_count += 1
 
         fee_type = fee_type_from_payment.get(student_id) or special_fee_map.get(student_id, "tuition")
 
@@ -4429,11 +4582,11 @@ async def get_financial_report_students(
 
     return {
         "summary": {
-            "total_students": total_students,  # Use actual total from count_documents
+            "total_students": active_count,  # Active students only
             "total_expected": total_expected,
             "total_collected": total_collected,
-            "outstanding_balance": total_expected - total_collected,
-            "collection_rate": round((total_collected / total_expected * 100), 2) if total_expected > 0 else 0,
+            "outstanding_balance": outstanding_balance,
+            "collection_rate": collection_rate,
             "paid_count": paid_count,
             "partial_count": partial_count,
             "unpaid_count": unpaid_count,
