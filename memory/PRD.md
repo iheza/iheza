@@ -356,15 +356,18 @@ Migrate a React/Vite zip file ("iheza-project.zip") for the "IHEZA School Manage
 #### CRITICAL P0 Fixes - Memory Overload & 502/520 Crashes ✅
 **Problem**: Production app crashing due to massive unpaginated MongoDB queries loading into memory, coupled with aggressive frontend polling and large base64 image uploads.
 
-**Implemented Fixes**:
+**Implemented Fixes (September 2, 2026)**:
 1. **Route Shadowing Fixed**: Moved `/api/users/chains` static route BEFORE parameterized `/api/users/{user_id}` to fix route shadowing
 2. **Parameter Shadowing Fixed**: Renamed `status` parameters to `fee_status`, `task_status`, `report_status`, `comm_status`, `announcement_status` to avoid shadowing `fastapi.status` import
 3. **Bare Except Fixed**: Changed `except:` to `except Exception:`
 4. **Service Worker Fixed**: Changed `clients` to `self.clients` in sw.js
 5. **Pagination Limits Reduced**:
-   - `.to_list(5000)` → `.to_list(1000-2000)` across attendance, grades, fees, payments
-   - `.to_list(None)` (unlimited!) → `.to_list(5000-10000)` for background tasks
-   - `/api/sync` already has `counts_only=true` mode and pagination
+   - `/api/students`: 1000 → 500 records, excludes passport_photo/profile_pic
+   - `/api/admissions`: 500+2000 → 300+500 records, excludes passport_photo
+   - `/api/attendance`: 2000 → 1000 records with minimal projection
+   - `/api/reports/attendance`: Changed from fetching all records to DB aggregation pipeline (HUGE improvement)
+   - `/api/staff-attendance-detailed`: 5000 → 1000 records with minimal projection
+   - Background tasks: `.to_list(None)` → `.to_list(5000-10000)`
 6. **500KB Image Upload Limit**: Added to profile pic upload and admission passport photo endpoints
 7. **Database Cleanup**: Ran script to delete existing heavy base64 images from:
    - `payments.receipt_image` 
@@ -379,6 +382,8 @@ Migrate a React/Vite zip file ("iheza-project.zip") for the "IHEZA School Manage
 - `/app/backend/cleanup_images.py` - Image cleanup script (run once)
 
 **Testing**: All 8 backend tests passed, all 4 frontend flows verified (100% success rate)
+
+**IMPORTANT**: After publishing, you may still need to run the image cleanup script on your production database to remove existing heavy images that are causing memory pressure.
 
 ## Backlog / Future Tasks
 1. **P0 (Fixed)**: ~~Memory Overload & 502/520 Crashes~~ ✅

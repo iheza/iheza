@@ -2116,9 +2116,8 @@ async def get_students(class_name: Optional[str] = None, chain: Optional[str] = 
     
     if class_name:
         query["class_name"] = class_name
-    # Exclude _id and password_hash from the projection so we never have to
-    # deal with raw ObjectId values leaking into the response.
-    students = await db.students.find(query, {"_id": 0, "password_hash": 0}).to_list(1000)
+    # Exclude _id, password_hash, and heavy image fields from the projection
+    students = await db.students.find(query, {"_id": 0, "password_hash": 0, "passport_photo": 0, "profile_pic": 0}).to_list(500)
     result = []
     for s in students:
         try:
@@ -4713,12 +4712,23 @@ async def get_attendance_report(
     if start_date and end_date:
         query["date"] = {"$gte": start_date, "$lte": end_date}
     
-    records = await db.attendance.find(query, {"_id": 0}).to_list(2000)
+    # Use aggregation pipeline to count directly in DB - MUCH more memory efficient
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": "$status",
+            "count": {"$sum": 1}
+        }}
+    ]
     
-    total = len(records)
-    present = len([r for r in records if r.get("status") == "present"])
-    absent = len([r for r in records if r.get("status") == "absent"])
-    late = len([r for r in records if r.get("status") == "late"])
+    results = await db.attendance.aggregate(pipeline).to_list(10)
+    
+    # Parse results
+    status_counts = {r["_id"]: r["count"] for r in results}
+    total = sum(status_counts.values())
+    present = status_counts.get("present", 0)
+    absent = status_counts.get("absent", 0)
+    late = status_counts.get("late", 0)
     
     return {
         "total_records": total,
@@ -4755,7 +4765,7 @@ async def get_staff_attendance_detailed(
     elif end_date:
         query["date"] = {"$lte": end_date}
     
-    records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(5000)
+    records = await db.attendance.find(query, {"_id": 0, "target_id": 1, "status": 1, "date": 1}).sort("date", -1).to_list(1000)
     
     # Get all staff for role filtering
     staff_query = get_chain_filter(current_user) if current_user else {}
@@ -7415,14 +7425,15 @@ async def get_admissions(
     else:
         query = get_chain_filter(current_user)
     
-    # 1. Fetch admission records from the admissions collection
-    admissions = await db.admissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # 1. Fetch admission records from the admissions collection (exclude heavy passport photos)
+    admissions = await db.admissions.find(query, {"_id": 0, "passport_photo": 0}).sort("created_at", -1).to_list(300)
     admission_list = [serialize_doc(a) for a in admissions]
     
     # 2. Fetch students from the students collection and merge them in
     #    This ensures students added via the Students component appear in the Admission list.
+    #    Exclude heavy fields like passport_photo and profile_pic
     students_query = dict(query)
-    students = await db.students.find(students_query, {"_id": 0, "password_hash": 0}).to_list(2000)
+    students = await db.students.find(students_query, {"_id": 0, "password_hash": 0, "passport_photo": 0, "profile_pic": 0}).to_list(500)
     
     # Build a set of existing admission student names (case-insensitive) to avoid duplicates
     existing_names = set()

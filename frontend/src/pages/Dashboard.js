@@ -222,9 +222,8 @@ function Dashboard() {
   // Show import button for DLP chain Principal/Director - DISABLED for now
   const showDLPImportButton = false;
 
-  // Show import button for DUP chain Principal/Director
-  const showDUPImportButton = currentUser?.chain === 'DUP' && 
-    ['principal', 'director'].includes(currentUser?.role?.toLowerCase());
+  // Show import button for DUP chain Principal/Director - DISABLED for now
+  const showDUPImportButton = false;
 
   const StatCard = ({ icon: Icon, label, value, color, trend }) => (
     <div className="stat-card" style={{ '--stat-color': color }}>
