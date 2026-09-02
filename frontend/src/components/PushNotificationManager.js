@@ -32,6 +32,22 @@ function PushNotificationManager() {
       return;
     }
 
+    // If the browser has already granted permission, never show the prompt again
+    if (Notification.permission === 'granted') {
+      setPermission('granted');
+      localStorage.setItem('push-notification-choice', 'enabled');
+      ensureSubscription();
+      return;
+    }
+
+    // If the browser has already denied permission, never show the prompt again
+    if (Notification.permission === 'denied') {
+      setPermission('denied');
+      localStorage.setItem('push-notification-choice', 'disabled');
+      return;
+    }
+
+    // Browser permission is still 'default' - check the user's stored choice
     const choice = localStorage.getItem('push-notification-choice');
     if (choice === 'enabled') {
       setPermission('granted');
@@ -49,6 +65,7 @@ function PushNotificationManager() {
   }, []);
 
 
+
   // Get the auth token from localStorage (same key used by the app)
   const getToken = useCallback(() => {
     return (
@@ -58,6 +75,17 @@ function PushNotificationManager() {
       ''
     );
   }, []);
+
+  // Get the current user from localStorage (same key used by the app)
+  const getCurrentUser = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }, []);
+
 
   // Get the API base URL
   const getBaseUrl = useCallback(() => {
@@ -130,6 +158,7 @@ function PushNotificationManager() {
       // Send the subscription to the backend
       const baseUrl = getBaseUrl();
       const token = getToken();
+      const currentUser = getCurrentUser();
       const res = await fetch(`${baseUrl}/api/push/subscribe`, {
         method: 'POST',
         headers: {
@@ -137,6 +166,10 @@ function PushNotificationManager() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
+          // The backend PushSubscription model requires user_id and chain.
+          // user_id is the user's "sub" (access code) and chain is their school.
+          user_id: currentUser?.sub || currentUser?.id || currentUser?.accessCode || '',
+          chain: currentUser?.chain || '',
           endpoint: subscription.endpoint,
           keys: subscription.toJSON().keys,
         }),
@@ -154,7 +187,8 @@ function PushNotificationManager() {
     } finally {
       setLoading(false);
     }
-  }, [getBaseUrl, getToken, getVapidPublicKey, urlBase64ToUint8Array]);
+  }, [getBaseUrl, getToken, getCurrentUser, getVapidPublicKey, urlBase64ToUint8Array]);
+
 
   // Unsubscribe from push notifications
   const unsubscribe = useCallback(async () => {
@@ -194,6 +228,9 @@ function PushNotificationManager() {
       const result = await Notification.requestPermission();
       setPermission(result);
       if (result === 'granted') {
+        // Persist the choice immediately so the prompt never reappears,
+        // even if the backend subscription fails (e.g. VAPID not configured).
+        localStorage.setItem('push-notification-choice', 'enabled');
         await ensureSubscription();
       } else {
         localStorage.setItem('push-notification-choice', 'disabled');
@@ -203,6 +240,7 @@ function PushNotificationManager() {
       localStorage.setItem('push-notification-choice', 'disabled');
     }
   };
+
 
   const handleDismiss = () => {
     setShowPrompt(false);

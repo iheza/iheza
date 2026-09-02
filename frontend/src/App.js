@@ -34,11 +34,15 @@ import Expenses from './pages/Expenses';
 import ExaminationReports from './pages/ExaminationReports';
 import EBook from './pages/EBook';
 import Admission from './pages/Admission';
+import Timetable from './pages/Timetable';
+
 
 // Components
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import RoleRedirect from './components/RoleRedirect';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+
 import { ToastProvider } from './components/Common/Toast';
 import { LanguageProvider } from './contexts/LanguageContext';
 
@@ -85,11 +89,21 @@ if ('serviceWorker' in navigator) {
         .then((registration) => {
           console.log('IHEZA SW registered:', registration.scope);
           
-          // Check for updates immediately and periodically
-          registration.update();
+          // Check for updates immediately and periodically.
+          // NOTE: We check every 30 minutes instead of every minute. Checking
+          // every minute caused repeated "Failed to update a ServiceWorker ...
+          // An unknown error occurred when fetching the script" errors on
+          // preview hosts that intermittently fail to serve sw.js. A 30-minute
+          // interval keeps the SW fresh without hammering the server.
+          registration.update().catch(() => {
+            // Ignore update failures - the SW will retry on the next interval.
+            // This prevents unhandled promise rejections from spamming the console.
+          });
           setInterval(() => {
-            registration.update();
-          }, 60 * 1000); // Check every minute
+            registration.update().catch(() => {
+              // Ignore update failures silently.
+            });
+          }, 30 * 60 * 1000); // Check every 30 minutes
           
           // Handle updates
           registration.addEventListener('updatefound', () => {
@@ -194,8 +208,9 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Routes>
-                  <Route index element={<Dashboard />} />
-                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route index element={<RoleRedirect><Dashboard /></RoleRedirect>} />
+                  <Route path="dashboard" element={<RoleRedirect><Dashboard /></RoleRedirect>} />
+
                   <Route path="students" element={<Students />} />
                   <Route path="staff" element={<Staff />} />
                   <Route path="classes" element={<Classes />} />
@@ -208,7 +223,9 @@ function App() {
                   <Route path="tasks" element={<TaskAssignment />} />
                   <Route path="classroom" element={<Classroom />} />
                   <Route path="academic-hub" element={<AcademicHub />} />
+                  <Route path="timetable" element={<Timetable />} />
                   <Route path="student-portal" element={<StudentPortal />} />
+
                   <Route path="announcements" element={<Announcements />} />
                   <Route path="qr-management" element={<QRCodeManagement />} />
                   <Route path="fee-structure" element={<FeeStructure />} />

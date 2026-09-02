@@ -8,6 +8,7 @@ import {
   GraduationCap, Camera, Search, RefreshCw, Download
 } from 'lucide-react';
 import './Admission.css';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 
 const EMPTY_FORM = {
@@ -84,7 +85,8 @@ function Admission() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [zoomPhoto, setZoomPhoto] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 20;
+
 
 
   const getToken = () => {
@@ -1123,10 +1125,7 @@ function Admission() {
       {/* Admissions List (Excel style) */}
       <div className="excel-container">
         {loading ? (
-          <div className="admission-loading">
-            <div className="spinner"></div>
-            <p>Loading admissions...</p>
-          </div>
+          <LoadingSpinner message="Loading admissions..." />
         ) : filteredAdmissions.length === 0 ? (
           <div className="admission-empty">
             <i className="fas fa-inbox"></i>

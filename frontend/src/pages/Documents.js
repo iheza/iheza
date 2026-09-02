@@ -13,7 +13,9 @@ const Documents = () => {
   const [previewType, setPreviewType] = useState(null);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'projects', 'report_cards', 'analytics', 'examination_reports'
   const [examReportFilter, setExamReportFilter] = useState({ year: '', term: '' });
+  const [projectCaption, setProjectCaption] = useState(''); // Caption for project pic uploads
   const [selectedChain, setSelectedChain] = useState('');
+
   const [filterSource, setFilterSource] = useState(null); // Clickable filter from analytics
   const [filterTeacher, setFilterTeacher] = useState(null); // Clickable filter from analytics
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,6 +119,9 @@ const Documents = () => {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       
+      // Determine if this is a project pic upload (from the Projects tab)
+      const isProjectUpload = activeTab === 'projects';
+      
       // Validate file type
       const allowedTypes = [
         'image/jpeg', 'image/png', 'image/jpg',
@@ -130,14 +135,22 @@ const Documents = () => {
         continue;
       }
 
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert(`File ${file.name} is too large. Maximum size is 10MB.`);
+      // Validate file size
+      // Project pics are limited to 1MB; other files max 10MB
+      const maxSize = isProjectUpload ? 1 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert(`File ${file.name} is too large. Maximum size is ${isProjectUpload ? '1MB' : '10MB'}.`);
         continue;
       }
 
       try {
-        const base64 = await fileToBase64(file);
+        // For project pics, resize the image to 100x100 px before saving
+        let base64;
+        if (isProjectUpload && file.type.startsWith('image/')) {
+          base64 = await resizeImageTo100px(file);
+        } else {
+          base64 = await fileToBase64(file);
+        }
         // Determine document category based on the active tab.
         // When uploading from the "Examination Reports" tab, categorize the file
         // as an examination report so it appears in the Examination Reports
@@ -152,6 +165,15 @@ const Documents = () => {
           source: isExamReportUpload ? 'examination_report' : 'upload',
           uploaded_by: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email || 'Unknown' : localStorage.getItem('userName') || 'Unknown',
           uploadedAt: new Date().toISOString(),
+          ...(isProjectUpload && {
+            isProjectPic: true,
+            caption: projectCaption.trim() || '',
+            metadata: {
+              caption: projectCaption.trim() || '',
+              teacher: currentUser ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email || 'Unknown' : 'Unknown',
+              uploadedFrom: 'projects'
+            }
+          }),
           ...(isExamReportUpload && {
             chain: currentUser?.chain || localStorage.getItem('userChain') || 'IHEZA',
             metadata: {
@@ -165,6 +187,7 @@ const Documents = () => {
           })
         };
         newDocs.push(docData);
+
 
 
         // Also upload to backend API for persistence
@@ -204,6 +227,31 @@ const Documents = () => {
       reader.readAsDataURL(file);
     });
   };
+
+  // Resize an image file to 100x100 px (used for project pics)
+  const resizeImageTo100px = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        // Use window.Image explicitly because `Image` is imported from lucide-react (icon)
+        const img = new window.Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 100;
+          canvas.height = 100;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, 100, 100);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
 
   const deleteDocument = (id) => {
     if (window.confirm('Are you sure you want to delete this document?')) {
@@ -1340,11 +1388,31 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
                   <td className="col-id">{(currentPage - 1) * pageSize + idx + 1}</td>
                   <td className="col-name">
                     <div className="doc-cell">
-                      <div className={`icon ${iconCls}`}>
-                        {iconCls === 'image' ? <Image size={16} /> : iconCls === 'pdf' ? <FileText size={16} /> : iconCls === 'word' ? <FileText size={16} /> : <File size={16} />}
-                      </div>
+                      {doc.isProjectPic && doc.data ? (
+                        <img
+                          src={doc.data}
+                          alt={doc.name}
+                          style={{
+                            width: '100px',
+                            height: '100px',
+                            objectFit: 'cover',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0',
+                            flexShrink: 0
+                          }}
+                        />
+                      ) : (
+                        <div className={`icon ${iconCls}`}>
+                          {iconCls === 'image' ? <Image size={16} /> : iconCls === 'pdf' ? <FileText size={16} /> : iconCls === 'word' ? <FileText size={16} /> : <File size={16} />}
+                        </div>
+                      )}
                       <div className="info">
                         <div className="name">{doc.name}</div>
+                        {doc.caption && (
+                          <div className="meta" style={{ color: '#7c3aed', fontWeight: '500' }}>
+                            📝 {doc.caption}
+                          </div>
+                        )}
                         <div className="meta">
                           {new Date(doc.uploadedAt).toLocaleDateString()}
                           {doc.chain && ` · ${doc.chain}`}
@@ -1352,6 +1420,7 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
                       </div>
                     </div>
                   </td>
+
                   <td><span className={`type-badge ${typeBadge.cls}`}>{typeBadge.label}</span></td>
                   <td><span className={`source-badge ${sourceBadge.cls}`}>{sourceBadge.label}</span></td>
                   <td>{formatFileSize(doc.size)}</td>
@@ -2307,12 +2376,14 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
           All Documents
         </button>
         <button 
-          className={`tab-btn projects-tab ${activeTab === 'projects' ? 'active' : ''}`}
-          onClick={() => setActiveTab('projects')}
+          className={`tab-btn projects-tab ${activeTab === 'examination_reports' ? 'active' : ''}`}
+          onClick={() => setActiveTab('examination_reports')}
         >
           <FolderOpen size={16} />
-          Projects
+          Examination Report
         </button>
+
+
         <button 
           className={`tab-btn ${activeTab === 'report_cards' ? 'active' : ''}`}
           onClick={() => setActiveTab('report_cards')}
@@ -2329,17 +2400,78 @@ ${tabDataToTable(fd.markingSchemeErrors, ['CLASSES', 'SUBJECTS', 'QUESTIONS', 'E
           Analytics
         </button>
         <button 
-          className={`tab-btn ${activeTab === 'examination_reports' ? 'active' : ''}`}
-          onClick={() => setActiveTab('examination_reports')}
-          style={activeTab === 'examination_reports' ? { color: '#8b5cf6' } : {}}
+          className={`tab-btn ${activeTab === 'projects' ? 'active' : ''}`}
+          onClick={() => setActiveTab('projects')}
+          style={activeTab === 'projects' ? { color: '#8b5cf6' } : {}}
         >
           <FileText size={16} />
-          Examination Reports
+          Projects
         </button>
+
+
       </div>
-      
+
+      {/* Project Pic Upload Panel - shown when Projects tab is active */}
+      {activeTab === 'projects' && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          marginBottom: '16px',
+          padding: '16px',
+          background: 'white',
+          borderRadius: '10px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Image size={18} style={{ color: '#8b5cf6' }} />
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+              Upload Project Picture
+            </span>
+            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>
+              Max 1MB · Saved as 100px
+            </span>
+          </div>
+          <textarea
+            value={projectCaption}
+            onChange={(e) => setProjectCaption(e.target.value)}
+            placeholder="Write a caption/description for this picture..."
+            rows={2}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '13px',
+              color: '#1e293b',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+              background: '#f8fafc'
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              className="upload-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={{ background: '#8b5cf6' }}
+            >
+              <Upload size={16} />
+              {uploading ? 'Uploading...' : 'Upload Picture'}
+            </button>
+            {projectCaption && (
+              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                Caption will be attached to the uploaded picture
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Examination Reports Filter */}
       {activeTab === 'examination_reports' && (
+
         <div style={{
           display: 'flex',
           gap: '12px',

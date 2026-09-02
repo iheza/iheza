@@ -166,9 +166,13 @@ function EBook() {
     : userChain;
 
   useEffect(() => {
+    // loadBooks also derives the grade-level filter options from the same
+    // response, so we do NOT call loadClasses() here too. Previously both
+    // functions fetched /ebooks independently, firing the SAME request twice
+    // on every mount / chain change.
     loadBooks();
-    loadClasses();
   }, [selectedChain, userChain]);
+
 
   // ----- LOAD AZURE VOICES ON MOUNT & PRE-WARM AZURE TTS -----
   useEffect(() => {
@@ -209,7 +213,12 @@ function EBook() {
       setLoading(true);
       const params = activeChain ? { chain: activeChain } : {};
       const response = await apiClient.get('/ebooks', { params });
-      setBooks(response.data || []);
+      const booksData = response.data || [];
+      setBooks(booksData);
+      // Derive the grade-level filter options from the SAME response so we
+      // don't issue a second /ebooks request just to build the dropdown.
+      const gradeLevels = [...new Set(booksData.map(b => b.grade_level).filter(Boolean))].sort();
+      setClasses(gradeLevels);
     } catch (error) {
       console.error('Failed to load books:', error);
       toast.error('Failed to load e-books');
@@ -218,19 +227,6 @@ function EBook() {
     }
   };
 
-  const loadClasses = async () => {
-    try {
-      // Load books first to extract unique grade_level values
-      const params = activeChain ? { chain: activeChain } : {};
-      const response = await apiClient.get('/ebooks', { params });
-      const booksData = response.data || [];
-      // Extract unique grade_level values from books
-      const gradeLevels = [...new Set(booksData.map(b => b.grade_level).filter(Boolean))].sort();
-      setClasses(gradeLevels);
-    } catch (error) {
-      console.error('Failed to load grade levels:', error);
-    }
-  };
 
 
   const handleDelete = async (bookId) => {

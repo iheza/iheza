@@ -820,7 +820,7 @@ async def generate_examination_report_all_data(
     year_start = f"{year}-01-01"
     year_end = f"{year}-12-31"
     grades_query = {"chain": chain, "term": term}
-    all_grades = await db.grades.find(grades_query, {"_id": 0}).to_list(5000)
+    all_grades = await db.grades.find(grades_query, {"_id": 0}).to_list(2000)
     
     # Also fetch student IDs per class for grade lookups
     students_by_class_ids = {}
@@ -1088,14 +1088,19 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def serialize_doc(doc: dict) -> dict:
-    """Convert MongoDB document to JSON-serializable dict"""
+    """Convert MongoDB document to JSON-serializable dict.
+
+    Recursively handles nested datetime, ObjectId, Decimal, bytes, and other
+    BSON types so the origin server never crashes on a single malformed field
+    (which Cloudflare reports as a 520 error / HTTP2 protocol error).
+    """
     if doc is None:
         return None
     result = {k: v for k, v in doc.items() if k != '_id'}
     for key, value in result.items():
-        if isinstance(value, datetime):
-            result[key] = value.isoformat()
+        result[key] = _json_safe(value)
     return result
+
 
 def get_chain_filter(user: dict) -> dict:
     """Get MongoDB filter based on user's chain access"""
@@ -1176,7 +1181,12 @@ async def send_push_notification(user_id: str, title: str, body: str, url: str =
     sent = 0
     for sub in subs:
         try:
-            webpush(
+            # Run the blocking webpush() call in a thread executor so it does NOT
+            # block the asyncio event loop. The pywebpush library performs a
+            # synchronous HTTP request to the push service (FCM/Web Push), which
+            # would otherwise freeze ALL other API requests while it runs.
+            await asyncio.to_thread(
+                webpush,
                 subscription_info={
                     "endpoint": sub["endpoint"],
                     "keys": sub.get("keys", {}),
@@ -1198,6 +1208,7 @@ async def send_push_notification(user_id: str, title: str, body: str, url: str =
             logger.warning(f"Push notification error for user {user_id}: {e}")
 
     return sent
+
 
 
 async def send_push_to_students(student_ids: List[str], title: str, body: str, url: str = "/portal/student-portal"):
@@ -1309,8 +1320,85 @@ async def run_fee_reminder_check():
     months_elapsed = days_since_start / 30.0
     expected_remaining_ratio = max(0.0, 1.0 - (months_elapsed / TERM_MONTHS))
 
-    # Get all students
-    students = await db.students.find({}, {"_id": 0, "password_hash": 0}).to_list(5000)
+    # Get all students - limit to 2000 per batch to prevent memory overload
+    students = await db.students.find({}, {"_id": 0, "password_hash": 0, "profile_pic": 0, "passport_photo": 0}).to_list(2000)
+
+    # =====================================================================
+    # BATCHED LOOKUPS (replaces the previous N+1 query pattern).
+    # Previously this loop ran up to 3-4 separate DB queries PER student
+    # (student_fees, payments, fee_structures, fee_reminders), which could
+    # block the single uvicorn worker for a very long time and cause
+    # Cloudflare 520 timeouts on all other API requests. Now we fetch each
+    # collection ONCE with $in queries and build in-memory lookup dicts, so
+    # the per-student loop performs ZERO additional DB queries.
+    # =====================================================================
+    student_ids = [s.get("id") for s in students if s.get("id")]
+
+    # 1) Batch student_fees
+    student_fee_map = {}
+    if student_ids:
+        try:
+            fee_records = await db.student_fees.find(
+                {"student_id": {"$in": student_ids}},
+                {"_id": 0}
+            ).to_list(5000)
+            for fr in fee_records:
+                sid = fr.get("student_id")
+                if sid and sid not in student_fee_map:
+                    student_fee_map[sid] = fr
+        except Exception as e:
+            logger.error(f"Fee reminder: batch student_fees lookup failed: {e}")
+
+    # 2) Batch payments (only amount needed)
+    paid_totals = {}
+    if student_ids:
+        try:
+            payment_records = await db.payments.find(
+                {"student_id": {"$in": student_ids}},
+                {"_id": 0, "student_id": 1, "amount": 1}
+            ).to_list(10000)
+            for p in payment_records:
+                sid = p.get("student_id")
+                if sid:
+                    paid_totals[sid] = paid_totals.get(sid, 0) + p.get("amount", 0)
+        except Exception as e:
+            logger.error(f"Fee reminder: batch payments lookup failed: {e}")
+
+    # 3) Batch fee_structures (all active structures, filtered in memory by
+    #    chain + class_name to preserve the original query semantics).
+    #    Only needed for students WITHOUT a student_fees record.
+    fee_structure_map = {}
+    chains_needed = set()
+    for s in students:
+        sid = s.get("id")
+        if sid and sid not in student_fee_map and s.get("chain"):
+            chains_needed.add(s.get("chain"))
+    if chains_needed:
+        try:
+            all_fee_structures = await db.fee_structures.find(
+                {"chain": {"$in": list(chains_needed)}, "status": "active"},
+                {"_id": 0}
+            ).to_list(500)
+            for fs in all_fee_structures:
+                key = f"{fs.get('chain')}:{fs.get('class_name') or ''}"
+                fee_structure_map.setdefault(key, []).append(fs)
+        except Exception as e:
+            logger.error(f"Fee reminder: batch fee_structures lookup failed: {e}")
+
+    # 4) Batch fee_reminders (most recent per student for cooldown check)
+    last_reminder_map = {}
+    if student_ids:
+        try:
+            reminder_records = await db.fee_reminders.find(
+                {"student_id": {"$in": student_ids}},
+                {"_id": 0, "student_id": 1, "sent_at": 1}
+            ).sort("sent_at", -1).to_list(5000)
+            for rr in reminder_records:
+                sid = rr.get("student_id")
+                if sid and sid not in last_reminder_map:
+                    last_reminder_map[sid] = rr
+        except Exception as e:
+            logger.error(f"Fee reminder: batch fee_reminders lookup failed: {e}")
 
     reminded = 0
     for student in students:
@@ -1321,23 +1409,26 @@ async def run_fee_reminder_check():
         chain = student.get("chain")
         class_name = student.get("class_name")
 
-        # Get student's fee record
-        student_fee = await db.student_fees.find_one({"student_id": student_id}, {"_id": 0})
+        # Look up student's fee record from the batch map (no DB query)
+        student_fee = student_fee_map.get(student_id)
 
-        # Get payments
-        payments = await db.payments.find({"student_id": student_id}, {"_id": 0}).to_list(100)
-        total_paid = sum(p.get("amount", 0) for p in payments)
+        # Look up total paid from the batch map (no DB query)
+        total_paid = paid_totals.get(student_id, 0)
 
         # Determine total fees
         if student_fee and student_fee.get("amount"):
             total_fees = student_fee.get("amount", 0)
         else:
-            fee_structures = await db.fee_structures.find({
-                "chain": chain,
-                "status": "active",
-                "$or": [{"class_name": class_name}, {"class_name": None}, {"class_name": ""}]
-            }, {"_id": 0}).to_list(50)
-            total_fees = sum(f.get("amount", 0) for f in fee_structures)
+            # Fallback: sum active fee structures matching chain + class_name
+            # (or the chain-wide default where class_name is null/empty).
+            # This mirrors the original $or query semantics.
+            total_fees = 0
+            if chain:
+                exact_key = f"{chain}:{class_name or ''}"
+                default_key = f"{chain}:"
+                for key in (exact_key, default_key):
+                    for fs in fee_structure_map.get(key, []):
+                        total_fees += fs.get("amount", 0)
 
         if total_fees <= 0:
             continue
@@ -1356,11 +1447,9 @@ async def run_fee_reminder_check():
         if balance <= expected_remaining:
             continue  # On track
 
-        # Check cooldown - look for a recent reminder record
-        last_reminder = await db.fee_reminders.find_one(
-            {"student_id": student_id},
-            {"_id": 0}
-        ).sort("sent_at", -1)
+        # Check cooldown - look up the most recent reminder from the batch map
+        last_reminder = last_reminder_map.get(student_id)
+
         if last_reminder:
             last_sent = last_reminder.get("sent_at")
             if last_sent:
@@ -1389,6 +1478,7 @@ async def run_fee_reminder_check():
         reminded += 1
 
     logger.info(f"Fee reminder scheduler complete - reminded {reminded} students")
+
 
 
 async def fee_reminder_loop():
@@ -1611,6 +1701,16 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
     user_doc.pop('_id', None)
     return user_doc
 
+# NOTE: Static routes /users/chains must be defined BEFORE parameterized route /users/{user_id}
+# to avoid route shadowing issues
+
+@api_router.get("/users/chains")
+async def get_chains():
+    """Get all chains from database"""
+    # Temporarily allow unauthenticated access for testing
+    chains = await db.chains.find({}, {"_id": 0}).sort("name", 1).to_list(100)
+    return [serialize_doc(chain) for chain in chains] if chains else []
+
 @api_router.get("/users/{user_id}")
 async def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
@@ -1738,14 +1838,16 @@ async def generate_new_chain(
         }
     }
 
-@api_router.get("/users/chains")
-async def get_chains():
-    """Get all chains from database"""
-    # Temporarily allow unauthenticated access for testing
-    chains = await db.chains.find({}, {"_id": 0}).sort("name", 1).to_list(100)
-    return [serialize_doc(chain) for chain in chains] if chains else []
+@api_router.get("/chains/{chain_code}", response_model=Dict)
+async def get_public_chain(chain_code: str):
+    """Get a specific chain by code - public endpoint for chain landing pages (no auth required)"""
+    chain = await db.chains.find_one({"code": chain_code.upper()}, {"_id": 0})
+    if not chain:
+        raise HTTPException(status_code=404, detail="Chain not found")
+    return serialize_doc(chain)
 
 @api_router.get("/users/chains/{chain_code}", response_model=Dict)
+
 async def get_chain(chain_code: str, current_user: dict = Depends(get_current_user)):
     """Get a specific chain by code"""
     # Only allow principals and above to see chains
@@ -1947,6 +2049,11 @@ async def upload_staff_profile_pic(
     
     # Read and encode as base64
     contents = await file.read()
+    
+    # Enforce max image size of 500 KB (0.5 MB) to prevent memory overload
+    if len(contents) > 500 * 1024:
+        raise HTTPException(status_code=400, detail="Image must be less than 500KB")
+    
     import base64
     encoded = base64.b64encode(contents).decode('utf-8')
     data_url = f"data:{file.content_type};base64,{encoded}"
@@ -2337,8 +2444,9 @@ async def get_attendance(
         query["date"] = {"$regex": f"^{month}"}
     if chain:
         query["chain"] = chain
-    # Sort by date descending to get newest records first, increase limit to 5000
-    records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(5000)
+    # Sort by date descending to get newest records first, limit to 1000 with field projections
+    # to prevent memory overload. Frontend should request specific date ranges.
+    records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
     return [serialize_doc(r) for r in records]
 
 @api_router.post("/attendance", response_model=Dict)
@@ -2830,12 +2938,12 @@ async def update_grade(grade_id: str, updates: Dict):
 # ============ FEES ROUTES ============
 
 @api_router.get("/fees", response_model=List[Dict])
-async def get_fees(student_id: Optional[str] = None, status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def get_fees(student_id: Optional[str] = None, fee_status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     query = get_chain_filter(current_user) if current_user else {}
     if student_id:
         query["student_id"] = student_id
-    if status:
-        query["status"] = status
+    if fee_status:
+        query["status"] = fee_status
     fees = await db.fees.find(query, {"_id": 0}).to_list(1000)
     return [serialize_doc(f) for f in fees]
 
@@ -2928,8 +3036,16 @@ async def get_payments(
         query["student_id"] = student_id
     if chain:
         query["chain"] = chain
-    payments = await db.payments.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    # IMPORTANT: Project OUT receipt_image / receipt_images. Those base64 blobs
+    # are 1-5 MB each and are NOT needed for the payments table rows. Stripping
+    # them here cuts the /payments payload dramatically (a list of 1000 payments
+    # with receipts could otherwise be hundreds of MB).
+    payments = await db.payments.find(
+        query,
+        {"_id": 0, "receipt_image": 0, "receipt_images": 0}
+    ).sort("created_at", -1).to_list(1000)
     return [serialize_doc(p) for p in payments]
+
 
 
 # ============ SPECIAL FEES ROUTES ============
@@ -3402,7 +3518,7 @@ async def get_student_fee_summary(student_id: str, current_user: dict = Depends(
         try:
             from bson import ObjectId
             student = await db.students.find_one({"_id": ObjectId(decoded_id)}, {"password_hash": 0})
-        except:
+        except Exception:
             pass
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
@@ -3738,7 +3854,7 @@ async def delete_student_receipt(student_id: str, receipt_id: str, current_user:
 
 async def get_all_student_fees(
     class_name: Optional[str] = None,
-    status: Optional[str] = None,
+    fee_status: Optional[str] = None,
     chain: Optional[str] = None,
     page: int = 1,
     page_size: int = 50,
@@ -4074,10 +4190,10 @@ async def get_financial_report(
     student_map = {s["id"]: s for s in students}
     
     # Get all student fee records (individual fee assignments)
-    student_fees = await db.student_fees.find(chain_filter, {"_id": 0}).to_list(5000)
+    student_fees = await db.student_fees.find(chain_filter, {"_id": 0}).to_list(2000)
     
     # Get all payments
-    payments = await db.payments.find(chain_filter, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    payments = await db.payments.find(chain_filter, {"_id": 0}).sort("created_at", -1).to_list(2000)
     
     # Calculate totals from student_fees collection
     total_expected = sum(f.get("amount", 0) for f in student_fees)
@@ -4341,7 +4457,7 @@ async def get_report_cards(
     student_id: Optional[str] = None,
     term: Optional[str] = None,
     academic_year: Optional[str] = None,
-    status: Optional[str] = None,
+    report_status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     query = get_chain_filter(current_user) if current_user else {}
@@ -4351,8 +4467,8 @@ async def get_report_cards(
         query["term"] = term
     if academic_year:
         query["academic_year"] = academic_year
-    if status:
-        query["status"] = status
+    if report_status:
+        query["status"] = report_status
     
     report_cards = await db.report_cards.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return [serialize_doc(r) for r in report_cards]
@@ -4597,7 +4713,7 @@ async def get_attendance_report(
     if start_date and end_date:
         query["date"] = {"$gte": start_date, "$lte": end_date}
     
-    records = await db.attendance.find(query, {"_id": 0}).to_list(5000)
+    records = await db.attendance.find(query, {"_id": 0}).to_list(2000)
     
     total = len(records)
     present = len([r for r in records if r.get("status") == "present"])
@@ -4676,9 +4792,9 @@ async def get_staff_attendance_detailed(
         date = r.get("date")
         if date not in by_date:
             by_date[date] = {"present": 0, "absent": 0, "late": 0}
-        status = r.get("status", "absent")
-        if status in by_date[date]:
-            by_date[date][status] += 1
+        att_status = r.get("status", "absent")
+        if att_status in by_date[date]:
+            by_date[date][att_status] += 1
     
     # Group by role for chart data
     by_role = {}
@@ -4762,7 +4878,7 @@ async def get_fees_report(chain: Optional[str] = None, current_user: dict = Depe
 @api_router.get("/staff-tasks", response_model=List[Dict])
 async def get_staff_tasks(
     assigned_to: Optional[str] = None,
-    status: Optional[str] = None,
+    task_status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """Get staff tasks (Principal assigns to staff)"""
@@ -4775,11 +4891,19 @@ async def get_staff_tasks(
         query = {"assigned_to": assigned_to}
     else:
         query = get_chain_filter(current_user) if current_user else {}
-    if status:
-        query["status"] = status
+    if task_status:
+        query["status"] = task_status
     
-    tasks = await db.staff_tasks.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Field projection: only return the fields the frontend actually renders.
+    # This keeps the polling payload small (the TaskNotificationOverlay polls
+    # this endpoint every 60s per staff user, so trimming unused fields cuts
+    # sustained memory/bandwidth significantly).
+    tasks = await db.staff_tasks.find(
+        query,
+        {"_id": 0, "notes": 0}
+    ).sort("created_at", -1).to_list(500)
     return [serialize_doc(t) for t in tasks]
+
 
 @api_router.post("/staff-tasks", response_model=Dict)
 async def create_staff_task(task: StaffTask, current_user: dict = Depends(get_current_user)):
@@ -4966,16 +5090,16 @@ async def mark_student_task_completion(
         raise HTTPException(status_code=403, detail="Only teachers can mark task completion")
     
     student_id = data.get("student_id")
-    status = data.get("status", "completed")
+    completion_status = data.get("status", "completed")
     score = data.get("score")
     feedback = data.get("feedback")
     
     update_data = {
-        "status": status,
+        "status": completion_status,
         "marked_by": current_user.get("sub") if current_user else None
     }
     
-    if status == "completed":
+    if completion_status == "completed":
         update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
     if score is not None:
         update_data["score"] = score
@@ -5231,17 +5355,72 @@ async def delete_assessment(assessment_id: str, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Assessment not found")
     return {"success": True, "message": "Assessment moved to bin"}
 
+# ============ TIMETABLE ROUTES ============
+# Timetable is scoped per chain. Only Academic & Principal can edit.
+TIMETABLE_EDIT_ROLES = ['academic', 'principal']
+
+@api_router.get("/timetable")
+async def get_timetable(chain: str = None, current_user: dict = Depends(get_current_user)):
+    """Get the timetable for the current user's chain. All roles can view.
+    Directors/Coordinators can pass a ?chain= param to view a specific chain."""
+    query = {}
+    # If a chain param is provided (Director/Coordinator), use it.
+    # Otherwise fall back to the user's own chain filter.
+    if chain:
+        query["chain"] = chain
+    else:
+        query = get_chain_filter(current_user) if current_user else {}
+    # Timetable is stored as a single document per chain
+    query["type"] = "timetable"
+    timetable = await db.timetables.find_one(query, {"_id": 0})
+    if not timetable:
+        return {"rows": [], "updated_at": None}
+    return serialize_doc(timetable)
+
+@api_router.post("/timetable")
+async def save_timetable(payload: Dict, current_user: dict = Depends(get_current_user)):
+    """Save the timetable. Only Academic & Principal can edit."""
+    if current_user and current_user.get('role') not in TIMETABLE_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Only Academic & Principal can edit the timetable")
+    
+    rows = payload.get("rows", [])
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="rows must be a list")
+    
+    # Use the chain from the payload if provided (Director/Coordinator saving to a
+    # specific chain), otherwise fall back to the user's own chain.
+    chain = payload.get("chain") or (current_user.get("chain") if current_user else None)
+    query = {"type": "timetable"}
+    if chain:
+        query["chain"] = chain
+    
+    update = {
+        "$set": {
+            "rows": rows,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": current_user.get("name") if current_user else None,
+            "updated_by_role": current_user.get("role") if current_user else None,
+        }
+    }
+    if chain:
+        update["$set"]["chain"] = chain
+    
+    result = await db.timetables.update_one(query, update, upsert=True)
+    return {"success": True, "message": "Timetable saved successfully", "updated_at": update["$set"]["updated_at"]}
+
+
 # ============ COMMUNICATIONS ROUTES ============
+
 
 @api_router.get("/communications", response_model=List[Dict])
 async def get_communications(
-    status: Optional[str] = None,
+    comm_status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """Get communications/messages"""
     query = get_chain_filter(current_user) if current_user else {}
-    if status:
-        query["status"] = status
+    if comm_status:
+        query["status"] = comm_status
     
     communications = await db.communications.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return [serialize_doc(c) for c in communications]
@@ -5250,7 +5429,7 @@ async def get_communications(
 
 @api_router.get("/announcements", response_model=List[Dict])
 async def get_announcements(
-    status: Optional[str] = "published",
+    announcement_status: Optional[str] = "published",
     announcement_type: Optional[str] = None,
     chain: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
@@ -5262,8 +5441,8 @@ async def get_announcements(
     if chain and current_user and current_user.get('role') in ['director', 'coordinator']:
         query['chain'] = chain
     
-    if status:
-        query["status"] = status
+    if announcement_status:
+        query["status"] = announcement_status
     if announcement_type:
         query["announcement_type"] = announcement_type
     
@@ -5845,31 +6024,288 @@ async def delete_expense(expense_id: str, current_user: dict = Depends(get_curre
 # ============ SYNC & HEALTH ============
 
 @api_router.get("/sync")
-async def get_sync_data(chain: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    """Get all data for frontend sync - supports chain filter for IHEZA users"""
+async def get_sync_data(
+    chain: Optional[str] = None,
+    counts_only: Optional[bool] = False,
+    page: int = 1,
+    page_size: int = 1000,
+    current_user: dict = Depends(get_current_user),
+    response: Response = None
+):
+    """Get all data for frontend sync - supports chain filter for IHEZA users.
+
+    Memory optimization:
+    - `counts_only=true` returns ONLY document counts (no full arrays). The
+      Dashboard only needs counts, so this avoids downloading 1000 students +
+      1000 users + 100 classes + 200 subjects just to count them.
+    - Field projections strip heavy/unneeded fields from list responses.
+    - The `staff` key is removed (it duplicated `users` in the payload).
+    - Pagination (page/page_size) lets large datasets be fetched in chunks so
+      a single response never exceeds the reverse-proxy buffer.
+    - A short Cache-Control header lets the browser/reverse proxy serve repeat
+      sync loads from cache instead of re-hitting the origin.
+    """
     chain_filter = get_chain_filter(current_user) if current_user else {}
     
     # Allow IHEZA users (directors/coordinators) to filter by specific chain
     if chain and current_user and current_user.get('role') in ['director', 'coordinator']:
         chain_filter['chain'] = chain
-    
-    users = await db.users.find(chain_filter, {"_id": 0, "password_hash": 0}).to_list(1000)
-    students = await db.students.find(chain_filter, {"_id": 0, "password_hash": 0}).to_list(1000)
-    classes = await db.classes.find(chain_filter, {"_id": 0}).to_list(100)
-    subjects = await db.subjects.find(chain_filter, {"_id": 0}).to_list(200)
+
+    # Short cache window so repeat sync loads (e.g. every dashboard mount)
+    # are served from the browser/reverse-proxy cache instead of the origin.
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=30"
+
+    # Counts-only mode: return just counts to minimize memory/bandwidth.
+    if counts_only:
+        return {
+            "users": await db.users.count_documents(chain_filter),
+            "students": await db.students.count_documents(chain_filter),
+            "classes": await db.classes.count_documents(chain_filter),
+            "subjects": await db.subjects.count_documents(chain_filter),
+            "synced_at": datetime.now(timezone.utc).isoformat()
+        }
+
+    # Pagination for full mode so large datasets are fetched in chunks.
+    page = max(1, page)
+    page_size = max(1, min(1000, page_size))
+    skip = (page - 1) * page_size
+
+    # Full mode with field projections to keep payloads lean.
+    # Only return the fields the frontend actually renders.
+    users = await db.users.find(
+        chain_filter,
+        {"_id": 0, "password_hash": 0, "photo_url": 0}
+    ).skip(skip).limit(page_size).to_list(page_size)
+    students = await db.students.find(
+        chain_filter,
+        {"_id": 0, "password_hash": 0, "photo_url": 0}
+    ).skip(skip).limit(page_size).to_list(page_size)
+    classes = await db.classes.find(
+        chain_filter,
+        {"_id": 0, "students": 0}
+    ).skip(skip).limit(page_size).to_list(page_size)
+    subjects = await db.subjects.find(
+        chain_filter,
+        {"_id": 0}
+    ).skip(skip).limit(page_size).to_list(page_size)
     
     return {
         "users": [serialize_doc(u) for u in users],
         "students": [serialize_doc(s) for s in students],
-        "staff": [serialize_doc(u) for u in users],
         "classes": [serialize_doc(c) for c in classes],
         "subjects": [serialize_doc(s) for s in subjects],
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_users": await db.users.count_documents(chain_filter),
+            "total_students": await db.students.count_documents(chain_filter),
+            "total_classes": await db.classes.count_documents(chain_filter),
+            "total_subjects": await db.subjects.count_documents(chain_filter),
+        },
         "synced_at": datetime.now(timezone.utc).isoformat()
     }
+
+
+
+# ============ DASHBOARD AGGREGATION ENDPOINT ============
+# Collapses the Dashboard's 7-call "What's New" burst (payments, documents,
+# grades, subjects, users, almanac, admissions) into a SINGLE request. The
+# frontend previously fired these 7 calls in parallel per chain; this endpoint
+# does the same aggregation server-side, dramatically reducing request count
+# and origin load under concurrent dashboard loads.
+
+@api_router.get("/dashboard/whats-new")
+async def get_dashboard_whats_new(
+    chain: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+    response: Response = None
+):
+    """Aggregate all 'What's New' dashboard data for a chain in one request.
+
+    Performance optimizations:
+    - Strips base64 receipt images from payments (1-5 MB each) so the payload
+      stays small even when there are many payments.
+    - Sets a short Cache-Control header so the browser/reverse proxy can serve
+      repeat dashboard loads from cache instead of hitting the origin.
+    """
+    chain_filter = get_chain_filter(current_user) if current_user else {}
+
+    # Allow IHEZA users (directors/coordinators) to filter by specific chain
+    if chain and current_user and current_user.get('role') in ['director', 'coordinator']:
+        chain_filter['chain'] = chain
+
+    # Fetch all datasets in parallel (these are DB queries, not HTTP calls, so
+    # asyncio.gather is safe and efficient here).
+    # IMPORTANT: payments projection strips receipt_image / receipt_images
+    # (1-5 MB base64 blobs each) — they are NOT needed for the "What's New"
+    # recent-payments list and would bloat the response enormously.
+    payments, documents, grades, subjects, users, almanac, admissions = await asyncio.gather(
+        db.payments.find(chain_filter, {"_id": 0, "receipt_image": 0, "receipt_images": 0}).sort("created_at", -1).to_list(1000),
+        db.documents.find(chain_filter, {"_id": 0}).sort("uploadedAt", -1).to_list(500),
+        db.grades.find(chain_filter, {"_id": 0}).to_list(1000),
+        db.subjects.find(chain_filter, {"_id": 0}).to_list(200),
+        db.users.find(chain_filter, {"_id": 0, "password_hash": 0}).to_list(1000),
+        db.almanac_events.find(chain_filter, {"_id": 0}).to_list(1000),
+        db.admissions.find(chain_filter, {"_id": 0}).sort("created_at", -1).to_list(500),
+    )
+
+
+    payments = [serialize_doc(p) for p in payments]
+    documents = [serialize_doc(d) for d in documents]
+    grades = [serialize_doc(g) for g in grades]
+    subjects = [serialize_doc(s) for s in subjects]
+    users = [serialize_doc(u) for u in users]
+    almanac = [serialize_doc(e) for e in almanac]
+    admissions = [serialize_doc(a) for a in admissions]
+
+    # ---- 1. Recent payments (most recent 5) ----
+    recent_payments = sorted(
+        payments,
+        key=lambda p: p.get('created_at') or '',
+        reverse=True
+    )[:5]
+
+    # ---- 2. Recent documents (excluding project pics) ----
+    def is_project_pic(d):
+        return (
+            d.get('isProjectPic') is True
+            or (d.get('metadata') or {}).get('uploadedFrom') == 'projects'
+            or ((d.get('metadata') or {}).get('caption') and str(d.get('type') or '').startswith('image/'))
+        )
+
+    recent_documents = [
+        d for d in documents if not is_project_pic(d)
+    ]
+    recent_documents = sorted(
+        recent_documents,
+        key=lambda d: d.get('uploadedAt') or '',
+        reverse=True
+    )[:5]
+
+    # ---- 2b. Teacher submission ranking ----
+    teacher_submission_counts = {}
+    for d in documents:
+        teacher = (d.get('metadata') or {}).get('teacher') or d.get('uploaded_by') or 'Unknown'
+        teacher_submission_counts[teacher] = teacher_submission_counts.get(teacher, 0) + 1
+    teacher_submissions = [
+        {"name": name, "count": count}
+        for name, count in sorted(
+            teacher_submission_counts.items(),
+            key=lambda kv: kv[1],
+            reverse=True
+        )[:5]
+    ]
+
+    # ---- 2c. Recent project pics (3 most recent) ----
+    project_pics = [
+        {
+            "id": d.get('id'),
+            "name": d.get('name'),
+            "data": d.get('data'),
+            "caption": d.get('caption') or (d.get('metadata') or {}).get('caption') or '',
+            "uploadedAt": d.get('uploadedAt'),
+            "uploaded_by": (d.get('metadata') or {}).get('teacher') or d.get('uploaded_by') or 'Unknown'
+        }
+        for d in documents if is_project_pic(d) and d.get('data')
+    ]
+    project_pics = sorted(
+        project_pics,
+        key=lambda p: p.get('uploadedAt') or '',
+        reverse=True
+    )[:3]
+
+    # ---- 3. Teacher performance analytics ----
+    subject_teacher_map = {}
+    for sub in subjects:
+        if sub.get('teacher_id'):
+            subject_teacher_map[sub.get('id')] = sub.get('teacher_id')
+
+    teacher_name_map = {}
+    for u in users:
+        if u.get('role') in ('teacher', 'academic'):
+            teacher_name_map[u.get('id')] = (
+                u.get('name')
+                or f"{u.get('first_name') or ''} {u.get('last_name') or ''}".strip()
+                or u.get('access_code')
+            )
+
+    teacher_scores = {}
+    for g in grades:
+        teacher_id = subject_teacher_map.get(g.get('subject_id'))
+        if not teacher_id:
+            continue
+        entry = teacher_scores.setdefault(teacher_id, {"total": 0, "count": 0, "subject": ''})
+        entry["total"] += g.get('score') or 0
+        entry["count"] += 1
+        entry["subject"] = g.get('subject_id')
+
+    teacher_analytics = sorted(
+        [
+            {
+                "teacherId": tid,
+                "teacherName": teacher_name_map.get(tid, 'Unknown Teacher'),
+                "average": round(data["total"] / data["count"], 1) if data["count"] > 0 else 0,
+                "subjectCount": data["count"],
+            }
+            for tid, data in teacher_scores.items()
+        ],
+        key=lambda t: t["average"],
+        reverse=True
+    )[:3]
+
+    # ---- 4. Upcoming events ----
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    upcoming_events = []
+    for e in almanac:
+        try:
+            start = datetime.fromisoformat(e.get('start_date', '').replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            continue
+        # Normalize to an offset-aware datetime so we can compare against
+        # `today` (which is UTC-aware). Stored start_date values may be
+        # offset-naive (no timezone suffix), which previously raised
+        # "TypeError: can't compare offset-naive and offset-aware datetimes"
+        # and crashed the whole endpoint with a 500.
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if start >= today:
+            upcoming_events.append(e)
+    upcoming_events = sorted(
+        upcoming_events,
+        key=lambda e: e.get('start_date') or '',
+    )[:5]
+
+    # ---- 5. New admissions (most recent 5) ----
+    recent_admissions = sorted(
+        admissions,
+        key=lambda a: a.get('created_at') or '',
+        reverse=True
+    )[:5]
+
+    # Short cache window so the browser/reverse proxy can serve repeat
+    # dashboard loads from cache instead of re-hitting the origin. 30s is
+    # short enough that "What's New" stays reasonably fresh while still
+    # absorbing concurrent dashboard-load bursts.
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=30"
+
+    return {
+        "chain": chain,
+        "payments": recent_payments,
+        "documents": recent_documents,
+        "teacherAnalytics": teacher_analytics,
+        "teacherSubmissions": teacher_submissions,
+        "projectPics": project_pics,
+        "upcomingEvents": upcoming_events,
+        "newAdmissions": recent_admissions,
+    }
+
 
 @api_router.get("/")
 async def root():
     return {"message": "IHEZA School Management API", "version": "2.0.0", "status": "running"}
+
 
 @api_router.get("/health")
 async def health_check():
@@ -7106,6 +7542,20 @@ async def create_admission(payload: Dict, current_user: dict = Depends(get_curre
     # Determine chain
     chain = payload.get("chain") or current_user.get("chain") or ''
     
+    # Validate passport_photo size if provided (max 500KB)
+    passport_photo = payload.get("passport_photo")
+    if passport_photo and passport_photo.startswith("data:image/"):
+        try:
+            import base64 as _b64
+            base64_part = passport_photo.split(",", 1)[1] if "," in passport_photo else passport_photo
+            decoded_size = len(_b64.b64decode(base64_part))
+            if decoded_size > 500 * 1024:
+                raise HTTPException(status_code=400, detail="Passport photo must be less than 500KB")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid passport photo image data")
+    
     # Build admission_no from chain + student_number + year if not provided
     admission_no = payload.get("admission_no") or ''
     if not admission_no:
@@ -7251,7 +7701,20 @@ async def update_admission(admission_id: str, payload: Dict, current_user: dict 
         if payload.get("admission_date") is not None:
             student_updates["admission_date"] = payload.get("admission_date")
         if payload.get("passport_photo") is not None:
-            student_updates["passport_photo"] = payload.get("passport_photo")
+            # Validate passport_photo size (max 500KB)
+            passport_photo = payload.get("passport_photo")
+            if passport_photo and passport_photo.startswith("data:image/"):
+                try:
+                    import base64 as _b64
+                    base64_part = passport_photo.split(",", 1)[1] if "," in passport_photo else passport_photo
+                    decoded_size = len(_b64.b64decode(base64_part))
+                    if decoded_size > 500 * 1024:
+                        raise HTTPException(status_code=400, detail="Passport photo must be less than 500KB")
+                except HTTPException:
+                    raise
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid passport photo image data")
+            student_updates["passport_photo"] = passport_photo
         if payload.get("status") is not None:
             student_updates["status"] = payload.get("status")
         if payload.get("password"):
@@ -7328,6 +7791,8 @@ async def delete_admission(admission_id: str, current_user: dict = Depends(get_c
 # Include routers
 app.include_router(api_router)
 app.include_router(users_router, prefix="/api")
+
+
 
 # CORS configuration - explicitly allow production domain
 allowed_origins = [

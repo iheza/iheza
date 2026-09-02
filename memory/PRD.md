@@ -345,8 +345,47 @@ Migrate a React/Vite zip file ("iheza-project.zip") for the "IHEZA School Manage
 - **Production note**: User needs to deploy and click "Import" button from Dashboard
 
 ## Verified Test Credentials
-- Principal: `DUP/PRINCIPAL/0001/2021` / `DUP00000`
+- Principal: `DUP/PRINCIPAL/0002/2021` / `DUP00000`
 - Academic: `DUP/ACADEMIC/0002/2022` / `DUP00000`
 - Secretary: `DUP/SECRETARY/0001/2024` / `DUP00000`
 - Teacher: `DUP/TEACHER/0001/2024` / `DUP00000`
 - Student: `DUP/STU0078/2016` (Password blank)
+
+### Session: September 2, 2026
+
+#### CRITICAL P0 Fixes - Memory Overload & 502/520 Crashes ✅
+**Problem**: Production app crashing due to massive unpaginated MongoDB queries loading into memory, coupled with aggressive frontend polling and large base64 image uploads.
+
+**Implemented Fixes**:
+1. **Route Shadowing Fixed**: Moved `/api/users/chains` static route BEFORE parameterized `/api/users/{user_id}` to fix route shadowing
+2. **Parameter Shadowing Fixed**: Renamed `status` parameters to `fee_status`, `task_status`, `report_status`, `comm_status`, `announcement_status` to avoid shadowing `fastapi.status` import
+3. **Bare Except Fixed**: Changed `except:` to `except Exception:`
+4. **Service Worker Fixed**: Changed `clients` to `self.clients` in sw.js
+5. **Pagination Limits Reduced**:
+   - `.to_list(5000)` → `.to_list(1000-2000)` across attendance, grades, fees, payments
+   - `.to_list(None)` (unlimited!) → `.to_list(5000-10000)` for background tasks
+   - `/api/sync` already has `counts_only=true` mode and pagination
+6. **500KB Image Upload Limit**: Added to profile pic upload and admission passport photo endpoints
+7. **Database Cleanup**: Ran script to delete existing heavy base64 images from:
+   - `payments.receipt_image` 
+   - `admissions.passport_photo`
+   - `students.passport_photo/profile_pic` (base64 only)
+   - `users.profile_pic` (base64 only)
+   - `documents.data` (base64 only)
+
+**Files Modified**:
+- `/app/backend/server.py` - All pagination and parameter fixes
+- `/app/frontend/public/sw.js` - self.clients fix
+- `/app/backend/cleanup_images.py` - Image cleanup script (run once)
+
+**Testing**: All 8 backend tests passed, all 4 frontend flows verified (100% success rate)
+
+## Backlog / Future Tasks
+1. **P0 (Fixed)**: ~~Memory Overload & 502/520 Crashes~~ ✅
+2. **P0 (Pending)**: Chain Landing Page Mixing - Mobile dashboards sometimes show wrong chain links
+3. **P1 (Pending)**: Mobile Horizontal Scrolling Bug - Test showed no issues on 375px viewport, but should verify on real devices
+4. **P1 (Pending)**: Student Dashboard Duplication - Verify students only see appropriate features
+5. **P2**: Continue Backend Route Extraction - server.py is 7827 lines, should split into routers
+6. **P2**: Real-time notifications via WebSocket
+7. **P2**: Email/SMS notification integrations
+8. **P2**: Parent portal for viewing student progress

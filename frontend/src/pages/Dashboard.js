@@ -8,9 +8,30 @@ import { toast } from '../hooks/useSoundEnabledToast';
 import { 
   Users, GraduationCap, Calendar, ClipboardList, 
   TrendingUp, BookOpen, DollarSign, Database,
-  FileText, Award, Sparkles, UserPlus, TrendingDown
+  FileText, Award, Sparkles, UserPlus, TrendingDown, Image
 } from 'lucide-react';
 
+
+
+// Module-level cache for the "What's New" dashboard data. The Dashboard is
+// re-mounted frequently (every navigation back to it), and re-fetching all
+// chains' data each time is wasteful. We cache per-chain results with a short
+// TTL so re-mounts within the window reuse the previous fetch instead of
+// firing another 7-call burst per chain.
+const whatsNewCache = new Map(); // chain -> { data, expiresAt }
+const WHATS_NEW_TTL_MS = 60000; // 60s
+
+function getCachedWhatsNew(chain) {
+  const entry = whatsNewCache.get(chain);
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.data;
+  }
+  return null;
+}
+
+function setCachedWhatsNew(chain, data) {
+  whatsNewCache.set(chain, { data, expiresAt: Date.now() + WHATS_NEW_TTL_MS });
+}
 
 function Dashboard() {
   const currentUser = useSelector(selectCurrentUser);
@@ -21,17 +42,18 @@ function Dashboard() {
     classes: 0,
     subjects: 0,
   });
+
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
-  const [whatsNew, setWhatsNew] = useState({
-    payments: [],
-    documents: [],
-    teacherAnalytics: [],
-    upcomingEvents: [],
-    newAdmissions: [],
-  });
+  // "What's New" data grouped by chain (Director sees all chains)
+  const [whatsNewByChain, setWhatsNewByChain] = useState({});
+  // Flat list of slides: [{ chain, category }] — cycles through all chains automatically
+  const [slides, setSlides] = useState([]);
+
+
   const [activeCategory, setActiveCategory] = useState(0);
   const [slideDirection, setSlideDirection] = useState('next');
+
 
 
   // Only these roles can see Staff Management
@@ -41,116 +63,90 @@ function Dashboard() {
     loadDashboardData();
   }, []);
 
+  // Build the "What's New" data for a single chain.
+  // Uses the backend /dashboard/whats-new aggregation endpoint, which fetches
+  // all 7 datasets (payments, documents, grades, subjects, users, almanac,
+  // admissions) in a SINGLE request and pre-computes the same analytics that
+  // this component used to compute client-side. This collapses the previous
+  // 7-call parallel burst per chain into 1 request, dramatically reducing
+  // origin load under concurrent dashboard loads.
+  const buildChainWhatsNew = async (chain) => {
+    const params = chain ? { chain } : {};
+    const response = await apiClient.get('/dashboard/whats-new', { params });
+    const data = response.data || {};
+
+    return {
+      payments: data.payments || [],
+      documents: data.documents || [],
+      teacherAnalytics: data.teacherAnalytics || [],
+      teacherSubmissions: data.teacherSubmissions || [],
+      projectPics: data.projectPics || [],
+      upcomingEvents: data.upcomingEvents || [],
+      newAdmissions: data.newAdmissions || [],
+    };
+  };
+
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       const syncData = await dataService.syncData();
       
+      // /api/sync now returns counts_only=true (numbers) to avoid downloading
+      // the full 1000-student + 1000-user arrays just to count them. Handle
+      // both the new numeric shape and the legacy array shape defensively.
+      const countOf = (v) => (typeof v === 'number' ? v : (Array.isArray(v) ? v.length : 0));
       setStats({
-        students: syncData.students?.length || 0,
-        staff: syncData.staff?.length || 0,
-        classes: syncData.classes?.length || 0,
-        subjects: syncData.subjects?.length || 0,
+        students: countOf(syncData.students),
+        staff: countOf(syncData.staff) || countOf(syncData.users),
+        classes: countOf(syncData.classes),
+        subjects: countOf(syncData.subjects),
       });
 
-      // Fetch all "What's new" data in parallel
-      const [
-        paymentsRes,
-        documentsRes,
-        gradesRes,
-        subjectsRes,
-        usersRes,
-        almanacRes,
-        admissionsRes
-      ] = await Promise.allSettled([
-        apiClient.get('/payments'),
-        apiClient.get('/documents'),
-        apiClient.get('/grades'),
-        apiClient.get('/subjects'),
-        apiClient.get('/users'),
-        apiClient.get('/almanac'),
-        apiClient.get('/admissions'),
-      ]);
 
-      // 1. Recent payments (when a student's payments are edited)
-      const payments = paymentsRes.status === 'fulfilled' ? (paymentsRes.value.data || []) : [];
-      const recentPayments = payments
-        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-        .slice(0, 5);
+      // Determine which chains to show in "What's New".
+      // Director sees ALL chains (LALE, DLP, DUP) automatically; others see only their own chain.
+      const isDirector = currentUser?.role?.toLowerCase() === 'director';
+      const viewChains = isDirector
+        ? ['LALE', 'DLP', 'DUP']
+        : [currentUser?.chain || 'DUP'].filter(Boolean);
 
-      // 2. Recent document uploads and auto-saves
-      const documents = documentsRes.status === 'fulfilled' ? (documentsRes.value.data || []) : [];
-      const recentDocuments = documents
-        .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
-        .slice(0, 5);
+      const byChain = {};
+      const newSlides = [];
 
-      // 3. Teacher performance analytics (high and low performing teachers)
-      const grades = gradesRes.status === 'fulfilled' ? (gradesRes.value.data || []) : [];
-      const subjects = subjectsRes.status === 'fulfilled' ? (subjectsRes.value.data || []) : [];
-      const users = usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : [];
-      
-      // Map subject_id -> teacher_id, then teacher_id -> teacher name
-      const subjectTeacherMap = {};
-      subjects.forEach(sub => {
-        if (sub.teacher_id) subjectTeacherMap[sub.id] = sub.teacher_id;
-      });
-      
-      const teacherNameMap = {};
-      users.forEach(u => {
-        if (u.role === 'teacher' || u.role === 'academic') {
-          teacherNameMap[u.id] = u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.access_code;
+      // Iterate chains sequentially, reusing cached data when available and
+      // staggering fresh fetches so the 7-call bursts per chain don't all
+      // fire at once (which would spike the origin under concurrent load).
+      for (let i = 0; i < viewChains.length; i++) {
+        const chain = viewChains[i];
+
+        // Reuse cached "What's New" data if it's still fresh.
+        let chainData = getCachedWhatsNew(chain);
+        if (!chainData) {
+          chainData = await buildChainWhatsNew(chain);
+          setCachedWhatsNew(chain, chainData);
         }
-      });
-      
-      // Group grades by subject, compute average score per teacher
-      const teacherScores = {};
-      grades.forEach(g => {
-        const teacherId = subjectTeacherMap[g.subject_id];
-        if (!teacherId) return;
-        if (!teacherScores[teacherId]) {
-          teacherScores[teacherId] = { total: 0, count: 0, subject: '' };
+
+        byChain[chain] = chainData;
+
+        // Build slides for this chain (only categories that have data)
+        ['payments', 'documents', 'teacherAnalytics', 'teacherSubmissions', 'projectPics', 'upcomingEvents', 'newAdmissions'].forEach(cat => {
+          if (chainData[cat] && chainData[cat].length > 0) {
+            newSlides.push({ chain, category: cat });
+          }
+        });
+
+        // Stagger the next chain's fetch by 300ms so the origin isn't hit
+        // with all chains' 7-call bursts simultaneously.
+        if (i < viewChains.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
-        teacherScores[teacherId].total += g.score || 0;
-        teacherScores[teacherId].count += 1;
-        teacherScores[teacherId].subject = g.subject_id;
-      });
-      
-      const teacherAnalytics = Object.entries(teacherScores)
-        .map(([teacherId, data]) => ({
-          teacherId,
-          teacherName: teacherNameMap[teacherId] || 'Unknown Teacher',
-          average: data.count > 0 ? Math.round((data.total / data.count) * 10) / 10 : 0,
-          subjectCount: data.count,
-        }))
-        .sort((a, b) => b.average - a.average)
-        .slice(0, 5);
+      }
 
-      // 4. Upcoming events from the almanac
-      const almanacData = almanacRes.status === 'fulfilled' ? (almanacRes.value.data || {}) : {};
-      const events = almanacData.events || [];
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const upcomingEvents = events
-        .filter(e => {
-          const startDate = new Date(e.start_date);
-          return startDate >= today;
-        })
-        .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
-        .slice(0, 5);
 
-      // 5. New admissions (most recent)
-      const admissions = admissionsRes.status === 'fulfilled' ? (admissionsRes.value.data || []) : [];
-      const recentAdmissions = admissions
-        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-        .slice(0, 5);
-
-      setWhatsNew({
-        payments: recentPayments,
-        documents: recentDocuments,
-        teacherAnalytics,
-        upcomingEvents,
-        newAdmissions: recentAdmissions,
-      });
+      setWhatsNewByChain(byChain);
+      setSlides(newSlides);
+      setActiveCategory(0);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -158,24 +154,22 @@ function Dashboard() {
     }
   };
 
+  // The active slide (chain + category) currently being shown
+  const activeSlide = slides[activeCategory] || null;
+  // The data for the active slide's chain
+  const activeChainData = activeSlide ? (whatsNewByChain[activeSlide.chain] || {}) : {};
 
-  // Build list of available categories (only those with data)
-  const availableCategories = [];
-  if (whatsNew.payments.length > 0) availableCategories.push('payments');
-  if (whatsNew.documents.length > 0) availableCategories.push('documents');
-  if (whatsNew.teacherAnalytics.length > 0) availableCategories.push('teacherAnalytics');
-  if (whatsNew.upcomingEvents.length > 0) availableCategories.push('upcomingEvents');
-  if (whatsNew.newAdmissions.length > 0) availableCategories.push('newAdmissions');
-
-  // Auto-rotate categories every 4 seconds
+  // Auto-rotate slides every 5 seconds (cycles through all chains automatically)
   useEffect(() => {
-    if (availableCategories.length <= 1) return;
+    if (slides.length <= 1) return;
     const timer = setInterval(() => {
       setSlideDirection('next');
-      setActiveCategory(prev => (prev + 1) % availableCategories.length);
-    }, 4000);
+      setActiveCategory(prev => (prev + 1) % slides.length);
+    }, 5000);
     return () => clearInterval(timer);
-  }, [availableCategories.length]);
+  }, [slides.length]);
+
+
 
   // Import DLP data function
   const handleImportDLPData = async () => {
@@ -257,6 +251,26 @@ function Dashboard() {
     </button>
   );
 
+  // Map each "What's New" category to its full-content page
+  const categoryPageMap = {
+    payments: '/portal/fees',
+    documents: '/portal/documents',
+    teacherAnalytics: '/portal/reports',
+    teacherSubmissions: '/portal/documents',
+    projectPics: '/portal/documents',
+    upcomingEvents: '/portal/almanac',
+    newAdmissions: '/portal/admission',
+  };
+
+
+  const navigateToCategoryPage = (category) => {
+    const path = categoryPageMap[category];
+    if (path) {
+      window.location.href = path;
+    }
+  };
+
+
   return (
     <div className="dashboard">
       <style>{`
@@ -280,11 +294,12 @@ function Dashboard() {
         }
         
         .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+          display: flex;
+          flex-wrap: wrap;
           gap: 1.25rem;
           margin-bottom: 2rem;
         }
+
         
         .stat-card {
           background: rgba(30, 41, 59, 0.8);
@@ -322,9 +337,10 @@ function Dashboard() {
         }
         
         .stat-info {
-          flex: 1;
+          flex: 0 0 auto;
           min-width: 0;
         }
+
         
         .stat-value {
           font-size: 1rem;
@@ -593,7 +609,40 @@ function Dashboard() {
           margin-bottom: 0.5rem;
         }
         
+        .whats-new-view-all {
+          margin-left: auto;
+          font-size: 0.65rem;
+          font-weight: 600;
+          color: #2563eb;
+          text-transform: none;
+          letter-spacing: 0;
+          background: #dbeafe;
+          padding: 0.15rem 0.5rem;
+          border-radius: 9999px;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+        
+        .whats-new-slide:hover .whats-new-view-all {
+          background: #2563eb;
+          color: #ffffff;
+        }
+        
+        .chain-badge {
+          font-size: 0.6rem;
+          font-weight: 700;
+          color: #ffffff;
+          background: #0f4c81;
+          padding: 0.1rem 0.45rem;
+          border-radius: 9999px;
+          text-transform: none;
+          letter-spacing: 0.03em;
+          white-space: nowrap;
+        }
+
+        
         .teacher-score {
+
           display: inline-flex;
           align-items: center;
           gap: 0.25rem;
@@ -716,7 +765,65 @@ function Dashboard() {
           flex-shrink: 0;
         }
 
+        /* ─── MOBILE: fit all 4 stat cards in one line ─── */
+        @media (max-width: 640px) {
+          .stats-grid {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 0.4rem;
+            justify-content: space-between;
+          }
+          .stat-card {
+            flex: 1 1 0;
+            min-width: 0;
+            height: auto;
+            min-height: 64px;
+            padding: 0.35rem 0.2rem;
+            gap: 0.15rem;
+            border-radius: 0.5rem;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+          }
+          .stat-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            flex-shrink: 0;
+          }
+          .stat-icon svg {
+            width: 12px;
+            height: 12px;
+          }
+          .stat-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+          }
+          .stat-value {
+            font-size: 0.85rem;
+            line-height: 1.1;
+          }
+          .stat-label {
+            font-size: 0.5rem;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            line-height: 1.1;
+            word-break: break-word;
+            text-align: center;
+          }
+          .stat-trend {
+            display: none;
+          }
+
+
+        }
+
       `}</style>
+
       
       <div className="welcome-banner">
         <div className="welcome-text">
@@ -860,18 +967,21 @@ function Dashboard() {
           <div className="section-content">
             {loading ? (
               <div className="empty-state">Loading latest activity...</div>
-            ) : availableCategories.length === 0 ? (
+            ) : slides.length === 0 ? (
               <div className="empty-state">No recent activity yet</div>
             ) : (
               <div className="whats-new-carousel">
-                {/* Only show the active category */}
-                {availableCategories[activeCategory] === 'payments' && (
-                  <div className="whats-new-section whats-new-slide">
+                {/* Only show the active slide (chain + category) */}
+                {activeSlide?.category === 'payments' && (
+                  <div className="whats-new-section whats-new-slide" onClick={() => navigateToCategoryPage('payments')} style={{ cursor: 'pointer' }}>
                     <div className="whats-new-section-title">
                       <DollarSign size={14} />
                       Recent Payments
+                      {activeSlide.chain && <span className="chain-badge">{activeSlide.chain}</span>}
+                      <span className="whats-new-view-all">View all →</span>
                     </div>
-                    {whatsNew.payments.map((p, idx) => (
+
+                    {activeChainData.payments.map((p, idx) => (
                       <div key={`pay-${idx}`} className="whats-new-item payment" style={{ animationDelay: `${idx * 0.15}s` }}>
                         <div className="whats-new-icon payment">
                           <DollarSign size={16} />
@@ -892,13 +1002,16 @@ function Dashboard() {
                   </div>
                 )}
 
-                {availableCategories[activeCategory] === 'documents' && (
-                  <div className="whats-new-section whats-new-slide">
+                {activeSlide?.category === 'documents' && (
+                  <div className="whats-new-section whats-new-slide" onClick={() => navigateToCategoryPage('documents')} style={{ cursor: 'pointer' }}>
                     <div className="whats-new-section-title">
                       <FileText size={14} />
                       Document Uploads
+                      {activeSlide.chain && <span className="chain-badge">{activeSlide.chain}</span>}
+                      <span className="whats-new-view-all">View all →</span>
                     </div>
-                    {whatsNew.documents.map((d, idx) => (
+
+                    {activeChainData.documents.map((d, idx) => (
                       <div key={`doc-${idx}`} className="whats-new-item document" style={{ animationDelay: `${idx * 0.15}s` }}>
                         <div className="whats-new-icon document">
                           <FileText size={16} />
@@ -917,13 +1030,16 @@ function Dashboard() {
                   </div>
                 )}
 
-                {availableCategories[activeCategory] === 'teacherAnalytics' && (
-                  <div className="whats-new-section whats-new-slide">
+                {activeSlide?.category === 'teacherAnalytics' && (
+                  <div className="whats-new-section whats-new-slide" onClick={() => navigateToCategoryPage('teacherAnalytics')} style={{ cursor: 'pointer' }}>
                     <div className="whats-new-section-title">
                       <Award size={14} />
                       Teacher Performance
+                      {activeSlide.chain && <span className="chain-badge">{activeSlide.chain}</span>}
+                      <span className="whats-new-view-all">View all →</span>
                     </div>
-                    {whatsNew.teacherAnalytics.map((t, idx) => (
+
+                    {activeChainData.teacherAnalytics.map((t, idx) => (
                       <div key={`teacher-${idx}`} className="whats-new-item teacher" style={{ animationDelay: `${idx * 0.15}s` }}>
                         <div className="whats-new-icon teacher">
                           <Award size={16} />
@@ -943,13 +1059,132 @@ function Dashboard() {
                   </div>
                 )}
 
-                {availableCategories[activeCategory] === 'upcomingEvents' && (
-                  <div className="whats-new-section whats-new-slide">
+                {activeSlide?.category === 'teacherSubmissions' && (
+                  <div className="whats-new-section whats-new-slide" onClick={() => navigateToCategoryPage('teacherSubmissions')} style={{ cursor: 'pointer' }}>
+                    <div className="whats-new-section-title">
+                      <FileText size={14} />
+                      Teacher Submission Ranking
+                      {activeSlide.chain && <span className="chain-badge">{activeSlide.chain}</span>}
+                      <span className="whats-new-view-all">View all →</span>
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.65rem',
+                      color: '#64748b',
+                      padding: '0 0.5rem 0.4rem 0.5rem',
+                      borderBottom: '1px solid #e2e8f0',
+                      fontWeight: '600',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em'
+                    }}>
+                      <span>#</span>
+                      <span style={{ flex: 1, marginLeft: '0.5rem' }}>Teacher</span>
+                      <span>Count</span>
+                      <span style={{ width: '40px', textAlign: 'right' }}>%</span>
+                    </div>
+                    {activeChainData.teacherSubmissions.map((t, idx) => {
+                      const total = activeChainData.teacherSubmissions.reduce((sum, x) => sum + x.count, 0) || 1;
+                      const pct = Math.round((t.count / total) * 100);
+                      const isTop = idx === 0;
+                      const isBottom = idx === activeChainData.teacherSubmissions.length - 1 && activeChainData.teacherSubmissions.length > 1;
+                      return (
+                        <div key={`sub-${idx}`} className="whats-new-item teacher" style={{ animationDelay: `${idx * 0.15}s`, alignItems: 'center' }}>
+                          <div className="whats-new-icon teacher">
+                            <FileText size={16} />
+                          </div>
+                          <div className="whats-new-content">
+                            <div className="whats-new-title">
+                              {isTop ? '🥇 ' : isBottom ? '📉 ' : `${idx + 1}. `}
+                              {t.name === 'Unknown' ? 'Not Assigned' : t.name}
+                            </div>
+                            <div className="whats-new-desc">
+                              {t.count} submission{t.count === 1 ? '' : 's'}
+                            </div>
+                          </div>
+                          <span className={`teacher-score ${isTop ? 'high' : isBottom ? 'low' : ''}`}>
+                            {t.count} · {pct}%
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {activeSlide?.category === 'projectPics' && (
+                  <div className="whats-new-section whats-new-slide" onClick={() => navigateToCategoryPage('projectPics')} style={{ cursor: 'pointer' }}>
+                    <div className="whats-new-section-title">
+                      <Image size={14} />
+                      Recent Project Pictures
+                      {activeSlide.chain && <span className="chain-badge">{activeSlide.chain}</span>}
+                      <span className="whats-new-view-all">View all →</span>
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '0.75rem'
+                    }}>
+                      {activeChainData.projectPics.map((p, idx) => (
+                        <div key={`pic-${idx}`} className="whats-new-item document" style={{ animationDelay: `${idx * 0.15}s`, flexDirection: 'column', alignItems: 'stretch', padding: '0.75rem' }}>
+                          {p.data ? (
+                            <img
+                              src={p.data}
+                              alt={p.name}
+                              style={{
+                                width: '100%',
+                                height: '100px',
+                                objectFit: 'cover',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0'
+                              }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: '100%',
+                              height: '100px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: '#f1f5f9',
+                              borderRadius: '8px',
+                              border: '1px solid #e2e8f0',
+                              color: '#94a3b8',
+                              fontSize: '0.7rem',
+                              fontWeight: '600'
+                            }}>
+                              <Image size={24} style={{ marginRight: '6px' }} />
+                              Project Picture
+                            </div>
+                          )}
+                          <div className="whats-new-content">
+                            <div className="whats-new-title" style={{ whiteSpace: 'normal', fontSize: '0.75rem' }}>
+                              {p.caption || p.name || 'Project Picture'}
+                            </div>
+                            <div className="whats-new-desc" style={{ whiteSpace: 'normal' }}>
+                              {p.uploaded_by || 'Unknown'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                    </div>
+                  </div>
+                )}
+
+                {activeSlide?.category === 'upcomingEvents' && (
+
+                  <div className="whats-new-section whats-new-slide" onClick={() => navigateToCategoryPage('upcomingEvents')} style={{ cursor: 'pointer' }}>
+
                     <div className="whats-new-section-title">
                       <Calendar size={14} />
                       Upcoming Events
+                      {activeSlide.chain && <span className="chain-badge">{activeSlide.chain}</span>}
+                      <span className="whats-new-view-all">View all →</span>
                     </div>
-                    {whatsNew.upcomingEvents.map((e, idx) => (
+
+                    {activeChainData.upcomingEvents.map((e, idx) => (
                       <div key={`event-${idx}`} className="whats-new-item event" style={{ animationDelay: `${idx * 0.15}s` }}>
                         <div className="whats-new-icon event">
                           <Calendar size={16} />
@@ -968,13 +1203,16 @@ function Dashboard() {
                   </div>
                 )}
 
-                {availableCategories[activeCategory] === 'newAdmissions' && (
-                  <div className="whats-new-section whats-new-slide">
+                {activeSlide?.category === 'newAdmissions' && (
+                  <div className="whats-new-section whats-new-slide" onClick={() => navigateToCategoryPage('newAdmissions')} style={{ cursor: 'pointer' }}>
                     <div className="whats-new-section-title">
                       <UserPlus size={14} />
                       New Admissions
+                      {activeSlide.chain && <span className="chain-badge">{activeSlide.chain}</span>}
+                      <span className="whats-new-view-all">View all →</span>
                     </div>
-                    {whatsNew.newAdmissions.map((a, idx) => (
+
+                    {activeChainData.newAdmissions.map((a, idx) => (
                       <div key={`adm-${idx}`} className="whats-new-item admission" style={{ animationDelay: `${idx * 0.15}s` }}>
                         <div className="whats-new-icon admission">
                           <UserPlus size={16} />
@@ -994,23 +1232,24 @@ function Dashboard() {
                 )}
 
                 {/* Category indicator dots */}
-                {availableCategories.length > 1 && (
+                {slides.length > 1 && (
                   <div className="whats-new-dots">
-                    {availableCategories.map((cat, idx) => (
+                    {slides.map((slide, idx) => (
                       <button
-                        key={cat}
+                        key={`${slide.chain}-${slide.category}`}
                         className={`whats-new-dot ${idx === activeCategory ? 'active' : ''}`}
                         onClick={() => {
                           setSlideDirection(idx > activeCategory ? 'next' : 'prev');
                           setActiveCategory(idx);
                         }}
-                        aria-label={`Show ${cat}`}
+                        aria-label={`Show ${slide.chain} ${slide.category}`}
                       />
                     ))}
                   </div>
                 )}
               </div>
             )}
+
           </div>
 
         </div>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { toast } from '../hooks/useSoundEnabledToast';
@@ -29,65 +30,128 @@ function StudentPortal() {
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [reportCards, setReportCards] = useState([]);
+  const [grades, setGrades] = useState([]);
   const [feeData, setFeeData] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
+  const [almanacEvents, setAlmanacEvents] = useState([]);
   const [selectedReportCard, setSelectedReportCard] = useState(null);
   const [showReportCardModal, setShowReportCardModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(null);
   const [showFeeModal, setShowFeeModal] = useState(null);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(null);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [studentInfo, setStudentInfo] = useState(null);
-  // Which section modal is open: 'tasks' | 'report-cards' | 'fees' | 'announcements' | null
+
+  // Which section modal is open: 'tasks' | 'report-cards' | 'fees' | 'announcements' | 'results' | 'almanac' | null
   const [openSection, setOpenSection] = useState(null);
 
-  useEffect(() => { loadAllData(); }, []);
-  useEffect(() => { loadStudentInfo(); }, []);
+  // LAZY-LOAD PER SECTION (see audit report).
+  // On mount we fetch ONLY the student's profile info (needed for the header).
+  // Each section's data is fetched ON DEMAND the first time its card is
+  // clicked, then cached for the session so re-opening a modal is instant.
+  // This eliminates the previous 7-request mount storm: a student who only
+  // opens "My Tasks" triggers 1 mount request + 1 section request instead of
+  // 7 concurrent requests on every login.
+  const [sectionLoading, setSectionLoading] = useState(null); // section key currently loading
+  const loadedSectionsRef = useRef(new Set());
 
+  const SECTION_ENDPOINTS = {
+    tasks: '/api/student-portal/my-tasks',
+    'report-cards': '/api/student-portal/my-report-cards',
+    fees: '/api/student-portal/my-fees',
+    announcements: '/api/student-portal/my-announcements',
+    results: '/api/student-portal/my-grades',
+    almanac: '/api/almanac',
+  };
+
+  const getHeaders = () => {
+    const token = localStorage.getItem('sessionToken');
+    return { 'Content-Type': 'application/json', ...(token && { 'Authorization': `Bearer ${token}` }) };
+  };
+
+  const handleUnauthorized = (res) => {
+    if (res.status === 401) {
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('currentPortal');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('sessionExpiresAt');
+      window.location.href = '/login';
+      return true;
+    }
+    return false;
+  };
+
+  // Fetch a single section's data and store it in the matching state.
+  const fetchSection = async (section) => {
+    const endpoint = SECTION_ENDPOINTS[section];
+    if (!endpoint) return;
+    setSectionLoading(section);
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, { headers: getHeaders() });
+      if (handleUnauthorized(res)) return;
+      if (!res.ok) return;
+      const data = await res.json();
+      if (section === 'tasks') setTasks(data);
+      else if (section === 'report-cards') setReportCards(data);
+      else if (section === 'fees') setFeeData(data);
+      else if (section === 'announcements') setAnnouncements(data);
+      else if (section === 'results') setGrades(data);
+      else if (section === 'almanac') setAlmanacEvents(data.events || []);
+      loadedSectionsRef.current.add(section);
+    } catch (error) {
+      console.error(`Failed to load ${section}:`, error);
+    } finally {
+      setSectionLoading(null);
+    }
+  };
+
+  // Load the student's profile info on mount (1 request instead of 7).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/student-portal/my-info`, { headers: getHeaders() });
+        if (cancelled) return;
+        if (handleUnauthorized(res)) return;
+        if (res.ok) setStudentInfo(await res.json());
+      } catch (error) {
+        console.error('Failed to load student info:', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Open a section modal, lazily fetching its data on first open.
+  // The modal opens immediately and shows a loading spinner while the
+  // section's data is fetched (only on the first open; cached afterwards).
+  const openModal = (section) => {
+    setOpenSection(section);
+    if (!loadedSectionsRef.current.has(section)) {
+      fetchSection(section);
+    }
+  };
+
+
+  const closeModal = () => setOpenSection(null);
+
+  // Refresh: reload the profile info and every section (clears the cache).
   const loadAllData = async () => {
     setLoading(true);
+    loadedSectionsRef.current.clear();
     try {
-      const token = localStorage.getItem('sessionToken');
-      const headers = { 'Content-Type': 'application/json', ...(token && { 'Authorization': `Bearer ${token}` }) };
-      const handleUnauthorized = (res) => {
-        if (res.status === 401) {
-          localStorage.removeItem('sessionToken');
-          localStorage.removeItem('currentPortal');
-          localStorage.removeItem('currentUser');
-          localStorage.removeItem('isLoggedIn');
-          localStorage.removeItem('sessionExpiresAt');
-          window.location.href = '/login';
-          return true;
-        }
-        return false;
-      };
-      const [tasksRes, rcRes, feeRes, annRes] = await Promise.all([
-        fetch(`${API_URL}/api/student-portal/my-tasks`, { headers }),
-        fetch(`${API_URL}/api/student-portal/my-report-cards`, { headers }),
-        fetch(`${API_URL}/api/student-portal/my-fees`, { headers }),
-        fetch(`${API_URL}/api/student-portal/my-announcements`, { headers }),
-      ]);
-      if (handleUnauthorized(tasksRes)) return;
-      if (tasksRes.ok) setTasks(await tasksRes.json());
-      if (rcRes.ok) setReportCards(await rcRes.json());
-      if (feeRes.ok) setFeeData(await feeRes.json());
-      if (annRes.ok) setAnnouncements(await annRes.json());
+      const res = await fetch(`${API_URL}/api/student-portal/my-info`, { headers: getHeaders() });
+      if (handleUnauthorized(res)) return;
+      if (res.ok) setStudentInfo(await res.json());
+      await Promise.all(Object.keys(SECTION_ENDPOINTS).map(section => fetchSection(section)));
     } catch (error) {
-      console.error('Failed to load data:', error);
+      console.error('Failed to refresh data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadStudentInfo = async () => {
-    try {
-      const token = localStorage.getItem('sessionToken');
-      const headers = { 'Content-Type': 'application/json', ...(token && { 'Authorization': `Bearer ${token}` }) };
-      const res = await fetch(`${API_URL}/api/student-portal/my-info`, { headers });
-      if (res.ok) setStudentInfo(await res.json());
-    } catch (error) {
-      console.error('Failed to load student info:', error);
-    }
-  };
+
 
   const handleViewReportCard = (rc) => { setSelectedReportCard(rc); setShowReportCardModal(true); };
 
@@ -226,10 +290,8 @@ function StudentPortal() {
   const studentName = `${currentUser?.firstName || currentUser?.first_name || ''} ${currentUser?.lastName || currentUser?.last_name || ''}`.trim() || 'Student';
   const balance = feeData?.balance || 0;
 
-  const openModal = (section) => setOpenSection(section);
-  const closeModal = () => setOpenSection(null);
-
   return (
+
     <div className="student-portal-page">
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -449,8 +511,35 @@ function StudentPortal() {
                 <span className="card-arrow"><i className="fas fa-chevron-right"></i></span>
               </div>
             </div>
+
+            {/* CARD 5: My Results */}
+            <div className="dash-card" onClick={() => openModal('results')}>
+              <div className="card-icon purple"><i className="fas fa-chart-line"></i></div>
+              <div className="card-content">
+                <div className="info">
+                  <div className="title">My Results</div>
+                  <div className="subtitle">{grades.length} subjects graded</div>
+                </div>
+                <span className="badge-count success">{grades.length}</span>
+                <span className="card-arrow"><i className="fas fa-chevron-right"></i></span>
+              </div>
+            </div>
+
+            {/* CARD 6: Almanac */}
+            <div className="dash-card" onClick={() => openModal('almanac')}>
+              <div className="card-icon blue"><i className="fas fa-calendar-alt"></i></div>
+              <div className="card-content">
+                <div className="info">
+                  <div className="title">Almanac</div>
+                  <div className="subtitle">{almanacEvents.length} upcoming events</div>
+                </div>
+                <span className="badge-count warning">{almanacEvents.length}</span>
+                <span className="card-arrow"><i className="fas fa-chevron-right"></i></span>
+              </div>
+            </div>
           </div>
         )}
+
 
         {/* FOOTER */}
         <div className="footer-note">
@@ -466,9 +555,12 @@ function StudentPortal() {
             <button className="modal-close" onClick={closeModal}><i className="fas fa-times"></i></button>
           </div>
           <div className="modal-body">
-            {tasks.length === 0 ? (
+            {sectionLoading === 'tasks' ? (
+              <div className="loading-state">Loading your tasks...</div>
+            ) : tasks.length === 0 ? (
               <div className="empty-state">No tasks assigned yet</div>
             ) : (
+
               <table className="modal-table">
                 <thead>
                   <tr>
@@ -483,17 +575,35 @@ function StudentPortal() {
                 <tbody>
                   {tasks.map((task, idx) => {
                     const perf = getPerformanceLevel(task.score);
+                    const hasScore = task.score !== null && task.score !== undefined;
                     return (
                       <tr key={task._id || idx}>
                         <td>{idx + 1}</td>
-                        <td><strong>{task.title || 'Untitled'}</strong></td>
+                        <td>
+                          <strong>{task.title || 'Untitled'}</strong>
+                          {task.feedback && (
+                            <div style={{ fontSize: '0.68rem', color: '#64748b', fontStyle: 'italic', marginTop: '2px' }}>
+                              💬 "{task.feedback}"
+                            </div>
+                          )}
+                        </td>
                         <td><span className={`type-badge ${task.task_type || 'homework'}`}>{(TASK_TYPE_INFO[task.task_type]?.label || task.task_type || 'Homework')}</span></td>
                         <td>{task.subject_name || 'N/A'}</td>
                         <td>{getStatusBadge(task.my_status)}</td>
-                        <td>{perf ? <span className={`perf-badge ${perf.cls}`}>{perf.label}</span> : <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>—</span>}</td>
+                        <td>
+                          {hasScore ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span className={`perf-badge ${perf?.cls || ''}`}>{perf?.label || '—'}</span>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0f172a' }}>{task.score}/100</span>
+                            </div>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>—</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
+
                 </tbody>
               </table>
             )}
@@ -512,9 +622,12 @@ function StudentPortal() {
             <button className="modal-close" onClick={closeModal}><i className="fas fa-times"></i></button>
           </div>
           <div className="modal-body">
-            {reportCards.length === 0 ? (
+            {sectionLoading === 'report-cards' ? (
+              <div className="loading-state">Loading your report cards...</div>
+            ) : reportCards.length === 0 ? (
               <div className="empty-state">No report cards have been sent to you yet</div>
             ) : (
+
               <table className="modal-table">
                 <thead>
                   <tr>
@@ -561,39 +674,47 @@ function StudentPortal() {
             <button className="modal-close" onClick={closeModal}><i className="fas fa-times"></i></button>
           </div>
           <div className="modal-body">
+            {sectionLoading === 'fees' ? (
+              <div className="loading-state">Loading your fee records...</div>
+            ) : (
+            <>
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, background: '#f8fafc', borderRadius: '8px', padding: '0.8rem', textAlign: 'center', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontSize: '0.6rem', color: '#64748b', textTransform: 'uppercase' }}>Total Fees</div>
+
                 <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>TZS {(feeData?.total_fees || 0).toLocaleString()}</div>
               </div>
               <div style={{ flex: 1, background: '#f8fafc', borderRadius: '8px', padding: '0.8rem', textAlign: 'center', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontSize: '0.6rem', color: '#64748b', textTransform: 'uppercase' }}>Paid</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#059669' }}>TZS {(feeData?.paid || 0).toLocaleString()}</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#059669' }}>TZS {(feeData?.total_paid || feeData?.paid || 0).toLocaleString()}</div>
               </div>
+
               <div style={{ flex: 1, background: '#f8fafc', borderRadius: '8px', padding: '0.8rem', textAlign: 'center', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontSize: '0.6rem', color: '#64748b', textTransform: 'uppercase' }}>Balance</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#dc2626' }}>TZS {(feeData?.balance || 0).toLocaleString()}</div>
               </div>
             </div>
-            {feeData?.items && feeData.items.length > 0 ? (
+            {feeData?.payments && feeData.payments.length > 0 ? (
               <table className="modal-table">
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>Fee Item</th>
+                    <th>Fee Type</th>
                     <th>Amount (TZS)</th>
-                    <th>Status</th>
+                    <th>Method</th>
+                    <th>Reference</th>
                     <th>Payment Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {feeData.items.map((item, idx) => (
-                    <tr key={item._id || idx}>
+                  {feeData.payments.map((item, idx) => (
+                    <tr key={item._id || item.id || idx}>
                       <td>{idx + 1}</td>
-                      <td><strong>{item.name || item.fee_name || 'Fee'}</strong></td>
+                      <td><strong>{item.fee_type || item.fee_name || 'Payment'}</strong></td>
                       <td>{(item.amount || 0).toLocaleString()}</td>
-                      <td>{getFeeStatusBadge(item.status)}</td>
-                      <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.payment_date || '—'}</td>
+                      <td style={{ textTransform: 'capitalize' }}>{item.payment_method || 'cash'}</td>
+                      <td style={{ fontSize: '0.7rem', color: '#64748b' }}>{item.reference_no || '—'}</td>
+                      <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.created_at ? new Date(item.created_at).toLocaleDateString() : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -601,14 +722,18 @@ function StudentPortal() {
             ) : (
               <div className="empty-state">No fee records found</div>
             )}
+
             <div className="modal-footer-note">
               <i className="fas fa-info-circle"></i> Total outstanding: <strong style={{ color: '#dc2626' }}>TZS {(feeData?.balance || 0).toLocaleString()}</strong>
             </div>
+            </>
+            )}
           </div>
         </div>
       </div>
 
       {/* ======================== MODAL: ANNOUNCEMENTS ======================== */}
+
       <div className={`modal-overlay ${openSection === 'announcements' ? 'active' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
         <div className="modal">
           <div className="modal-header">
@@ -616,9 +741,12 @@ function StudentPortal() {
             <button className="modal-close" onClick={closeModal}><i className="fas fa-times"></i></button>
           </div>
           <div className="modal-body">
-            {announcements.length === 0 ? (
+            {sectionLoading === 'announcements' ? (
+              <div className="loading-state">Loading announcements...</div>
+            ) : announcements.length === 0 ? (
               <div className="empty-state">No announcements yet</div>
             ) : (
+
               <table className="modal-table">
                 <thead>
                   <tr>
@@ -627,6 +755,7 @@ function StudentPortal() {
                     <th>Type</th>
                     <th>Posted By</th>
                     <th>Date</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -637,10 +766,14 @@ function StudentPortal() {
                       <td><span style={{ display: 'inline-block', padding: '0.05rem 0.4rem', borderRadius: '20px', fontSize: '0.55rem', fontWeight: 600, background: ann.priority === 'urgent' ? '#fee2e2' : '#dbeafe', color: ann.priority === 'urgent' ? '#dc2626' : '#2563eb' }}>{ann.priority === 'urgent' ? 'Urgent' : 'General'}</span></td>
                       <td>{ann.created_by_name || 'Admin'}</td>
                       <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{ann.created_at ? new Date(ann.created_at).toLocaleDateString() : '—'}</td>
+                      <td>
+                        <button className="act-btn view" onClick={() => setSelectedAnnouncement(ann)}>👁 View</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
             )}
             <div className="modal-footer-note">
               <i className="fas fa-info-circle"></i> Click <i className="fas fa-eye"></i> to view full announcement details
@@ -649,8 +782,137 @@ function StudentPortal() {
         </div>
       </div>
 
+      {/* ======================== MODAL: ANNOUNCEMENT ZOOM CARD ======================== */}
+      <div className={`modal-overlay ${selectedAnnouncement ? 'active' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setSelectedAnnouncement(null); }}>
+        <div className="modal" style={{ maxWidth: '560px' }}>
+          <div className="modal-header">
+            <h2><span className="icon-sm orange"><i className="fas fa-bell"></i></span> Announcement</h2>
+            <button className="modal-close" onClick={() => setSelectedAnnouncement(null)}><i className="fas fa-times"></i></button>
+          </div>
+          <div className="modal-body">
+            {selectedAnnouncement && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-block', padding: '0.15rem 0.6rem', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 700, background: selectedAnnouncement.priority === 'urgent' ? '#fee2e2' : '#dbeafe', color: selectedAnnouncement.priority === 'urgent' ? '#dc2626' : '#2563eb' }}>
+                    {selectedAnnouncement.priority === 'urgent' ? '🔴 URGENT' : '📢 General'}
+                  </span>
+                  <span style={{ fontSize: '9px', color: '#94a3b8' }}>
+                    {selectedAnnouncement.created_at ? new Date(selectedAnnouncement.created_at).toLocaleString() : ''}
+                  </span>
+
+                </div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem', lineHeight: 1.3 }}>
+                  {selectedAnnouncement.title || 'Untitled'}
+                </h3>
+                <div style={{ fontSize: '0.95rem', color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+                  {selectedAnnouncement.body || selectedAnnouncement.message || selectedAnnouncement.content || 'No content provided.'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
+                  <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#ede9fe', color: '#7c3aed', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700 }}>
+                    {(selectedAnnouncement.created_by_name || 'A').charAt(0).toUpperCase()}
+                  </span>
+                  <span><strong>{selectedAnnouncement.created_by_name || 'Admin'}</strong> · {selectedAnnouncement.audience || selectedAnnouncement.target || 'All Students'}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ======================== MODAL: MY RESULTS ======================== */}
+      <div className={`modal-overlay ${openSection === 'results' ? 'active' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+
+        <div className="modal">
+          <div className="modal-header">
+            <h2><span className="icon-sm purple"><i className="fas fa-chart-line"></i></span> My Results</h2>
+            <button className="modal-close" onClick={closeModal}><i className="fas fa-times"></i></button>
+          </div>
+          <div className="modal-body">
+            {sectionLoading === 'results' ? (
+              <div className="loading-state">Loading your results...</div>
+            ) : grades.length === 0 ? (
+              <div className="empty-state">No results have been published yet</div>
+            ) : (
+
+              <table className="modal-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Subject</th>
+                    <th>Score</th>
+                    <th>Grade</th>
+                    <th>Performance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grades.map((g, idx) => {
+                    const perf = getPerformanceLevel(g.score);
+                    return (
+                      <tr key={g._id || g.id || idx}>
+                        <td>{idx + 1}</td>
+                        <td><strong>{g.subject_name || g.subject || 'Unknown'}</strong></td>
+                        <td style={{ fontWeight: 700 }}>{g.score !== null && g.score !== undefined ? g.score : '—'}</td>
+                        <td><span style={{ display: 'inline-block', padding: '0.05rem 0.4rem', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 700, background: '#d1fae5', color: '#059669' }}>{g.grade || 'N/A'}</span></td>
+                        <td>{perf ? <span className={`perf-badge ${perf.cls}`}>{perf.label}</span> : <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>—</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            <div className="modal-footer-note">
+              <i className="fas fa-info-circle"></i> {grades.length} subjects graded · Performance based on latest scores
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ======================== MODAL: ALMANAC ======================== */}
+      <div className={`modal-overlay ${openSection === 'almanac' ? 'active' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+        <div className="modal">
+          <div className="modal-header">
+            <h2><span className="icon-sm blue"><i className="fas fa-calendar-alt"></i></span> Almanac</h2>
+            <button className="modal-close" onClick={closeModal}><i className="fas fa-times"></i></button>
+          </div>
+          <div className="modal-body">
+            {sectionLoading === 'almanac' ? (
+              <div className="loading-state">Loading the school almanac...</div>
+            ) : almanacEvents.length === 0 ? (
+              <div className="empty-state">No upcoming events in the school almanac</div>
+            ) : (
+
+              <table className="modal-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Event</th>
+                    <th>Date</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {almanacEvents.map((ev, idx) => (
+                    <tr key={ev._id || ev.id || idx}>
+                      <td>{idx + 1}</td>
+                      <td><strong>{ev.title || ev.name || 'Event'}</strong></td>
+                      <td style={{ fontSize: '0.75rem', color: '#64748b' }}>{ev.start_date ? new Date(ev.start_date).toLocaleDateString() : (ev.date ? new Date(ev.date).toLocaleDateString() : '—')}</td>
+                      <td><span style={{ display: 'inline-block', padding: '0.05rem 0.4rem', borderRadius: '20px', fontSize: '0.55rem', fontWeight: 600, background: '#dbeafe', color: '#2563eb' }}>{ev.visibility || ev.type || ev.category || 'General'}</span></td>
+                    </tr>
+                  ))}
+
+                </tbody>
+              </table>
+            )}
+            <div className="modal-footer-note">
+              <i className="fas fa-info-circle"></i> {almanacEvents.length} events in the school calendar
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ======================== MODAL: FULL REPORT CARD DETAIL ======================== */}
       <div className={`modal-overlay ${showReportCardModal ? 'active' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setShowReportCardModal(false); }}>
+
         <div className="modal">
           <div className="modal-header">
             <h2><span className="icon-sm purple"><i className="fas fa-file-alt"></i></span> Report Card · {selectedReportCard?.term || ''}</h2>

@@ -45,6 +45,14 @@ function QRAttendance() {
 
   const availableAction = getAvailableAction();
 
+  // Guard against the double-fetch chain reaction on mount:
+  // The [currentUser] effect below calls setSelectedChain(...), which would
+  // otherwise re-trigger the [selectedChain] effect and fire loadStaff() +
+  // loadTodayAttendance() a SECOND time. We skip that redundant re-fetch when
+  // the chain change was caused by initializing from currentUser, and only
+  // re-fetch when the user manually changes the chain via the toggle.
+  const skipNextChainFetchRef = useRef(false);
+
   useEffect(() => {
     if (currentUser?.chain) {
       if (currentUser.role === 'director' || currentUser.role === 'coordinator') {
@@ -52,6 +60,9 @@ function QRAttendance() {
       } else {
         setSelectedChain(currentUser.chain);
       }
+      // The chain was just initialized from currentUser; the [selectedChain]
+      // effect should not re-fetch for this programmatic set.
+      skipNextChainFetchRef.current = true;
     }
     loadStaff();
     loadTodayAttendance();
@@ -59,11 +70,16 @@ function QRAttendance() {
   }, [currentUser]);
 
   useEffect(() => {
+    if (skipNextChainFetchRef.current) {
+      skipNextChainFetchRef.current = false;
+      return;
+    }
     if (selectedChain || currentUser?.role === 'director' || currentUser?.role === 'coordinator') {
       loadStaff();
       loadTodayAttendance();
     }
   }, [selectedChain]);
+
 
   const loadStaff = async () => {
     try {

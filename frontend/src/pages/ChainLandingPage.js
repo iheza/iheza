@@ -608,20 +608,15 @@ function ChainLandingPage() {
             gap: 0.4rem;
           }
 
-          /* DUP chain on mobile: 3 rows (3+3+2), last 2 centered */
+          /* DUP chain on mobile: consistent 2-column grid like other chains */
           .portals-grid.chain-dup {
-            display: flex !important;
-            flex-wrap: wrap !important;
-            justify-content: center !important;
-            gap: 0.4rem !important;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.4rem;
           }
 
           .portals-grid.chain-dup .portal-card {
             min-height: 50px;
             padding: 0.25rem 0.5rem;
-            width: calc(33.333% - 0.3rem) !important;
-            flex-shrink: 0;
-            box-sizing: border-box;
           }
 
           .portals-grid.chain-dup .portal-icon {
@@ -639,6 +634,7 @@ function ChainLandingPage() {
             justify-content: center;
             gap: 1rem;
           }
+
 
           
           .info-item {
@@ -669,18 +665,15 @@ function ChainLandingPage() {
             gap: 0.3rem;
           }
 
-          /* DUP chain on very small screens: keep 3 columns (3+3+2), last 2 centered */
+          /* DUP chain on very small screens: consistent 2-column grid like other chains */
           .portals-grid.chain-dup {
-            display: flex !important;
-            flex-wrap: wrap !important;
-            justify-content: center !important;
-            gap: 0.3rem !important;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.3rem;
           }
           
           .portals-grid.chain-dup .portal-card {
-            width: calc(33.333% - 0.25rem) !important;
-            flex-shrink: 0;
-            box-sizing: border-box;
+            min-height: 50px;
+            padding: 0.25rem 0.5rem;
           }
           
           .portal-card {
@@ -692,6 +685,7 @@ function ChainLandingPage() {
             font-size: 0.5rem;
           }
         }
+
 
 
 

@@ -44,12 +44,15 @@ const MyTasks = () => {
 
   useEffect(() => {
     if (shouldShow) {
+      // Load tasks once on mount. The global TaskNotificationOverlay (mounted
+      // in Layout.js) already polls /staff-tasks every 60s and pauses when the
+      // tab is hidden, so a separate page-level interval here would DOUBLE the
+      // request rate for the same data. We rely on the global poll for
+      // freshness and only re-fetch here on mount / after a status update.
       loadTasks();
-      // Refresh tasks every 30 seconds
-      const interval = setInterval(loadTasks, 30000);
-      return () => clearInterval(interval);
     }
   }, [shouldShow, loadTasks]);
+
 
   // Blink effect every 5 seconds
   useEffect(() => {

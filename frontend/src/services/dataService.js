@@ -160,11 +160,16 @@ class DataService {
   }
 
   // Sync
+  // Uses counts_only=true so the Dashboard only downloads document COUNTS
+  // instead of the full 1000-student + 1000-user + 100-class + 200-subject
+  // arrays (which it only ever used to call .length on). This dramatically
+  // cuts memory/bandwidth on every dashboard load.
   static async syncData(chainFilter = '') {
-    const params = chainFilter ? { chain: chainFilter } : {};
+    const params = chainFilter ? { chain: chainFilter, counts_only: true } : { counts_only: true };
     const response = await apiClient.get('/sync', { params });
     return response.data;
   }
+
 
   // Seed
   static async seedDatabase() {

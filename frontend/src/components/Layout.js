@@ -49,9 +49,12 @@ const NAV_PERMISSIONS = {
 
   // Classroom: Teachers assign to students
   classroom: ['director', 'coordinator', 'principal', 'academic', 'teacher', 'section_leader'],
-  // Academic Hub: All staff EXCEPT Directors (they don't need teaching templates)
-  // Students can access e-Book and Almanac via this dropdown
-  'academic-hub': ['coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
+  // Academic Hub: All staff (including Directors) + Students (e-Book & Almanac)
+  'academic-hub': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
+  // Timetable: All staff can view; only Academic & Principal can edit (enforced in component)
+  'timetable': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+
+
 
   // Almanac: All portals can view (Section Leader and Principal can edit)
   'almanac': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader', 'student'],
@@ -61,6 +64,8 @@ const NAV_PERMISSIONS = {
   'reports-attendance': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
   'reports-financial': ['secretary', 'director', 'principal'],
   'reports-academic': ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
+  'reports-uniform': ['director', 'principal', 'secretary'],
+
 
   // Dashboard: Staff only (students go directly to My Portal)
   dashboard: ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'],
@@ -145,7 +150,9 @@ function Layout({ children }) {
       { path: '/portal/documents', icon: FileText, label: 'Documents', key: 'documents' },
       { path: '/portal/grades', icon: Award, label: 'Grades', key: 'grades' },
       { path: '/portal/almanac', icon: Calendar, label: 'Almanac', key: 'almanac' },
+      { path: '/portal/timetable', icon: Calendar, label: 'Timetable', key: 'timetable' },
     ]},
+
     { path: '/portal/report-cards', icon: FileText, label: 'Report Cards', key: 'report-cards' },
     { path: '/portal/fees', icon: DollarSign, label: 'Fees', key: 'fees' },
     { path: '/portal/fee-structure', icon: FileText, label: 'Fee Structure', key: 'fee-structure' },
@@ -157,8 +164,10 @@ function Layout({ children }) {
       { path: '/portal/reports?tab=attendance', icon: Calendar, label: 'Attendance Report', key: 'reports-attendance' },
       { path: '/portal/reports?tab=financial', icon: DollarSign, label: 'Financial Report', key: 'reports-financial' },
       { path: '/portal/reports?tab=academic', icon: Users, label: 'Academic Report', key: 'reports-academic' },
+      { path: '/portal/reports?tab=uniform', icon: FileText, label: 'Uniform Report', key: 'reports-uniform' },
       { path: '/portal/expenses', icon: DollarSign, label: 'Expenses', key: 'expenses' },
     ]},
+
 
     { path: '/portal/examination-reports', icon: FileText, label: 'Examination Reports', key: 'examination-reports' },
   ];
@@ -658,13 +667,22 @@ function Layout({ children }) {
                   <button
                     className={`nav-item nav-dropdown-toggle ${hasActiveChild || isOpen ? 'active' : ''}`}
                     onClick={() => {
-                      setOpenDropdown(isOpen ? null : item.key);
-                      navigate(item.path);
-                      closeSidebarOnMobile();
+                      if (isOpen) {
+                        // If already open, just close the sub-menu
+                        setOpenDropdown(null);
+                      } else {
+                        // Open the sub-menu AND navigate to the parent page so the
+                        // main content (e.g. Students table, Academic Hub) is displayed.
+                        setOpenDropdown(item.key);
+                        navigate(item.path);
+                        closeSidebarOnMobile();
+                      }
                     }}
 
                     data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
                   >
+
+
 
                     <Icon size={20} className="nav-icon" />
                     <span className="nav-label">{t(`nav.${item.key}`, item.label)}</span>

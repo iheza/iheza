@@ -203,10 +203,19 @@ function Home() {
         }
 
         @media (max-width: 768px) {
+          .portals-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.4rem;
+          }
+          
           .portal-card {
             min-height: 50px;
             padding: 0.25rem 0.5rem;
             gap: 0.3rem;
+            width: calc(33.333% - 0.4rem);
+            flex-direction: column;
           }
           
           .portal-icon-wrapper {
@@ -217,8 +226,15 @@ function Home() {
           
           .portal-name {
             font-size: 0.7rem;
+            white-space: normal;
+            text-align: center;
+            line-height: 1.1;
+            word-break: break-word;
           }
         }
+
+
+
 
         
         .quick-actions {

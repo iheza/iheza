@@ -185,7 +185,7 @@ self.addEventListener('notificationclick', (event) => {
   const url = (event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
         // If a window is already open, focus it and navigate to the URL
         for (const client of clientList) {
@@ -195,8 +195,8 @@ self.addEventListener('notificationclick', (event) => {
           }
         }
         // Otherwise open a new window
-        if (clients.openWindow) {
-          return clients.openWindow(url);
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(url);
         }
       })
   );

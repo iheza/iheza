@@ -8,6 +8,7 @@ import { studentService } from '../services/studentService';
 import { toast } from '../hooks/useSoundEnabledToast';
 import { Plus, Search, Edit2, Trash2, X, GraduationCap, Building, Upload, FileText, Users, Download, RefreshCw, Filter, Info, VenusAndMars, Venus, School } from 'lucide-react';
 import ChainToggle from '../components/ChainToggle';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 
 const SCHOOL_PREFIXES = ['DUP', 'DLP', 'LALE', 'OLGUN'];
@@ -28,6 +29,9 @@ function Students() {
   const [classFilter, setClassFilter] = useState('');
   const [chainFilter, setChainFilter] = useState('');
   const [classes, setClasses] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
+
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -56,21 +60,24 @@ function Students() {
     password: '',
   });
 
+  // Single data-loading effect. Computes the effective chain synchronously
+  // (the user's own chain takes precedence) so we never issue a wasted
+  // "all schools" student fetch before applying the user's chain. Previously
+  // two effects fired fetchStudents twice on mount (once with '' and once with
+  // the user's chain), doubling the student payload for non-IHEZA users.
   useEffect(() => {
-    dispatch(fetchStudents({ chainFilter }));
-    loadClasses();
-    
-    // Set default chain based on user's chain
-    if (currentUser?.chain && currentUser.chain !== 'IHEZA') {
-      setChainFilter(currentUser.chain);
-      setFormData(prev => ({ ...prev, chain: currentUser.chain }));
-    }
-  }, [dispatch, currentUser]);
+    const effectiveChain = (currentUser?.chain && currentUser.chain !== 'IHEZA')
+      ? currentUser.chain
+      : chainFilter;
 
-  // Reload students when chain filter changes
-  useEffect(() => {
-    dispatch(fetchStudents({ chainFilter }));
-  }, [chainFilter, dispatch]);
+    // Sync the form's default chain without triggering extra renders.
+    setFormData(prev => (prev.chain === effectiveChain ? prev : { ...prev, chain: effectiveChain }));
+
+    dispatch(fetchStudents({ chainFilter: effectiveChain }));
+    loadClasses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, chainFilter, dispatch]);
+
 
   const loadClasses = async () => {
     try {
@@ -224,9 +231,31 @@ function Students() {
     return matchesSearch && matchesClass && matchesChain;
   });
 
+  // Pagination: 20 records per page
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedStudents = filteredStudents.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Reset to page 1 whenever the filter/search results change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, classFilter, chainFilter]);
+
   const filteredClasses = chainFilter 
     ? classes.filter(c => c.chain === chainFilter)
     : classes;
+
+
+  // Produce a unique, stable key for a class option. Some class documents in
+  // the DB may have a missing/null id (rendered as "None") or duplicate ids,
+  // which caused React duplicate-key warnings. Always include the index so
+  // every <option> gets a unique key even when ids collide or are missing.
+  const getClassKey = (cls, index) => {
+    const id = cls?.id || 'none';
+    return `class-${index}-${id}`;
+  };
+
+
 
   // Download CSV template for bulk upload
   const handleDownloadCSVTemplate = () => {
@@ -845,11 +874,12 @@ function Students() {
             <span className="filter-label">Class</span>
             <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} data-testid="class-filter">
               <option value="">All</option>
-              {filteredClasses.map(cls => (
-                <option key={cls.id} value={cls.name}>{cls.name}</option>
+              {filteredClasses.map((cls, index) => (
+                <option key={getClassKey(cls, index)} value={cls.name}>{cls.name}</option>
               ))}
             </select>
           </div>
+
 
           <span className="result-count"><Filter size={12} /> {filteredStudents.length} results</span>
         </div>
@@ -857,7 +887,7 @@ function Students() {
         {/* EXCEL TABLE */}
         <div className="excel-container">
           {loading ? (
-            <div className="empty-state">Loading students...</div>
+            <LoadingSpinner message="Loading students..." />
           ) : filteredStudents.length === 0 ? (
             <div className="empty-state">
               {students.length === 0
@@ -879,9 +909,10 @@ function Students() {
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.map((student, index) => (
+                {paginatedStudents.map((student, index) => (
                   <tr key={student.id}>
-                    <td className="col-id">{index + 1}</td>
+                    <td className="col-id">{(safePage - 1) * PAGE_SIZE + index + 1}</td>
+
                     <td className="col-name">
                       <div className="student-cell">
                         <div className="avatar" style={{ background: avatarColors[index % avatarColors.length] }}>
@@ -930,13 +961,36 @@ function Students() {
 
           {/* PAGINATION */}
           <div className="pagination-bar">
-            <span className="info"><Info size={12} /> {filteredStudents.length} records · page 1 of 1</span>
+            <span className="info">
+              <Info size={12} /> {filteredStudents.length} records · page {safePage} of {totalPages}
+            </span>
             <div className="pages">
-              <button disabled><span>‹</span></button>
-              <button className="active">1</button>
-              <button disabled><span>›</span></button>
+              <button
+                onClick={() => setCurrentPage(safePage - 1)}
+                disabled={safePage <= 1}
+                aria-label="Previous page"
+              >
+                <span>‹</span>
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  className={page === safePage ? 'active' : ''}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage(safePage + 1)}
+                disabled={safePage >= totalPages}
+                aria-label="Next page"
+              >
+                <span>›</span>
+              </button>
             </div>
           </div>
+
         </div>
 
       </div>
@@ -985,11 +1039,12 @@ function Students() {
                     <option value="">Select Class</option>
                     {classes
                       .filter(c => !bulkData.chain || c.chain === bulkData.chain)
-                      .map(cls => (
-                        <option key={cls.id} value={cls.name}>{cls.name}</option>
+                      .map((cls, index) => (
+                        <option key={getClassKey(cls, index)} value={cls.name}>{cls.name}</option>
                       ))
                     }
                   </select>
+
                 </div>
               </div>
 
@@ -1205,11 +1260,12 @@ function Students() {
                       <option value="">Select Class</option>
                       {classes
                         .filter(c => !formData.chain || c.chain === formData.chain)
-                        .map(cls => (
-                          <option key={cls.id} value={cls.name}>{cls.name}</option>
+                        .map((cls, index) => (
+                          <option key={getClassKey(cls, index)} value={cls.name}>{cls.name}</option>
                         ))
                       }
                     </select>
+
                   </div>
                 </div>
 

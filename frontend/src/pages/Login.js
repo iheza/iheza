@@ -40,6 +40,28 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [chain, setChain] = useState(null);
   const [chainLoading, setChainLoading] = useState(false);
+  // Remember & auto-fill the user's credentials so they don't have to retype them
+  const [rememberMe, setRememberMe] = useState(true);
+
+  // On mount, restore any saved credentials (access code + portal) from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('iheza_saved_credentials');
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.accessCode) {
+          setFormData(prev => ({
+            ...prev,
+            accessCode: data.accessCode,
+            portal: data.portal || prev.portal,
+          }));
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
 
   // Fetch chain data if chain code is provided
   useEffect(() => {
@@ -100,9 +122,29 @@ function Login() {
         chain: chainCode, // Pass chain code from URL if available
       })).unwrap();
       
+      // Remember the user's credentials so they don't have to retype them next time
+      if (rememberMe) {
+        try {
+          localStorage.setItem('iheza_saved_credentials', JSON.stringify({
+            accessCode: formData.accessCode,
+            portal: formData.portal,
+            savedAt: new Date().toISOString(),
+          }));
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        try {
+          localStorage.removeItem('iheza_saved_credentials');
+        } catch (e) {
+          // ignore
+        }
+      }
+      
       toast.success(`Welcome, ${result.user.name}!`);
       // Students go directly to My Portal, staff go to Dashboard
       navigate(isStudent ? '/portal/student-portal' : '/portal/dashboard');
+
     } catch (err) {
       // Error handled by Redux
     }
@@ -209,6 +251,20 @@ function Login() {
           gap: 0.5rem;
           margin-bottom: 1.5rem;
         }
+        @media (max-width: 640px) {
+          .portal-select-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+          }
+          .portal-select-grid .portal-btn {
+            flex: 0 0 calc(33.333% - 0.5rem);
+            max-width: calc(33.333% - 0.5rem);
+          }
+        }
+
+
         
         .portal-btn {
           padding: 0.75rem 0.5rem;
@@ -466,13 +522,37 @@ function Login() {
                 <div>Just enter your admission number to login</div>
               </div>
             )}
-            
+
+            {/* Remember me — saves credentials so the user doesn't have to retype them */}
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.8rem',
+                color: '#475569',
+                cursor: 'pointer',
+                marginTop: '0.25rem',
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#0f4c81' }}
+                data-testid="remember-me-checkbox"
+              />
+              Remember me on this device
+            </label>
+
             <button
               type="submit"
               className="login-btn"
               disabled={loading}
               data-testid="login-submit-btn"
             >
+
               {loading ? (
                 <>Signing in...</>
               ) : (

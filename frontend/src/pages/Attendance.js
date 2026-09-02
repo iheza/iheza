@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import { dataService } from '../services/dataService';
@@ -46,19 +47,28 @@ function Attendance() {
     return dayNames[date.getDay()];
   };
 
-  useEffect(() => {
-    loadClasses();
-    if (userChain && userChain !== 'IHEZA') {
-      setSelectedChain(userChain);
-    }
-  }, [userChain]);
+  // Tracks the chain we last loaded classes for, so we never issue a
+  // duplicate class fetch when the user's own chain is applied on mount.
+  const lastLoadedChain = useRef(null);
 
   useEffect(() => {
-    // Reload classes when chain selection changes
-    if (selectedChain || !canFilterChains) {
-      loadClasses();
+    // Compute the effective chain synchronously (user's own chain takes
+    // precedence for non-IHEZA users) so we load classes exactly once.
+    const effectiveChain = (userChain && userChain !== 'IHEZA') ? userChain : selectedChain;
+
+    if (lastLoadedChain.current !== effectiveChain) {
+      lastLoadedChain.current = effectiveChain;
+      loadClasses(effectiveChain);
     }
-  }, [selectedChain]);
+
+    // Sync the selected chain for non-IHEZA users (triggers the effect
+    // above to load classes for the correct chain on the next render).
+    if (effectiveChain !== selectedChain) {
+      setSelectedChain(effectiveChain);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userChain, selectedChain]);
+
 
   useEffect(() => {
     if (selectedClass && selectedMonth) {
@@ -66,10 +76,10 @@ function Attendance() {
     }
   }, [selectedClass, selectedMonth, selectedChain]);
 
-  const loadClasses = async () => {
+  const loadClasses = async (chain = selectedChain) => {
     try {
       // Pass the selected chain to backend for Director/Coordinator filtering
-      const data = await dataService.getClasses(selectedChain);
+      const data = await dataService.getClasses(chain);
       const filteredClasses = canFilterChains 
         ? data 
         : data.filter(c => c.chain === userChain);
@@ -81,6 +91,7 @@ function Attendance() {
       console.error('Failed to load classes:', error);
     }
   };
+
 
   const getFilteredClasses = () => {
     if (!selectedChain && canFilterChains) return classes;
@@ -104,7 +115,10 @@ function Attendance() {
       // Fetch all attendance for students in this class
       try {
         const attendanceParams = { 
-          target_type: 'student'
+          target_type: 'student',
+          // Filter on the backend so we don't pull the entire attendance
+          // history (up to 5000 records) just to render one month.
+          month: selectedMonth
         };
         // Add chain filter for Director/Coordinator
         if (selectedChain) {
@@ -112,6 +126,7 @@ function Attendance() {
         }
         
         const allAttendance = await dataService.getAttendance(attendanceParams);
+
         
         console.log('Raw attendance from API:', allAttendance?.length, 'records');
         
@@ -764,9 +779,10 @@ function Attendance() {
               data-testid="class-select"
             >
               <option value="">Select Class</option>
-              {getFilteredClasses().map(cls => (
-                <option key={cls.id} value={cls.name}>{cls.name}</option>
+              {getFilteredClasses().map((cls, idx) => (
+                <option key={`${cls.id ?? 'none'}-${idx}`} value={cls.name}>{cls.name}</option>
               ))}
+
             </select>
           </div>
           
@@ -833,7 +849,8 @@ function Attendance() {
               </thead>
               <tbody>
                 {students.map((student, index) => (
-                  <tr key={student.id}>
+                  <tr key={`${student.id ?? 'none'}-${index}`}>
+
                     <td className="roll-cell">{index + 1}</td>
                     <td className="pupil-name">
                       {student.first_name || student.name?.split(' ')[0] || 'Unknown'} {student.last_name || ''}

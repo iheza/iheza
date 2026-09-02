@@ -87,6 +87,10 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Give requests a reasonable timeout so a hung origin connection
+  // (which Cloudflare reports as ERR_HTTP2_PROTOCOL_ERROR / 520) fails
+  // fast and can be retried instead of hanging the UI.
+  timeout: 30000,
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -97,22 +101,105 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor to handle 401 errors (expired tokens)
+// Retry transient failures caused by the origin server briefly dropping the
+// connection mid-response (Cloudflare ERR_HTTP2_PROTOCOL_ERROR / 520 spam).
+//
+// IMPORTANT: 502/503/504 are deliberately NOT retried. Those statuses mean
+// the origin is OVERLOADED — retrying immediately only adds more load and
+// turns a transient blip into a sustained outage (retry-storm feedback loop).
+// We only retry true origin-connection drops (520/521/522/524) and network
+// errors (no response), which are safe to retry a couple of times.
+const RETRYABLE_STATUS = [520, 521, 522, 524];
+const MAX_RETRIES = 1;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ---- Circuit breaker -----------------------------------------------------
+// After N consecutive retryable failures, open the circuit for a cooldown
+// window. While open, no further retries are attempted (requests fail fast)
+// so the origin gets a chance to recover instead of being hammered.
+const CIRCUIT_BREAKER = {
+  consecutiveFailures: 0,
+  MAX_CONSECUTIVE_FAILURES: 3,
+  openUntil: 0,
+  COOLDOWN_MS: 30000,
+  isOpen() {
+    if (Date.now() > this.openUntil) {
+      // Cooldown expired — close the circuit and reset.
+      this.consecutiveFailures = 0;
+      return false;
+    }
+    return true;
+  },
+  recordFailure() {
+    this.consecutiveFailures += 1;
+    if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+      this.openUntil = Date.now() + this.COOLDOWN_MS;
+      console.warn(
+        `Circuit breaker opened: ${this.consecutiveFailures} consecutive ` +
+        `failures. Pausing retries for ${this.COOLDOWN_MS / 1000}s.`
+      );
+    }
+  },
+  recordSuccess() {
+    this.consecutiveFailures = 0;
+  },
+};
+
+// Response interceptor to handle 401 errors (expired tokens) and retry
+// transient origin/network failures.
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Token expired or invalid - log out
+  (response) => {
+    // Any successful response closes the circuit.
+    CIRCUIT_BREAKER.recordSuccess();
+    return response;
+  },
+  async (error) => {
+    const { config, response } = error;
+
+    // 401 = token expired/invalid -> log out (never retry)
+    if (response && response.status === 401) {
       console.warn('Session expired or invalid. Logging out...');
       AuthService.logout();
-      // Redirect to login page
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
+      return Promise.reject(error);
     }
+
+    // Determine if this is a retryable failure:
+    //  - A 520/521/522/524 (Cloudflare origin-connection drop)
+    //  - A network error (no response) which is what surfaces as
+    //    ERR_HTTP2_PROTOCOL_ERROR in the browser
+    const isRetryable =
+      (response && RETRYABLE_STATUS.includes(response.status)) ||
+      (!response && error.code !== 'ECONNABORTED');
+
+    // Respect per-request opt-out (e.g. config.retry === 0)
+    const retriesLeft = config.__retryCount ?? MAX_RETRIES;
+
+    // Circuit breaker: if open, fail fast — do NOT retry.
+    if (isRetryable && retriesLeft > 0 && !CIRCUIT_BREAKER.isOpen()) {
+      config.__retryCount = retriesLeft - 1;
+      CIRCUIT_BREAKER.recordFailure();
+      // Longer backoff so the origin has time to recover: 2s, then 4s.
+      const delay = 2000 * (MAX_RETRIES - retriesLeft + 1);
+      await sleep(delay);
+      return apiClient(config);
+    }
+
     return Promise.reject(error);
   }
 );
+
+// NOTE: A previous "request coalescing" interceptor here was REMOVED because
+// it was fatally buggy. It called `apiClient(config)` recursively from inside
+// the request interceptor, which created a self-referential promise that never
+// resolved — causing EVERY GET request to hang forever (attendance "loads
+// forever", students/classes appear empty). The retry + circuit-breaker logic
+// above already prevents retry storms, so no separate coalescing layer is
+// needed. If coalescing is ever re-added, it must be implemented via the axios
+// adapter (not a request interceptor) to avoid recursion.
 
 export const authService = AuthService;
 export default AuthService;

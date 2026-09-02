@@ -19,21 +19,8 @@ root.render(
   </React.StrictMode>
 );
 
-// Service Worker registration with graceful error handling
-// Prevents console error spam when the SW endpoint returns errors (e.g. 502 on preview hosts)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${process.env.PUBLIC_URL}/sw.js`)
-      .then((registration) => {
-        console.log('[SW] Registered successfully:', registration.scope);
-      })
-      .catch((error) => {
-        // SW registration failed (e.g. 502 from preview host).
-        // Unregister any existing SWs to prevent repeated failed update attempts.
-        console.warn('[SW] Registration failed, unregistering existing service workers:', error);
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          registrations.forEach((reg) => reg.unregister());
-        });
-      });
-  });
-}
+// NOTE: Service Worker registration is handled in App.js only.
+// Registering here AND in App.js caused duplicate registrations targeting the
+// same scope, which produced repeated "Failed to update a ServiceWorker ...
+// An unknown error occurred when fetching the script" errors. App.js has the
+// robust registration with fallbacks, so we keep it there and remove this one.

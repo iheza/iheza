@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../store/slices/authSlice';
-import { BookMarked, FileText, Calendar, List, ClipboardCheck, Library } from 'lucide-react';
+import { BookMarked, FileText, Calendar, List, ClipboardCheck, Library, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import LessonPlanForm from './LessonPlanForm';
 import AssessmentForm from './AssessmentForm';
 import SchemeOfWork from './SchemeOfWork';
 import SubjectEvaluation from './SubjectEvaluation';
 import StudentPortal from './StudentPortal';
+import Timetable from './Timetable';
 
 const TOOLS = [
   { id: 'lesson-plans', label: 'Lesson Plans', icon: FileText, color: '#8b5cf6' },
   { id: 'schemes', label: 'Scheme of Work', icon: Calendar, color: '#3b82f6' },
   { id: 'evaluations', label: 'Subject Evaluation', icon: List, color: '#22c55e' },
   { id: 'assessments', label: 'Assessments', icon: ClipboardCheck, color: '#f59e0b' },
+  { id: 'timetable', label: 'Timetable', icon: Clock, color: '#0ea5e9' },
 ];
 
 // Staff roles that can access the teacher tools (lesson plans, schemes, etc.)
 const STAFF_ROLES = ['director', 'coordinator', 'principal', 'academic', 'teacher', 'secretary', 'section_leader'];
+
 
 function AcademicHub() {
   const currentUser = useSelector(selectCurrentUser);
@@ -36,10 +39,13 @@ function AcademicHub() {
         return <SchemeOfWork />;
       case 'evaluations':
         return <SubjectEvaluation />;
+      case 'timetable':
+        return <Timetable />;
       default:
         return <LessonPlanForm />;
     }
   };
+
 
   // Students should see the redesigned Excel-style Student Portal
   // (Tasks, Report Cards, Fees, Announcements) when accessing Academic Hub.

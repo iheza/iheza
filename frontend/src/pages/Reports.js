@@ -10,8 +10,11 @@ import { toast } from '../hooks/useSoundEnabledToast';
 import { Users, Calendar, DollarSign, Download, Search, Filter, RefreshCw, FileText } from 'lucide-react';
 
 import ChainToggle from '../components/ChainToggle';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { API_URL } from '../config/api';
 import { exportReportCard, exportAttendanceReport } from '../utils/docExport';
+import UniformReport from './UniformReport';
+
 
 function Reports() {
   const currentUser = useSelector(selectCurrentUser);
@@ -31,6 +34,9 @@ function Reports() {
   const [detailedAttendance, setDetailedAttendance] = useState(null);
   const [feesReport, setFeesReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  // Pagination for the attendance report table (20 rows per page)
+  const [attendancePage, setAttendancePage] = useState(1);
+  const attendancePageSize = 20;
   
   // Check if user can see Financial Reports (Secretary, Director, Principal only)
   const canViewFinancialReports = ['secretary', 'director', 'principal'].includes(currentUser?.role?.toLowerCase());
@@ -137,9 +143,12 @@ function Reports() {
     <div className="reports-page">
 
       <ChainToggle selectedChain={selectedChain} onChainChange={(chain) => {
+        // Only update state. The effect on [activeTab, selectedChain] below
+        // already reloads reports, so calling loadReports here too would
+        // double-fetch on every chain change.
         setSelectedChain(chain);
-        loadReports(chain);
       }} />
+
       <style>{`
         .reports-page {
           padding: 1.5rem;
@@ -157,8 +166,9 @@ function Reports() {
         .filters-header {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          margin-bottom: 1rem;
+          gap: 0.75rem;
+          flex-wrap: nowrap;
+          margin-bottom: 0;
         }
         
         .filters-title {
@@ -168,6 +178,8 @@ function Reports() {
           display: flex;
           align-items: center;
           gap: 0.5rem;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
         
         .filter-mode-toggle {
@@ -176,6 +188,7 @@ function Reports() {
           padding: 0.25rem;
           background: rgba(51, 65, 85, 0.5);
           border-radius: 0.5rem;
+          flex-shrink: 0;
         }
         
         .mode-btn {
@@ -187,6 +200,7 @@ function Reports() {
           font-size: 0.8rem;
           cursor: pointer;
           transition: all 0.2s;
+          white-space: nowrap;
         }
         
         .mode-btn.active {
@@ -196,33 +210,36 @@ function Reports() {
         
         .filters-row {
           display: flex;
-          gap: 1rem;
-          flex-wrap: wrap;
+          gap: 0.75rem;
+          flex-wrap: nowrap;
           align-items: flex-end;
+          flex: 1;
+          min-width: 0;
         }
         
         .filter-group {
           flex: 1;
-          min-width: 150px;
+          min-width: 0;
         }
         
         .filter-label {
           display: block;
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           font-weight: 500;
           color: #94a3b8;
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.35rem;
           text-transform: uppercase;
+          white-space: nowrap;
         }
         
         .filter-input {
           width: 100%;
-          padding: 0.625rem 0.75rem;
+          padding: 0.5rem 0.6rem;
           background: rgba(51, 65, 85, 0.5);
           border: 1px solid rgba(71, 85, 105, 0.5);
           border-radius: 0.5rem;
           color: #f8fafc;
-          font-size: 0.875rem;
+          font-size: 0.8rem;
         }
         
         .filter-input:focus {
@@ -232,20 +249,22 @@ function Reports() {
         
         .filter-actions {
           display: flex;
-          gap: 0.5rem;
+          gap: 0.4rem;
+          flex-shrink: 0;
         }
         
         .btn {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          padding: 0.625rem 1rem;
+          gap: 0.4rem;
+          padding: 0.5rem 0.75rem;
           border-radius: 0.5rem;
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
           border: none;
-          font-size: 0.875rem;
+          font-size: 0.8rem;
+          white-space: nowrap;
         }
         
         .btn-primary {
@@ -261,23 +280,33 @@ function Reports() {
         
         .stats-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1rem;
+          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+          gap: 0.75rem;
           margin-bottom: 1.5rem;
         }
         
         .stat-card {
           background: rgba(30, 41, 59, 0.8);
           border: 1px solid rgba(51, 65, 85, 0.5);
-          border-radius: 1rem;
-          padding: 1.5rem;
+          border-radius: 0.75rem;
+          padding: 0 0.75rem;
           text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 50px;
+          min-height: 50px;
+          max-height: 50px;
+          overflow: hidden;
+          box-sizing: border-box;
         }
         
         .stat-value {
-          font-size: 2rem;
+          font-size: 1rem;
           font-weight: 700;
           color: #f8fafc;
+          line-height: 1.1;
         }
         
         .stat-value.present { color: #22c55e; }
@@ -285,9 +314,12 @@ function Reports() {
         .stat-value.rate { color: #3b82f6; }
         
         .stat-label {
-          font-size: 0.875rem;
+          font-size: 0.55rem;
           color: #64748b;
-          margin-top: 0.25rem;
+          margin-top: 2px;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          line-height: 1.1;
         }
         
         .table-container {
@@ -438,65 +470,64 @@ function Reports() {
                   By Month
                 </button>
               </div>
-            </div>
-            
-            <div className="filters-row">
-              {filterMode === 'date' ? (
-                <>
+              <div className="filters-row">
+                {filterMode === 'date' ? (
+                  <>
+                    <div className="filter-group">
+                      <label className="filter-label">Start Date</label>
+                      <input
+                        type="date"
+                        className="filter-input"
+                        value={filters.start_date}
+                        onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
+                      />
+                    </div>
+                    <div className="filter-group">
+                      <label className="filter-label">End Date</label>
+                      <input
+                        type="date"
+                        className="filter-input"
+                        value={filters.end_date}
+                        onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
+                      />
+                    </div>
+                  </>
+                ) : (
                   <div className="filter-group">
-                    <label className="filter-label">Start Date</label>
+                    <label className="filter-label">Select Month</label>
                     <input
-                      type="date"
+                      type="month"
                       className="filter-input"
-                      value={filters.start_date}
-                      onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
+                      value={filters.month}
+                      onChange={(e) => setFilters({ ...filters, month: e.target.value })}
                     />
                   </div>
-                  <div className="filter-group">
-                    <label className="filter-label">End Date</label>
-                    <input
-                      type="date"
-                      className="filter-input"
-                      value={filters.end_date}
-                      onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
-                    />
-                  </div>
-                </>
-              ) : (
+                )}
+                
                 <div className="filter-group">
-                  <label className="filter-label">Select Month</label>
-                  <input
-                    type="month"
+                  <label className="filter-label">Staff Position</label>
+                  <select
                     className="filter-input"
-                    value={filters.month}
-                    onChange={(e) => setFilters({ ...filters, month: e.target.value })}
-                  />
+                    value={filters.role}
+                    onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+                  >
+                    {STAFF_ROLES.map(role => (
+                      <option key={role.value} value={role.value}>{role.label}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
-              
-              <div className="filter-group">
-                <label className="filter-label">Staff Position</label>
-                <select
-                  className="filter-input"
-                  value={filters.role}
-                  onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-                >
-                  {STAFF_ROLES.map(role => (
-                    <option key={role.value} value={role.value}>{role.label}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="filter-actions">
-                <button className="btn btn-primary" onClick={handleSearch}>
-                  <Search size={16} /> Search
-                </button>
-                <button className="btn btn-secondary" onClick={handleClearFilters}>
-                  <RefreshCw size={16} /> Clear
-                </button>
-                <button className="btn btn-secondary" onClick={exportToDOC}>
-                  <Download size={16} /> Export DOC
-                </button>
+                
+                <div className="filter-actions">
+                  <button className="btn btn-primary" onClick={handleSearch}>
+                    <Search size={16} /> Search
+                  </button>
+                  <button className="btn btn-secondary" onClick={handleClearFilters}>
+                    <RefreshCw size={16} /> Clear
+                  </button>
+                  <button className="btn btn-secondary" onClick={exportToDOC}>
+                    <Download size={16} /> Export DOC
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -548,51 +579,131 @@ function Reports() {
           )}
           
           {/* Detailed Records Table */}
-          <div className="table-container">
-            <div className="table-header">
-              <div className="table-title">Attendance Records</div>
-              <span className="records-count">
+          <div className="table-container" style={{ background: 'white' }}>
+            <div className="table-header" style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <div className="table-title" style={{ color: '#1e293b' }}>Attendance Records</div>
+              <span className="records-count" style={{ background: '#e2e8f0', color: '#475569' }}>
                 {detailedAttendance?.records?.length || 0} records
               </span>
             </div>
             
             {loading ? (
-              <div className="empty-state">Loading attendance data...</div>
+              <LoadingSpinner message="Loading attendance data..." />
             ) : detailedAttendance?.records?.length > 0 ? (
-              <table>
+              <>
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white' }}>
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Staff Name</th>
-                    <th>Position</th>
-                    <th>Status</th>
-                    <th>Check-in</th>
-                    <th>Check-out</th>
-                    <th>Late</th>
+                    <th style={{ background: '#f1f5f9', color: '#475569', borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Date</th>
+                    <th style={{ background: '#f1f5f9', color: '#475569', borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Staff Name</th>
+                    <th style={{ background: '#f1f5f9', color: '#475569', borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Position</th>
+                    <th style={{ background: '#f1f5f9', color: '#475569', borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Status</th>
+                    <th style={{ background: '#f1f5f9', color: '#475569', borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Check-in</th>
+                    <th style={{ background: '#f1f5f9', color: '#475569', borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Check-out</th>
+                    <th style={{ background: '#f1f5f9', color: '#475569', borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Late</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detailedAttendance.records.slice(0, 50).map((record, idx) => (
-                    <tr key={idx}>
-                      <td>{record.date}</td>
-                      <td>{record.staff_name || 'N/A'}</td>
-                      <td>
-                        <span className="role-badge">{record.staff_role || 'N/A'}</span>
+                  {detailedAttendance.records.slice((attendancePage - 1) * attendancePageSize, attendancePage * attendancePageSize).map((record, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontSize: '0.875rem' }}>{record.date}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontSize: '0.875rem' }}>{record.staff_name || 'N/A'}</td>
+                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                        <span style={{ display: 'inline-block', padding: '0.25rem 0.5rem', background: '#ede9fe', borderRadius: '0.375rem', color: '#7c3aed', fontSize: '0.75rem', fontWeight: 500, textTransform: 'capitalize' }}>{record.staff_role || 'N/A'}</span>
                       </td>
-                      <td>
-                        <span className={`status-badge ${record.status || 'absent'}`}>
+                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
+                        <span style={{ display: 'inline-block', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', background: record.status === 'present' ? '#dcfce7' : record.status === 'late' ? '#fef3c7' : '#fee2e2', color: record.status === 'present' ? '#166534' : record.status === 'late' ? '#92400e' : '#991b1b' }}>
                           {record.status || 'absent'}
                         </span>
                       </td>
-                      <td style={{ color: '#22c55e', fontWeight: 500 }}>{record.check_in_time || '-'}</td>
-                      <td style={{ color: '#6366f1', fontWeight: 500 }}>{record.check_out_time || '-'}</td>
-                      <td style={{ color: record.is_late ? '#f59e0b' : '#64748b', fontWeight: record.is_late ? 600 : 400 }}>
+                      <td style={{ padding: '0.75rem 1rem', color: '#166534', fontWeight: 500, fontSize: '0.875rem' }}>{record.check_in_time || '-'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#4338ca', fontWeight: 500, fontSize: '0.875rem' }}>{record.check_out_time || '-'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: record.is_late ? '#b45309' : '#94a3b8', fontWeight: record.is_late ? 600 : 400, fontSize: '0.875rem' }}>
                         {record.is_late ? record.check_in_time : '-'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {/* Pagination Controls */}
+              {detailedAttendance.records.length > attendancePageSize && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.75rem 1rem',
+                  borderTop: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                    Showing {(attendancePage - 1) * attendancePageSize + 1}–{Math.min(attendancePage * attendancePageSize, detailedAttendance.records.length)} of {detailedAttendance.records.length} records
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                    <button
+                      onClick={() => setAttendancePage(p => Math.max(1, p - 1))}
+                      disabled={attendancePage === 1}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: '0.375rem',
+                        border: '1px solid #e2e8f0',
+                        background: attendancePage === 1 ? '#f1f5f9' : 'white',
+                        color: attendancePage === 1 ? '#94a3b8' : '#1e293b',
+                        cursor: attendancePage === 1 ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: 500
+                      }}
+                    >
+                      ‹ Prev
+                    </button>
+                    {Array.from({ length: Math.ceil(detailedAttendance.records.length / attendancePageSize) }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === Math.ceil(detailedAttendance.records.length / attendancePageSize) || Math.abs(p - attendancePage) <= 2)
+                      .reduce((acc, p, i, arr) => {
+                        if (i > 0 && p - arr[i - 1] > 1) acc.push('...');
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, i) => p === '...' ? (
+                        <span key={`ellipsis-${i}`} style={{ padding: '0.35rem 0.5rem', color: '#94a3b8', fontSize: '0.8rem' }}>…</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setAttendancePage(p)}
+                          style={{
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '0.375rem',
+                            border: '1px solid #e2e8f0',
+                            background: p === attendancePage ? '#0ea5e9' : 'white',
+                            color: p === attendancePage ? 'white' : '#1e293b',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            fontWeight: p === attendancePage ? 600 : 500
+                          }}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    <button
+                      onClick={() => setAttendancePage(p => Math.min(Math.ceil(detailedAttendance.records.length / attendancePageSize), p + 1))}
+                      disabled={attendancePage === Math.ceil(detailedAttendance.records.length / attendancePageSize)}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: '0.375rem',
+                        border: '1px solid #e2e8f0',
+                        background: attendancePage === Math.ceil(detailedAttendance.records.length / attendancePageSize) ? '#f1f5f9' : 'white',
+                        color: attendancePage === Math.ceil(detailedAttendance.records.length / attendancePageSize) ? '#94a3b8' : '#1e293b',
+                        cursor: attendancePage === Math.ceil(detailedAttendance.records.length / attendancePageSize) ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: 500
+                      }}
+                    >
+                      Next ›
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             ) : (
               <div className="empty-state">
                 No attendance records found. Try adjusting your filters.
@@ -609,9 +720,14 @@ function Reports() {
       {activeTab === 'academic' && (
         <AcademicReportsTab selectedChain={selectedChain} />
       )}
+
+      {activeTab === 'uniform' && (
+        <UniformReport />
+      )}
     </div>
   );
 }
+
 
 
 // Financial Reports Tab Component - Secretary, Director, Principal only
@@ -626,6 +742,9 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
   const [showSpecialDetailsModal, setShowSpecialDetailsModal] = useState(false);
   const [specialNotes, setSpecialNotes] = useState('');
   const [selectedStudentForDetails, setSelectedStudentForDetails] = useState(null);
+  // Pagination for the financial report table (20 rows per page)
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   const isSecretary = currentUser?.role?.toLowerCase() === 'secretary';
 
@@ -665,6 +784,11 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
   };
 
   const loadAllStudentFees = async () => {
+    // AbortController + timeout so a slow/hung backend (which Cloudflare
+    // surfaces as a 520) doesn't leave the request hanging forever. After
+    // 30s we abort and show a friendly message instead of silently retrying.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -677,7 +801,8 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
       // receipt images for every student.
       const url = `${API_URL}/api/financial-report-students${params.toString() ? '?' + params.toString() : ''}`;
       const response = await fetch(url, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        signal: controller.signal
       });
       if (response.ok) {
         const data = await response.json();
@@ -697,13 +822,26 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
           setStudents([]);
           setSummary(null);
         }
+      } else {
+        // Non-OK response (e.g. Cloudflare 520, 500, 502). Show a friendly
+        // message instead of silently failing.
+        console.error(`Financial report request failed with HTTP ${response.status}`);
+        toast.error('Server busy, please try again in a moment.');
       }
     } catch (error) {
       console.error('Failed to load student fees:', error);
+      if (error?.name === 'AbortError') {
+        // Request timed out (30s) — the backend is likely overloaded.
+        toast.error('The report is taking too long to load. Please try again.');
+      } else {
+        toast.error('Server busy, please try again in a moment.');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
+
 
   const applyFilters = () => {
     let result = [...students];
@@ -736,6 +874,8 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
     }
     
     setFilteredStudents(result);
+    // Reset to first page whenever filters change
+    setPage(1);
   };
 
 
@@ -1184,8 +1324,9 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
       {/* Student Fees Table */}
       <div className="fin-table-container">
         {loading ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>Loading...</div>
+          <LoadingSpinner message="Loading financial report..." />
         ) : (
+          <>
           <table className="fin-table">
             <thead>
               <tr>
@@ -1199,8 +1340,9 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
               </tr>
             </thead>
             <tbody>
-              {filteredStudents.map(student => (
-                <tr key={student.id}>
+              {filteredStudents.slice((page - 1) * pageSize, page * pageSize).map((student, index) => (
+                <tr key={`${student.id || student.admission_no || 'student'}-${index}`}>
+
                   <td>
                     <div style={{ fontWeight: 500 }}>{student.name}</div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{student.admission_no}</div>
@@ -1243,6 +1385,85 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
               )}
             </tbody>
           </table>
+          {/* Pagination Controls */}
+          {filteredStudents.length > pageSize && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderTop: '1px solid #e2e8f0',
+              background: '#f8fafc',
+              flexWrap: 'wrap',
+              gap: '0.5rem'
+            }}>
+              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filteredStudents.length)} of {filteredStudents.length} students
+              </span>
+              <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid #e2e8f0',
+                    background: page === 1 ? '#f1f5f9' : 'white',
+                    color: page === 1 ? '#94a3b8' : '#1e293b',
+                    cursor: page === 1 ? 'not-allowed' : 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: 500
+                  }}
+                >
+                  ‹ Prev
+                </button>
+                {Array.from({ length: Math.ceil(filteredStudents.length / pageSize) }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === Math.ceil(filteredStudents.length / pageSize) || Math.abs(p - page) <= 2)
+                  .reduce((acc, p, i, arr) => {
+                    if (i > 0 && p - arr[i - 1] > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) => p === '...' ? (
+                    <span key={`ellipsis-${i}`} style={{ padding: '0.35rem 0.5rem', color: '#94a3b8', fontSize: '0.8rem' }}>…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: '0.375rem',
+                        border: '1px solid #e2e8f0',
+                        background: p === page ? '#0ea5e9' : 'white',
+                        color: p === page ? 'white' : '#1e293b',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: p === page ? 600 : 500
+                      }}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                <button
+                  onClick={() => setPage(p => Math.min(Math.ceil(filteredStudents.length / pageSize), p + 1))}
+                  disabled={page === Math.ceil(filteredStudents.length / pageSize)}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid #e2e8f0',
+                    background: page === Math.ceil(filteredStudents.length / pageSize) ? '#f1f5f9' : 'white',
+                    color: page === Math.ceil(filteredStudents.length / pageSize) ? '#94a3b8' : '#1e293b',
+                    cursor: page === Math.ceil(filteredStudents.length / pageSize) ? 'not-allowed' : 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: 500
+                  }}
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
       
@@ -1616,9 +1837,10 @@ function AcademicReportsTab({ selectedChain }) {
             data-testid="academic-class-select"
           >
             <option value="">Choose a class...</option>
-            {classes.map(cls => (
-              <option key={cls.id} value={cls.name}>{cls.name}</option>
+            {classes.map((cls, index) => (
+              <option key={`${cls.id ?? 'cls'}-${index}`} value={cls.name}>{cls.name}</option>
             ))}
+
           </select>
         </div>
         
@@ -1635,11 +1857,12 @@ function AcademicReportsTab({ selectedChain }) {
               data-testid="academic-student-select"
             >
               <option value="">Choose a student...</option>
-              {students.map(student => (
-                <option key={student.id} value={student.id}>
+              {students.map((student, index) => (
+                <option key={`${student.id ?? student.admission_no ?? 'stu'}-${index}`} value={student.id}>
                   {student.first_name} {student.last_name} ({student.admission_no})
                 </option>
               ))}
+
             </select>
           </div>
         )}

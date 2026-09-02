@@ -63,6 +63,10 @@ function Classroom() {
 
   const [showTaskFormatMenu, setShowTaskFormatMenu] = useState(null);
 
+  // Per-student mark inputs (score + feedback) for the current task being viewed
+  const [markInputs, setMarkInputs] = useState({});
+
+
   const handleDownloadTask = (task, format) => {
     setShowTaskFormatMenu(null);
     
@@ -377,11 +381,13 @@ function Classroom() {
       const response = await fetch(`${API_URL}/api/student-tasks/${task.id}`);
       const data = await response.json();
       setSelectedTask(data);
+      setMarkInputs({}); // reset per-student mark inputs when opening a task
       setShowViewModal(true);
     } catch (error) {
       toast.error('Failed to load task details');
     }
   };
+
 
   const handleMarkCompletion = async (studentId, status) => {
     try {
@@ -399,6 +405,33 @@ function Classroom() {
       toast.error('Failed to update completion');
     }
   };
+
+  // Save a mark (score + feedback) for a student's task submission
+  const handleSaveMark = async (studentId, score, feedback) => {
+    try {
+      const response = await fetch(`${API_URL}/api/student-tasks/${selectedTask.id}/mark-completion`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: studentId,
+          status: 'completed',
+          score: score !== '' && score !== null && score !== undefined ? Number(score) : null,
+          feedback: feedback || ''
+        })
+      });
+      
+      if (response.ok) {
+        toast.success('Mark saved successfully');
+        handleViewTask(selectedTask);
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to save mark');
+      }
+    } catch (error) {
+      toast.error('Failed to save mark: ' + (error.message || 'Unknown error'));
+    }
+  };
+
 
   const resetForm = () => {
     setFormData({
@@ -442,7 +475,8 @@ function Classroom() {
 
   const totalStudents = tasks.reduce((sum, t) => sum + (t.total_students || 0), 0);
   const totalCompleted = tasks.reduce((sum, t) => sum + (t.completed_count || 0), 0);
-  const avgProgress = tasks.length > 0 ? Math.round((totalCompleted / totalStudents) * 100) : 0;
+  const avgProgress = tasks.length > 0 && totalStudents > 0 ? Math.round((totalCompleted / totalStudents) * 100) : 0;
+
 
   return (
     <div className="classroom-page">
@@ -822,11 +856,12 @@ function Classroom() {
           </div>
           <span className="filter-label">Class</span>
           <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} data-testid="class-select">
-            {classes.map(c => (
-              <option key={c.id} value={c.name}>{c.name}</option>
+            {classes.map((c, idx) => (
+              <option key={`${c.id ?? 'none'}-${idx}`} value={c.name}>{c.name}</option>
             ))}
           </select>
           <span className="filter-label">Type</span>
+
           <select value={filterType} onChange={(e) => setFilterType(e.target.value)} data-testid="type-filter">
             <option value="">All</option>
             {TASK_TYPES.map(t => (
@@ -870,7 +905,8 @@ function Classroom() {
                   const progress = getProgress(task);
                   const progressColor = progress >= 100 ? 'green' : progress >= 70 ? 'orange' : 'red';
                   return (
-                    <tr key={task.id}>
+                    <tr key={`${task.id ?? 'none'}-${index}`}>
+
                       <td className="col-id">{index + 1}</td>
                       <td className="col-name">{task.title}</td>
                       <td>
@@ -1000,9 +1036,10 @@ function Classroom() {
                       required
                     >
                       <option value="">Select Subject</option>
-                      {subjects.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                      {subjects.map((s, idx) => (
+                        <option key={`${s.id ?? 'none'}-${idx}`} value={s.id}>{s.name}</option>
                       ))}
+
                     </select>
                   </div>
                 </div>
@@ -1014,13 +1051,14 @@ function Classroom() {
                       onChange={(e) => setFormData({ ...formData, class_name: e.target.value })}
                       required
                     >
-                      {classes.map(c => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
+                      {classes.map((c, idx) => (
+                        <option key={`${c.id ?? 'none'}-${idx}`} value={c.name}>{c.name}</option>
                       ))}
                     </select>
                   </div>
                   <div className="form-group">
                     <label>Due Date *</label>
+
                     <input
                       type="date"
                       value={formData.due_date}
@@ -1128,33 +1166,109 @@ function Classroom() {
               <div className="form-group">
                 <label>Student Progress ({selectedTask.completed_count || 0}/{selectedTask.total_students || 0})</label>
                 <div className="completion-list">
-                  {(selectedTask.students || []).map(student => (
-                    <div key={student.id} className="completion-item">
-                      <div className="student-info">
-                        <div className="student-avatar">{(student.name || 'S').charAt(0)}</div>
-                        <div>
-                          <div className="student-name">{student.name}</div>
-                          <div className="student-code">{student.admission_number || student.student_code || ''}</div>
+                  {(selectedTask.completions || []).map((student, idx) => {
+                    const isCompleted = student.status === 'completed';
+                    const markKey = student.student_id || `s-${idx}`;
+                    const markVal = markInputs[markKey] || {};
+                    return (
+                      <div key={`${student.student_id ?? 'none'}-${idx}`} className="completion-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <div className="student-info">
+                            <div className="student-avatar">{(student.student_name || 'S').charAt(0)}</div>
+                            <div>
+                              <div className="student-name">{student.student_name || 'Unknown Student'}</div>
+                              <div className="student-code">{student.admission_no || ''}</div>
+                            </div>
+                          </div>
+                          <div className="completion-status">
+                            <span className={`status-indicator ${isCompleted ? 'status-completed' : 'status-pending'}`}></span>
+                            <span style={{ fontSize: '0.7rem', color: isCompleted ? '#059669' : '#d97706', fontWeight: 600 }}>
+                              {isCompleted ? 'Completed' : 'Pending'}
+                            </span>
+                            {canAssignTasks && (
+                              <button
+                                className="mark-complete-btn"
+                                onClick={() => handleMarkCompletion(student.student_id, !isCompleted)}
+                              >
+                                <Check size={12} /> {isCompleted ? 'Undo' : 'Mark'}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="completion-status">
-                        <span className={`status-indicator ${student.completed ? 'status-completed' : 'status-pending'}`}></span>
-                        <span style={{ fontSize: '0.7rem', color: student.completed ? '#059669' : '#d97706', fontWeight: 600 }}>
-                          {student.completed ? 'Completed' : 'Pending'}
-                        </span>
+
+                        {/* Score + Feedback marking area (teachers only) */}
                         {canAssignTasks && (
-                          <button
-                            className="mark-complete-btn"
-                            onClick={() => handleMarkCompletion(student.id, !student.completed)}
-                          >
-                            <Check size={12} /> {student.completed ? 'Undo' : 'Mark'}
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="Score /100"
+                              value={markVal.score !== undefined ? markVal.score : (student.score !== undefined && student.score !== null ? student.score : '')}
+                              onChange={(e) => setMarkInputs(prev => ({
+                                ...prev,
+                                [markKey]: { ...(prev[markKey] || {}), score: e.target.value }
+                              }))}
+                              style={{
+                                width: '90px',
+                                padding: '0.3rem 0.5rem',
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontFamily: 'Inter, sans-serif'
+                              }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Feedback..."
+                              value={markVal.feedback !== undefined ? markVal.feedback : (student.feedback || '')}
+                              onChange={(e) => setMarkInputs(prev => ({
+                                ...prev,
+                                [markKey]: { ...(prev[markKey] || {}), feedback: e.target.value }
+                              }))}
+                              style={{
+                                flex: '1',
+                                minWidth: '120px',
+                                padding: '0.3rem 0.5rem',
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontFamily: 'Inter, sans-serif'
+                              }}
+                            />
+                            <button
+                              className="mark-complete-btn"
+                              style={{ background: '#059669' }}
+                              onClick={() => handleSaveMark(
+                                student.student_id,
+                                markVal.score !== undefined ? markVal.score : (student.score !== undefined && student.score !== null ? student.score : ''),
+                                markVal.feedback !== undefined ? markVal.feedback : (student.feedback || '')
+                              )}
+                            >
+                              <Check size={12} /> Save Mark
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Display saved score/feedback */}
+                        {(student.score !== undefined && student.score !== null) && (
+                          <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 600 }}>
+                            Score: {student.score}/100
+                          </div>
+                        )}
+                        {student.feedback && (
+                          <div style={{ fontSize: '0.7rem', color: '#475569', fontStyle: 'italic' }}>
+                            "{student.feedback}"
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
+
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setShowViewModal(false)}>Close</button>

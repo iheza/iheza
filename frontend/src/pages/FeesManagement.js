@@ -8,6 +8,7 @@ import {
   CreditCard, Users, MessageCircle, Check, AlertCircle, Image, Upload, Eye, Download, Receipt
 } from 'lucide-react';
 import ChainToggle from '../components/ChainToggle';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { API_URL } from '../config/api';
 import { saveAs } from 'file-saver';
 import { jsPDF } from 'jspdf';
@@ -20,6 +21,7 @@ function FeesManagement() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentFeeData, setStudentFeeData] = useState(null);
+  const [loadingStudentFees, setLoadingStudentFees] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Editable total fees state
@@ -41,9 +43,9 @@ function FeesManagement() {
   // All Students table view state
   const [allStudentFees, setAllStudentFees] = useState([]);
   const [loadingAllFees, setLoadingAllFees] = useState(false);
-  const [pagination, setPagination] = useState({ page: 1, page_size: 50, total: 0, total_pages: 0 });
+  const [pagination, setPagination] = useState({ page: 1, page_size: 20, total: 0, total_pages: 0 });
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(20);
   const [activeTab, setActiveTab] = useState(
     ['secretary', 'principal', 'director'].includes(currentUser?.role?.toLowerCase()) ? 'payments' : 'all-students'
   ); // 'payments' or 'all-students'
@@ -126,6 +128,9 @@ function FeesManagement() {
     }
     setSelectedStudent(student);
     setEditingTotalFees(false);
+    // Show loading spinner while fetching the new student's fee data
+    setLoadingStudentFees(true);
+    setStudentFeeData(null);
     
     // Try fetching with the resolved studentId
     const tryFetch = async (id) => {
@@ -158,6 +163,8 @@ function FeesManagement() {
     } catch (error) {
       console.error('Failed to load student fees:', error);
       toast.error('Failed to load student fees');
+    } finally {
+      setLoadingStudentFees(false);
     }
   };
 
@@ -675,7 +682,8 @@ function FeesManagement() {
       return <span className="status-badge left"><AlertCircle size={12}/> Left School</span>;
     }
     switch(status) {
-      case 'fully_paid': return <span className="status-badge paid"><Check size={12}/> Fully Paid</span>;
+      case 'fully_paid':
+      case 'paid': return <span className="status-badge paid"><Check size={12}/> Fully Paid</span>;
       case 'partial': return <span className="status-badge partial"><AlertCircle size={12}/> Partial</span>;
       default: return <span className="status-badge unpaid"><AlertCircle size={12}/> Unpaid</span>;
     }
@@ -824,13 +832,13 @@ function FeesManagement() {
         .student-name { font-weight: 500; color: #f8fafc; font-size: 0.875rem; }
         .student-code { font-size: 0.7rem; color: #64748b; font-family: monospace; }
         
-        .fee-summary { }
-        .summary-header { text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius: 0.75rem 0.75rem 0 0; margin: -1.25rem -1.25rem 1rem; }
+        .fee-summary { background: white; border-radius: 0.75rem; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .summary-header { text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); border-radius: 0.75rem 0.75rem 0 0; margin: -1.25rem -1.25rem 1rem; }
         .summary-name { font-size: 1.25rem; font-weight: 600; color: white; }
         .summary-code { font-size: 0.75rem; color: rgba(255,255,255,0.8); }
         
         .fee-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem; }
-        .fee-stat { text-align: center; padding: 1rem; background: rgba(51, 65, 85, 0.3); border-radius: 0.5rem; }
+        .fee-stat { text-align: center; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; }
         .fee-stat-value { font-size: 1.25rem; font-weight: 700; }
         .fee-stat-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; }
         
@@ -843,12 +851,12 @@ function FeesManagement() {
 
         
         .fee-breakdown { margin-top: 1rem; }
-        .fee-item { display: flex; justify-content: space-between; padding: 0.75rem; border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
+        .fee-item { display: flex; justify-content: space-between; padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }
         .fee-item:last-child { border-bottom: none; }
         
         .payment-history { margin-top: 1rem; }
-        .payment-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: rgba(51, 65, 85, 0.3); border-radius: 0.5rem; margin-bottom: 0.5rem; }
-        .payment-amount { font-weight: 600; color: #22c55e; }
+        .payment-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; margin-bottom: 0.5rem; }
+        .payment-amount { font-weight: 600; color: #0ea5e9; }
         .payment-date { font-size: 0.75rem; color: #64748b; }
         .payment-item .action-btn { padding: 0.35rem; border-radius: 0.35rem; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
         .payment-item .action-btn.edit { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
@@ -938,7 +946,7 @@ function FeesManagement() {
 
       {activeTab === 'payments' ? (
         loading ? (
-          <div className="empty-state">Loading...</div>
+          <LoadingSpinner message="Loading students..." />
         ) : (
           <>
             {/* Payments Section */}
@@ -982,6 +990,8 @@ function FeesManagement() {
                     <DollarSign size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
                     <p>Select a student to view their fee status and record payments</p>
                   </div>
+                ) : loadingStudentFees ? (
+                  <LoadingSpinner message="Loading fee data..." />
                 ) : studentFeeData ? (
                   <div className="fee-summary">
                     <div className="summary-header">
@@ -1036,7 +1046,7 @@ function FeesManagement() {
                           <div 
                             className="fee-stat-value" 
                             style={{ 
-                              color: '#f8fafc',
+                              color: '#0ea5e9',
                               cursor: canManageFees ? 'pointer' : 'default',
                               padding: '0.25rem 0.5rem',
                               borderRadius: '0.375rem',
@@ -1121,11 +1131,11 @@ function FeesManagement() {
                     </button>
                     
                     <div className="fee-breakdown">
-                      <h4 style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.5rem' }}>FEE BREAKDOWN</h4>
+                      <h4 style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.5rem', fontWeight: 600 }}>FEE BREAKDOWN</h4>
                       {studentFeeData.fee_structures?.map(fs => (
                         <div key={fs.id} className="fee-item">
-                          <span style={{ color: '#f8fafc' }}>{fs.name}</span>
-                          <span style={{ color: '#94a3b8' }}>TZS {fs.amount?.toLocaleString()}</span>
+                          <span style={{ color: '#1e293b' }}>{fs.name}</span>
+                          <span style={{ color: '#0ea5e9', fontWeight: 600 }}>TZS {fs.amount?.toLocaleString()}</span>
                         </div>
                       ))}
                     </div>
@@ -1133,7 +1143,7 @@ function FeesManagement() {
                         {/* Receipt Images from student_fees level (uploaded from All Students table) */}
                     {studentFeeData.receipt_images && studentFeeData.receipt_images.length > 0 && (
                       <div className="payment-history">
-                        <h4 style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.5rem' }}>RECEIPT IMAGES</h4>
+                        <h4 style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.5rem', fontWeight: 600 }}>RECEIPT IMAGES</h4>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                           <button 
                             className="action-btn"
@@ -1159,7 +1169,7 @@ function FeesManagement() {
 
                     {studentFeeData.payments?.length > 0 && (
                           <div className="payment-history">
-                            <h4 style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.5rem' }}>PAYMENT HISTORY</h4>
+                            <h4 style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.5rem', fontWeight: 600 }}>PAYMENT HISTORY</h4>
                             {studentFeeData.payments.map(p => (
                               <div key={p.id} className="payment-item">
                                 <div>
@@ -1282,7 +1292,7 @@ function FeesManagement() {
           </div>
           
           {loadingAllFees ? (
-            <div className="empty-state">Loading student fee data...</div>
+            <LoadingSpinner message="Loading student fee data..." />
           ) : allStudentFees.length === 0 ? (
             <div className="empty-state">
               <Users size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
@@ -1290,19 +1300,19 @@ function FeesManagement() {
             </div>
           ) : (
             <>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <div style={{ overflowX: 'auto', background: 'white' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', background: 'white' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.5)' }}>
-                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'left', color: '#94a3b8', fontWeight: 600 }}>Student</th>
-                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'left', color: '#94a3b8', fontWeight: 600 }}>Class</th>
-                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}>Total Fee</th>
-                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}>Paid</th>
-                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#94a3b8', fontWeight: 600 }}>Outstanding</th>
-                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Status</th>
-                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Receipt</th>
+                  <tr style={{ borderBottom: '2px solid #e2e8f0', background: '#f1f5f9' }}>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'left', color: '#475569', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>Student</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'left', color: '#475569', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>Class</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#475569', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>Total Fee</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#475569', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>Paid</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#475569', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>Outstanding</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#475569', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>Status</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#475569', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>Receipt</th>
                     {canViewPayments && (
-                      <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Details</th>
+                      <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center', color: '#475569', fontWeight: 600 }}>Details</th>
                     )}
                   </tr>
                 </thead>
@@ -1311,12 +1321,13 @@ function FeesManagement() {
                     <tr 
                       key={item.id || index}
                       style={{ 
-                        borderBottom: '1px solid rgba(51, 65, 85, 0.3)',
+                        borderBottom: '1px solid #e2e8f0',
                         transition: 'background 0.2s',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        background: index % 2 === 0 ? 'white' : '#f8fafc'
                       }}
-                      onMouseEnter={(e) => e.target.style.background = 'rgba(51, 65, 85, 0.3)'}
-                      onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      onMouseEnter={(e) => e.target.style.background = '#e8f0fe'}
+                      onMouseLeave={(e) => e.target.style.background = index % 2 === 0 ? 'white' : '#f8fafc'}
                       onClick={() => {
                         if (canViewPayments) {
                           setActiveTab('payments');
@@ -1340,29 +1351,30 @@ function FeesManagement() {
                         }
                       }}
                     >
-                      <td style={{ padding: '0.75rem 0.5rem' }}>
+                      <td style={{ padding: '0.75rem 0.5rem', borderRight: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <div className="student-avatar" style={{ width: '28px', height: '28px', fontSize: '0.7rem' }}>
                             {item.first_name?.charAt(0)}
                           </div>
                           <div>
-                            <div style={{ color: '#f8fafc', fontWeight: 500 }}>{item.first_name} {item.last_name}</div>
+                            <div style={{ color: '#1e293b', fontWeight: 500 }}>{item.first_name} {item.last_name}</div>
                             <div style={{ color: '#64748b', fontSize: '0.7rem', fontFamily: 'monospace' }}>{item.admission_no}</div>
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '0.75rem 0.5rem', color: '#94a3b8' }}>{item.class_name || '-'}</td>
-                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#f8fafc', fontWeight: 600 }}>
+                      <td style={{ padding: '0.75rem 0.5rem', color: '#475569', borderRight: '1px solid #e2e8f0' }}>{item.class_name || '-'}</td>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#1e293b', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>
                         TZS {item.total_fees?.toLocaleString() || '0'}
                       </td>
-                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#22c55e', fontWeight: 600 }}>
+                      <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#16a34a', fontWeight: 600, borderRight: '1px solid #e2e8f0' }}>
                         TZS {item.total_paid?.toLocaleString() || '0'}
                       </td>
                       <td style={{ 
                         padding: '0.75rem 0.5rem', 
                         textAlign: 'right', 
-                        color: (item.balance > 0) ? '#ef4444' : '#22c55e', 
-                        fontWeight: 600 
+                        color: (item.balance > 0) ? '#dc2626' : '#16a34a', 
+                        fontWeight: 600,
+                        borderRight: '1px solid #e2e8f0'
                       }}>
                         TZS {item.balance?.toLocaleString() || '0'}
                       </td>
@@ -1518,6 +1530,7 @@ function FeesManagement() {
                       cursor: 'pointer'
                     }}
                   >
+                    <option value="20">20 per page</option>
                     <option value="25">25 per page</option>
                     <option value="50">50 per page</option>
                     <option value="100">100 per page</option>

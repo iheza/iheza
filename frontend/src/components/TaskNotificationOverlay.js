@@ -30,6 +30,13 @@ const TaskNotificationOverlay = () => {
   // Track previously seen task IDs to detect new tasks
   const seenTaskIdsRef = useRef(new Set());
   const soundPlayedRef = useRef(false);
+  // Flag set when a poll fails (used by the adaptive backoff logic)
+  const pollFailedRef = useRef(false);
+  // Flag set when a poll fails with a HARD error (4xx/5xx) that should NOT
+  // be retried. Once set, polling stops entirely until the component remounts.
+  const hardStopRef = useRef(false);
+
+
   
   // Roles that receive tasks (same as MyTasks page)
   // Principals can also receive tasks from directors/coordinators
@@ -92,21 +99,124 @@ const TaskNotificationOverlay = () => {
       }
     } catch (error) {
       console.error('Error checking tasks:', error);
+      // Distinguish HARD failures (4xx/5xx responses) from transient network
+      // errors. Hard failures mean the endpoint is broken or the server is
+      // down — retrying will never succeed, so we STOP polling entirely.
+      const status = error?.response?.status;
+      const isHardFailure = status >= 400 && status <= 599;
+      if (isHardFailure) {
+        hardStopRef.current = true;
+        console.warn(
+          `Task polling stopped: /staff-tasks returned HTTP ${status}. ` +
+          'Not retrying to avoid hammering the server.'
+        );
+      } else {
+        // Transient network error (timeout, HTTP2 protocol error, offline) —
+        // signal the polling loop so it can back off and retry.
+        pollFailedRef.current = true;
+      }
     }
   }, [currentUser?.id, shouldShow, isOnMyTasks, dismissed]);
+
+
   
-  // Initial load and polling
+  // Initial load and polling with adaptive backoff and a hard-stop guard.
+  // Normally polls every 60s. On transient network errors (timeout, HTTP2
+  // protocol error, offline) it backs off up to 120s and stops after a max
+  // number of consecutive failures. On HARD failures (4xx/5xx responses) it
+  // stops polling entirely — retrying a broken endpoint only hammers the
+  // server and spams the console with errors.
+  //
+  // Polling is also PAUSED while the tab is hidden (document.visibilityState
+  // === 'hidden') so background tabs don't keep hammering the server. This
+  // dramatically cuts sustained load when many staff users leave the app open
+  // in background tabs.
   useEffect(() => {
     if (!shouldShow || !currentUser?.id) return;
     
+    let interval = null;
+    let consecutiveErrors = 0;
+    let cancelled = false;
+    // Max consecutive transient failures before we give up polling. Prevents
+    // an infinite retry loop when the origin is unreachable.
+    const MAX_CONSECUTIVE_ERRORS = 5;
+    // Base poll interval (ms). Raised from 15s to 60s to reduce sustained load.
+    const BASE_INTERVAL = 60000;
+    // Max backoff after repeated failures.
+    const MAX_BACKOFF = 120000;
+
+    const scheduleNext = (delay) => {
+      if (cancelled) return;
+      interval = setTimeout(async () => {
+        // If a previous poll hit a hard failure (4xx/5xx), stop entirely.
+        if (hardStopRef.current) {
+          cancelled = true;
+          return;
+        }
+
+        // Pause polling while the tab is hidden. When the tab becomes visible
+        // again, the visibilitychange listener below triggers an immediate
+        // poll, so no notifications are missed.
+        if (document.visibilityState === 'hidden') {
+          scheduleNext(BASE_INTERVAL);
+          return;
+        }
+
+        await loadTasks();
+
+        // loadTasks swallows its own errors, so detect failure by checking
+        // whether the poll actually produced a result. We approximate by
+        // tracking a flag set inside loadTasks via a ref.
+        if (pollFailedRef.current) {
+          consecutiveErrors += 1;
+          pollFailedRef.current = false;
+        } else {
+          consecutiveErrors = 0;
+        }
+
+        // Stop after too many consecutive transient failures to avoid an
+        // infinite retry loop against an unreachable origin.
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          console.warn(
+            `Task polling stopped after ${consecutiveErrors} consecutive ` +
+            'transient failures. Will resume on next page load.'
+          );
+          cancelled = true;
+          return;
+        }
+
+        // Backoff: 60s normally, up to 120s after repeated failures
+        const delay = consecutiveErrors > 0
+          ? Math.min(BASE_INTERVAL * Math.pow(2, consecutiveErrors), MAX_BACKOFF)
+          : BASE_INTERVAL;
+        scheduleNext(delay);
+      }, delay);
+    };
+
     // Initial check
     loadTasks();
-    
-    // Poll every 15 seconds
-    const interval = setInterval(loadTasks, 15000);
-    
-    return () => clearInterval(interval);
+    scheduleNext(BASE_INTERVAL);
+
+    // When the tab becomes visible again, poll immediately (in case tasks
+    // were assigned while hidden) and resume the normal schedule.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !cancelled) {
+        if (interval) clearTimeout(interval);
+        loadTasks();
+        scheduleNext(BASE_INTERVAL);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      if (interval) clearTimeout(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [shouldShow, currentUser?.id, loadTasks]);
+
+
+
   
   // When user navigates to MyTasks, dismiss the overlay
   useEffect(() => {

@@ -783,7 +783,8 @@ function Classes() {
                 const capacityCls = capacityPct >= 100 ? 'full' : capacityPct >= 80 ? 'warn' : 'ok';
                 const level = (cls.level || 'primary').toLowerCase();
                 return (
-                  <tr key={cls.id}>
+                  <tr key={`${cls.id ?? 'none'}-${idx}`}>
+
                     <td className="col-id">{idx + 1}</td>
                     <td className="col-name">
                       <div className="class-cell">
@@ -922,11 +923,12 @@ function Classes() {
                     onChange={(e) => setFormData({ ...formData, class_teacher_id: e.target.value })}
                   >
                     <option value="">Select Class Teacher</option>
-                    {staff.map(teacher => (
-                      <option key={teacher.id} value={teacher.id}>
+                    {staff.map((teacher, idx) => (
+                      <option key={`${teacher.id ?? 'none'}-${idx}`} value={teacher.id}>
                         {teacher.name} ({teacher.access_code || teacher.employee_id})
                       </option>
                     ))}
+
                   </select>
                 </div>
               </div>
