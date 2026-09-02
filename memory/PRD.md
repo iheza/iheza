@@ -381,9 +381,14 @@ Migrate a React/Vite zip file ("iheza-project.zip") for the "IHEZA School Manage
 - `/app/frontend/public/sw.js` - self.clients fix
 - `/app/backend/cleanup_images.py` - Image cleanup script (run once)
 
-**Testing**: All 8 backend tests passed, all 4 frontend flows verified (100% success rate)
+**Testing (September 2, 2026)**: 
+- All 9 backend tests passed, all 3 chain landing pages verified
+- Response times: students 120-300ms, admissions 223-337ms, fees 121ms, reports 121-133ms
+- All responses well under 500ms budget (production 502/520 risk eliminated)
 
-**IMPORTANT**: After publishing, you may still need to run the image cleanup script on your production database to remove existing heavy images that are causing memory pressure.
+**Production Cleanup Script**: `/app/backend/production_cleanup.py`
+- Run this script on your production MongoDB to remove existing heavy base64 images
+- Usage: `export MONGO_URL="your_connection_string" && python production_cleanup.py`
 
 ## Backlog / Future Tasks
 1. **P0 (Fixed)**: ~~Memory Overload & 502/520 Crashes~~ ✅
