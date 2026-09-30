@@ -1,0 +1,6 @@
+# Self-heal the IHEZA nginx backend-proxy after pod resume.
+# /etc is not persistent, so this file is re-created by the workspace copy
+# (/app/.emergent/nginx/iheza-proxy-restore.cron) via restore_proxy.sh.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+* * * * * root /bin/sh /app/.emergent/nginx/restore_proxy.sh >/dev/null 2>&1

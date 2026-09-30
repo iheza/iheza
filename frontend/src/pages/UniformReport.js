@@ -1,24 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSelector } from 'react-redux';
+import { selectCurrentUser } from '../store/slices/authSlice';
 
 function UniformReport() {
+  const currentUser = useSelector(selectCurrentUser);
+  const currentUserName = currentUser?.name || currentUser?.first_name || 'User';
   const [savedMsg, setSavedMsg] = useState('');
   const [lastSaved, setLastSaved] = useState(null);
   const sheetRef = useRef(null);
 
-  // Precoded product codes — standardized names so Stock Entry and Stock Exit
-  // always reference the same product and deductions communicate correctly.
-  const PRECODED_PRODUCTS = ["Girls' T-Shirt", "Boys' T-Shirt", "Boys' Trousers", "Sports T-Shirt", "Girls' Skirt", "Sports Tracksuit", "Deniz Upper Long-Sleeve Sports Dress"];
 
   // Product → sizes mapping (per-size stock tracking — one row per size)
+
   const PRODUCTS = [
-    { name: "Girls' T-Shirt", sizes: ["28", "30", "32", "34", "36"] },
-    { name: "Girls' Skirt", sizes: ["28", "30", "32", "34", "36"] },
-    { name: "Boys' T-Shirt", sizes: ["28", "30", "32", "34", "36"] },
-    { name: "Boys' Trousers", sizes: ["28", "30", "32", "34", "36"] },
-    { name: "Sports T-Shirt", sizes: ["S", "M", "L", "XL"] },
-    { name: "Sports Tracksuit", sizes: ["S", "M", "L", "XL"] },
-    { name: "Deniz Upper Long-Sleeve Sports Dress", sizes: ["S", "M", "L", "XL"] },
+    { name: "Girls' T-Shirt", sizes: ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46"] },
+    { name: "Girls' Skirt", sizes: ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46"] },
+    { name: "Boys' T-Shirt", sizes: ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46"] },
+    { name: "Boys' Trousers", sizes: ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46"] },
+    { name: "Sports T-Shirt", sizes: ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL"] },
+    { name: "Sports Tracksuit", sizes: ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL"] },
+    { name: "Deniz Upper Long-Sleeve Sports Dress", sizes: ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL"] },
   ];
+
 
   // Build initial per-size stock object (keyed by "Product__Size").
   // All values start at 0 — the Products & Sizes table is the source of truth
@@ -33,6 +36,13 @@ function UniformReport() {
   // Stock values keyed by "Product__Size"
   const [stock, setStock] = useState(buildInitialStock);
 
+  // Stock movement history — auto-populated from Stock Exit entries
+  const [history, setHistory] = useState([]);
+  // Track last processed exit quantity per row to avoid duplicate history entries
+  const lastExitQtyRef = useRef({});
+
+
+
   // Per-size stock helpers
   const stockKey = (product, size) => `${product}__${size}`;
   const getStock = (product, size) => stock[stockKey(product, size)] || 0;
@@ -43,23 +53,13 @@ function UniformReport() {
   };
 
 
-  // New rows added via the "Click to add new entry" placeholders
-  const [entryRows, setEntryRows] = useState([]);
-  const [exitRows, setExitRows] = useState([]);
-
-  // Track which product is currently "loading" during a stock exit deduction
-  // (mini spinner shown on the matching stock entry row)
-  const [loadingProduct, setLoadingProduct] = useState(null);
-
-  // When true, the Stock Entry table is locked (non-editable) while a stock exit
-  // deduction is being processed. Only the matching product row shows a spinner.
-  const [entryLocked, setEntryLocked] = useState(false);
+  const today = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY
 
   // Collapsible sections — each section can be opened/closed via its header button.
+
   // All sections start open so the full report is visible on first load.
   const [openSections, setOpenSections] = useState({
     products: true,
-    entry: true,
     exit: true,
     physical: true,
     discrepancies: true,
@@ -68,51 +68,7 @@ function UniformReport() {
 
   const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const today = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY
 
-
-
-
-  // Toggle: click to add a new entry row, click again to revert (remove it)
-  const addEntryRow = () => {
-    setEntryRows(prev => prev.length > 0 ? [] : [{ date: today, product: PRECODED_PRODUCTS[0], size: '', qty: '', desc: '', person: 'Director' }]);
-  };
-  const addExitRow = () => {
-    setExitRows(prev => prev.length > 0 ? [] : [{ date: today, product: PRECODED_PRODUCTS[0], size: '', qty: '', recipient: '', person: 'Director' }]);
-  };
-
-
-  // Update a single field of a new entry/exit row
-  const updateEntryRow = (i, field, value) => {
-    setEntryRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
-  };
-  const updateExitRow = (i, field, value) => {
-    setExitRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
-  };
-
-
-  // Returns true if the given product name matches the product currently being
-  // deducted in the Stock Exit table (used to show the mini spinner on the
-  // matching Stock Entry row only — not the whole table).
-  const matchesLoading = (productName) => {
-    if (!loadingProduct || !productName) return false;
-    const a = loadingProduct.toLowerCase();
-    const b = productName.toLowerCase();
-    return a.includes(b) || b.includes(a);
-  };
-
-  // Reusable precoded product dropdown used in both Stock Entry and Stock Exit.
-  // Ensures the exact same product name is used so deductions communicate correctly.
-  const ProductSelect = ({ value, onChange, disabled }) => (
-    <select
-      value={value}
-      onChange={(e) => onChange && onChange(e.target.value)}
-      disabled={disabled}
-      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '0.7rem', color: '#16416b', cursor: 'pointer', textAlign: 'center', fontWeight: 600 }}
-    >
-      {PRECODED_PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
-    </select>
-  );
 
 
 
@@ -141,11 +97,34 @@ function UniformReport() {
         if (data.stock) {
           setStock(data.stock);
         }
+        if (data.history && Array.isArray(data.history)) {
+          setHistory(data.history);
+        }
       }
     } catch (e) {
       // ignore
     }
   }, []);
+
+  // Persist stock movement history to localStorage whenever it changes
+  // Skip the first render to avoid overwriting loaded history with empty array
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    try {
+      const saved = localStorage.getItem('iheza_uniform_edits');
+      const data = saved ? JSON.parse(saved) : {};
+      data.history = history;
+      localStorage.setItem('iheza_uniform_edits', JSON.stringify(data));
+    } catch (e) {
+      // ignore
+    }
+  }, [history]);
+
+
 
   // Read stock values from the Products & Sizes table (Section 1).
   // The table has one row per size; the product name appears only on the first
@@ -196,17 +175,10 @@ function UniformReport() {
   }, []);
 
   // LIVE updates: re-read stock values whenever any editable cell changes
-  useEffect(() => {
-    const el = sheetRef.current;
-    if (!el) return;
-    const handler = () => {
-      const ns = readStockFromTable();
-      if (ns) setStock(ns);
-    };
-    el.addEventListener('input', handler);
-    return () => el.removeEventListener('input', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // NOTE: This handler is intentionally removed to avoid conflicts with
+  // handleExitInput which manages stock deductions from the Stock Exit table.
+  // Stock values are read and saved when the user clicks "Update".
+
 
   // Apply a quantity change to a specific product + size's stock
   const applyQty = (base, productName, size, qty) => {
@@ -220,8 +192,9 @@ function UniformReport() {
 
 
 
-  // SMART TABLE: when a stock exit quantity is edited, lock the Stock Entry table,
-  // show a mini spinner ONLY on the matching product row, then auto-apply the deduction.
+  // SMART TABLE: when a stock exit quantity is edited, auto-apply the deduction
+  // to the matching product + size in the Products & Sizes table, and add a
+  // transaction to the Stock Movement History.
   const handleExitInput = (e) => {
     const td = e.target.closest('td');
     if (!td) return;
@@ -230,29 +203,58 @@ function UniformReport() {
     const tds = tr.querySelectorAll('td');
     if (tds.length < 4) return;
 
-    // Only trigger the smart deduction when the Size (index 2) or Quantity (index 3)
-    // cell is edited — not when typing in Recipient or other fields.
+    // Only trigger the smart deduction when the Quantity (index 3) cell is edited
     const cellIndex = Array.from(tds).indexOf(td);
-    if (cellIndex !== 2 && cellIndex !== 3) return;
+    if (cellIndex !== 3) return;
 
-    const productCell = tds[1];
-    const productName = productCell.querySelector('select')?.value || (productCell.textContent || '').trim();
+    // Find the product name by walking up to the first row of this product group
+    // (product name only appears on the first row of each product's size group)
+    let productName = (tds[1]?.textContent || '').trim();
+    if (!productName) {
+      // Walk backwards through previous rows to find the product name
+      const allRows = Array.from(tr.parentElement.querySelectorAll('tr'));
+      const rowIdx = allRows.indexOf(tr);
+      for (let i = rowIdx - 1; i >= 0; i--) {
+        const prevName = (allRows[i].querySelectorAll('td')[1]?.textContent || '').trim();
+        if (prevName) { productName = prevName; break; }
+      }
+    }
     const size = (tds[2]?.textContent || '').trim();
     const qty = parseInt((tds[3]?.textContent || '').replace(/[^\d-]/g, ''), 10) || 0;
     if (!productName || !size || qty <= 0) return;
 
+    // Track previous quantity for this row to deduct only the difference
+    const rowKey = `${productName}__${size}`;
+    const prevQty = lastExitQtyRef.current[rowKey] || 0;
+    const diff = qty - prevQty;
+    if (diff === 0) return;
 
-    // Lock the Stock Entry table and show a spinner on the matching product row only
-    setEntryLocked(true);
-    setLoadingProduct(productName);
+    // Apply the deduction difference to the specific product + size
+    lastExitQtyRef.current[rowKey] = qty;
+    setStock(prev => applyQty(prev, productName, size, -diff));
 
-    // Simulate processing, then apply the deduction to the specific product + size and unlock
-    setTimeout(() => {
-      setStock(prev => applyQty(prev, productName, size, -qty));
-      setEntryLocked(false);
-      setLoadingProduct(null);
-    }, 900);
+    // Add/update a transaction in the Stock Movement History
+    const recipient = (tds[4]?.textContent || '').trim();
+    const runningBalance = getStock(productName, size) - qty;
+    setHistory(prev => {
+      const existing = prev.filter(h => !(h.product === productName && h.size === size));
+      return [...existing, {
+        date: today,
+        product: productName,
+        size,
+        type: 'Stock Exit',
+        qty: -qty,
+        user: currentUserName,
+        recipient,
+        runningBalance: Math.max(0, runningBalance),
+
+      }];
+    });
   };
+
+
+
+
 
 
 
@@ -266,29 +268,40 @@ function UniformReport() {
 
     let newStock = readStockFromTable() || stock;
 
-    // Process new Stock Entry rows (add to stock) — per product + size
-    const entryRowsEl = sheetRef.current.querySelectorAll('tr[data-rowtype="entry"]');
-    entryRowsEl.forEach((tr) => {
-      const tds = tr.querySelectorAll('td');
-      if (tds.length >= 4) {
-        const name = tds[1]?.querySelector('select')?.value || (tds[1]?.textContent || '').trim();
-        const size = (tds[2]?.textContent || '').trim();
-        const qty = parseInt((tds[3]?.textContent || '').replace(/[^\d-]/g, ''), 10) || 0;
-        if (name && size && qty > 0) newStock = applyQty(newStock, name, size, qty);
-      }
-    });
-
-    // Process new Stock Exit rows (subtract from stock) — per product + size
+    // Process Stock Exit rows (subtract from stock) — per product + size
+    // Product name only appears on the first row of each product group,
+    // so track the current product as we iterate through rows.
     const exitRowsEl = sheetRef.current.querySelectorAll('tr[data-rowtype="exit"]');
+    let currentExitProduct = null;
+    const newHistory = [];
     exitRowsEl.forEach((tr) => {
       const tds = tr.querySelectorAll('td');
       if (tds.length >= 4) {
-        const name = tds[1]?.querySelector('select')?.value || (tds[1]?.textContent || '').trim();
+        const name = (tds[1]?.textContent || '').trim();
+        if (name) currentExitProduct = name;
         const size = (tds[2]?.textContent || '').trim();
         const qty = parseInt((tds[3]?.textContent || '').replace(/[^\d-]/g, ''), 10) || 0;
-        if (name && size && qty > 0) newStock = applyQty(newStock, name, size, -qty);
+        if (currentExitProduct && size && qty > 0) {
+          newStock = applyQty(newStock, currentExitProduct, size, -qty);
+          const recipient = (tds[4]?.textContent || '').trim();
+          newHistory.push({
+            date: today,
+            product: currentExitProduct,
+            size,
+            type: 'Stock Exit',
+            qty: -qty,
+            user: currentUserName,
+            recipient,
+            runningBalance: Math.max(0, newStock[stockKey(currentExitProduct, size)] || 0),
+
+          });
+        }
       }
     });
+    if (newHistory.length > 0) setHistory(newHistory);
+
+
+
 
 
     // Update the Products & Sizes table stock cells to reflect the new stock (per size)
@@ -314,13 +327,16 @@ function UniformReport() {
     const payload = {
       cells: values,
       stock: newStock,
+      history: newHistory.length > 0 ? newHistory : history,
       savedAt: new Date().toLocaleString(),
     };
+
     try {
       localStorage.setItem('iheza_uniform_edits', JSON.stringify(payload));
       setStock(newStock);
       setLastSaved(payload.savedAt);
-      setSavedMsg('✅ Changes saved! Stock entries/exits applied to inventory.');
+      setSavedMsg('✅ Changes saved! Stock exits applied to inventory.');
+
       setTimeout(() => setSavedMsg(''), 3000);
     } catch (e) {
       setSavedMsg('❌ Failed to save changes.');
@@ -530,34 +546,8 @@ function UniformReport() {
           position: relative;
         }
 
-        /* ─── MINI LOADING SPINNER (smart stock entry) ─── */
-        .uniform-inventory-page .mini-spinner {
-          display: inline-block;
-          width: 14px;
-          height: 14px;
-          border: 2px solid rgba(26, 122, 58, 0.25);
-          border-top-color: #1a7a3a;
-          border-radius: 50%;
-          animation: uniformSpin 0.7s linear infinite;
-          vertical-align: middle;
-        }
-
-        @keyframes uniformSpin {
-          to { transform: rotate(360deg); }
-        }
-
-        .uniform-inventory-page .entry-locked-note {
-          display: inline-block;
-          font-size: 0.6rem;
-          color: #856404;
-          background: #fff3cd;
-          border-radius: 20px;
-          padding: 0.1rem 0.7rem;
-          font-weight: 600;
-          margin-left: 0.5rem;
-        }
-
         /* ─── DASHBOARD CARDS ─── */
+
 
         .uniform-inventory-page .dashboard-grid {
           display: grid;
@@ -1068,81 +1058,6 @@ function UniformReport() {
         </div>
 
 
-        {/* ─── SECTION: STOCK ENTRY ─── */}
-
-        <div className="section-title">
-          <div className="section-header" onClick={() => toggleSection('entry')}>
-            <div className="section-label">📥 Stock Entry<span className="section-sub">Record received items · auto-adds to stock</span></div>
-            <button className="section-toggle-btn">{openSections.entry ? '▲ Close' : '▼ Open'}</button>
-          </div>
-        </div>
-        <div className={`section-body ${openSections.entry ? '' : 'closed'}`}>
-          <div className="table-wrap">
-            <table className="timetable">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Product</th>
-                  <th>Size</th>
-                  <th>Quantity (+)</th>
-                  <th>Description</th>
-                  <th>Person</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {entryRows.map((r, i) => (
-                  <tr key={`entry-${i}`} data-rowtype="entry" style={{ background: '#f0f8f0' }}>
-                    <td style={{ fontWeight: 600 }}>{r.date}</td>
-                    <td>
-                      <ProductSelect
-                        value={r.product}
-                        onChange={(v) => updateEntryRow(i, 'product', v)}
-                        disabled={entryLocked}
-                      />
-                    </td>
-                    <td contentEditable={!entryLocked} suppressContentEditableWarning>{r.size}</td>
-                    <td contentEditable={!entryLocked} suppressContentEditableWarning style={{ color: '#1a7a3a', fontWeight: 700 }}>{r.qty}</td>
-                    <td contentEditable={!entryLocked} suppressContentEditableWarning>{r.desc}</td>
-                    <td style={{ fontWeight: 700, color: '#16416b', background: '#e8f5e9' }}>
-                      {matchesLoading(r.product) && entryLocked ? (
-                        <span className="mini-spinner" style={{ marginRight: '0.3rem' }} />
-                      ) : null}
-                      Director
-                    </td>
-                    <td style={{ background: '#e8f5e9', color: '#1a7a3a', fontWeight: 600 }}>
-                      {matchesLoading(r.product) && entryLocked ? (
-                        <span style={{ fontSize: '0.6rem' }}>⏳ Syncing…</span>
-                      ) : (
-                        '✅ Ready'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-
-                <tr
-                  onClick={addEntryRow}
-                  style={{ background: '#f9f9f9', fontStyle: 'italic', color: '#888', cursor: 'pointer' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#eef4fc')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = '#f9f9f9')}
-                >
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '0.3rem' }}>
-                    {entryRows.length > 0 ? '✖ Click again to remove new entry row' : '➕ Click to add new entry — click again to revert'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          {entryLocked && (
-            <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-              <span className="entry-locked-note">🔒 Stock Entry locked — processing stock exit deduction…</span>
-            </div>
-          )}
-        </div>
-
-
-
         {/* ─── SECTION: STOCK EXIT ─── */}
 
         <div className="section-title">
@@ -1167,34 +1082,25 @@ function UniformReport() {
               </thead>
 
               <tbody>
-                {exitRows.map((r, i) => (
+                {PRODUCTS.map((p, pi) => (
+                  p.sizes.map((sz, si) => (
+                    <tr key={`exit-${p.name}-${sz}`} data-rowtype="exit" style={{ background: '#fdf0f0' }}>
+                      <td style={{ fontWeight: 600 }}>{today}</td>
+                      <td style={si === 0 ? { fontWeight: 700 } : {}}>{si === 0 ? p.name : ''}</td>
+                      <td contentEditable="true" suppressContentEditableWarning>{sz}</td>
+                      <td contentEditable="true" suppressContentEditableWarning style={{ color: '#c0392b', fontWeight: 700 }}></td>
+                      <td contentEditable="true" suppressContentEditableWarning></td>
+                      <td style={{ fontWeight: 700, color: '#16416b', background: '#fdf0f0' }}>{currentUserName}</td>
 
-                  <tr key={`exit-${i}`} data-rowtype="exit" style={{ background: '#fdf0f0' }}>
-
-                    <td style={{ fontWeight: 600 }}>{r.date}</td>
-                    <td><ProductSelect value={r.product} onChange={(v) => updateExitRow(i, 'product', v)} /></td>
-                    <td contentEditable="true">{r.size}</td>
-                    <td contentEditable="true" style={{ color: '#c0392b', fontWeight: 700 }}>{r.qty}</td>
-                    <td contentEditable="true">{r.recipient}</td>
-                    <td style={{ fontWeight: 700, color: '#16416b', background: '#fdf0f0' }}>Director</td>
-                    <td style={{ background: '#ffebee', color: '#c0392b', fontWeight: 600 }}>⏳ Pending</td>
-                  </tr>
+                      <td style={{ background: '#ffebee', color: '#c0392b', fontWeight: 600 }}>⏳ Pending</td>
+                    </tr>
+                  ))
                 ))}
-
-                <tr
-                  onClick={addExitRow}
-                  style={{ background: '#f9f9f9', fontStyle: 'italic', color: '#888', cursor: 'pointer' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#eef4fc')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = '#f9f9f9')}
-                >
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '0.3rem' }}>
-                    {exitRows.length > 0 ? '✖ Click again to remove new exit row' : '➖ Click to add new exit — click again to revert'}
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
         </div>
+
 
 
 
@@ -1288,17 +1194,44 @@ function UniformReport() {
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ background: '#f9f9f9', fontStyle: 'italic', color: '#888' }}>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '0.3rem' }}>📊 Complete transaction history — answers "Where did this stock go?"</td>
-                </tr>
+                {history.length === 0 ? (
+                  <tr style={{ background: '#f9f9f9', fontStyle: 'italic', color: '#888' }}>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '0.3rem' }}>📊 Complete transaction history — answers "Where did this stock go?"</td>
+                  </tr>
+                ) : (
+                  history.map((h, i) => (
+                    <tr key={`hist-${i}`} style={{ background: h.type === 'Stock Exit' ? '#fdf0f0' : '#f0f8f0' }}>
+                      <td style={{ fontWeight: 600 }}>{h.date}</td>
+                      <td style={{ fontWeight: 600 }}>{h.product}</td>
+                      <td>{h.size}</td>
+                      <td>
+                        <span style={{
+                          background: h.type === 'Stock Exit' ? '#ffebee' : '#e8f5e9',
+                          color: h.type === 'Stock Exit' ? '#c0392b' : '#1a7a3a',
+                          padding: '0.1rem 0.5rem',
+                          borderRadius: '12px',
+                          fontWeight: 700,
+                          fontSize: '0.6rem',
+                        }}>
+                          {h.type}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 700, color: h.qty < 0 ? '#c0392b' : '#1a7a3a' }}>
+                        {h.qty > 0 ? `+${h.qty}` : h.qty}
+                      </td>
+                      <td>{h.user}</td>
+                      <td style={{ fontWeight: 700 }}>{h.runningBalance}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
-
             </table>
           </div>
         </div>
 
 
         {/* ─── FOOTER ─── */}
+
 
         <div className="footer">
           <span className="note">📌 All cells editable — click to modify</span>

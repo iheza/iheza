@@ -2,19 +2,17 @@
 // Handles both production (iheza.online) and preview environments
 
 export const getApiBaseUrl = () => {
-  // Check if we're in a browser
-  if (typeof window !== 'undefined') {
-    const currentHost = window.location.hostname;
-    
-    // If we're on iheza.online (production), use same origin
-    if (currentHost === 'iheza.online' || currentHost === 'www.iheza.online') {
-      return window.location.origin;
-    }
+  // Prefer same-origin whenever the app is served through the reverse proxy
+  // (nginx routes /api/* to the backend). This avoids hard-coding a preview
+  // URL that goes stale when the environment is re-created.
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return window.location.origin;
   }
-  
-  // Otherwise use environment variable (for preview/development)
+
+  // Fallback for non-browser contexts (SSR/tests)
   return process.env.REACT_APP_BACKEND_URL || '';
 };
+
 
 export const API_URL = getApiBaseUrl();
 export const API = `${API_URL}/api`;

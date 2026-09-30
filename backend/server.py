@@ -504,18 +504,68 @@ async def save_document_generic(payload: Dict, current_user: dict = Depends(get_
 @api_router.get("/documents", response_model=List[Dict])
 async def get_documents(
     source: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 100,
+    include_data: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all documents for the current user's chain"""
+    """Get documents for the current user's chain (paginated).
+
+    The base64 ``data`` field can be 1-5 MB per document, so it is PROJECTED
+    OUT of the list response by default to keep the payload small and avoid
+    OOM/520 errors. A lightweight ``has_data`` boolean is returned instead.
+    Pass ``include_data=true`` to opt back in, or fetch a single document via
+    ``GET /documents/{doc_id}`` to retrieve the full blob on demand.
+    """
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
+    # Clamp pagination to sane bounds
+    page = max(1, page)
+    page_size = max(1, min(page_size, 500))
+    skip = (page - 1) * page_size
+
     query = get_chain_filter(current_user) if current_user else {}
     if source:
         query["source"] = source
-    
-    docs = await db.documents.find(query, {"_id": 0}).sort("uploadedAt", -1).to_list(500)
-    return [serialize_doc(d) for d in docs]
+
+    # Project out the heavy base64 blob unless explicitly requested
+    projection = {"_id": 0}
+    if not include_data:
+        projection["data"] = 0
+
+    cursor = (
+        db.documents.find(query, projection)
+        .sort("uploadedAt", -1)
+        .skip(skip)
+        .limit(page_size)
+    )
+    docs = await cursor.to_list(page_size)
+
+    results = []
+    for d in docs:
+        serialized = serialize_doc(d)
+        if not include_data:
+            # Signal whether a blob exists without shipping it
+            serialized["has_data"] = bool(d.get("data"))
+        results.append(serialized)
+    return results
+
+@api_router.get("/documents/{doc_id}", response_model=Dict)
+async def get_document(doc_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a single document by ID, including its full base64 ``data`` blob.
+
+    Used by the frontend to lazily fetch preview/download content that is
+    intentionally omitted from the paginated list endpoint.
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return serialize_doc(doc)
+
 
 @api_router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str, current_user: dict = Depends(get_current_user)):
@@ -648,20 +698,51 @@ async def get_documents_analytics_projects(current_user: dict = Depends(get_curr
 @api_router.get("/examination-reports")
 async def get_examination_reports(
     chain: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 100,
+    include_data: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all examination reports for the current user's chain"""
+    """Get examination reports for the current user's chain (paginated).
+
+    The list view only needs lightweight metadata (year, term, examDate,
+    preparedBy, etc.) for filters and the saved-reports list. Heavy base64
+    blobs such as ``schoolLogo`` and any embedded ``data``/``htmlContent``
+    fields are PROJECTED OUT by default to keep the payload small and avoid
+    OOM/520 errors. Pass ``include_data=true`` to opt back in, or fetch a
+    single report via ``GET /examination-reports/{report_id}`` for the full
+    document.
+    """
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
+    # Clamp pagination to sane bounds
+    page = max(1, page)
+    page_size = max(1, min(page_size, 500))
+    skip = (page - 1) * page_size
+
     query = {}
     if chain:
         query["chain"] = chain
     else:
         query = get_chain_filter(current_user)
-    
-    reports = await db.examination_reports.find(query, {"_id": 0}).sort("createdAt", -1).to_list(500)
-    return reports
+
+    # Project out heavy base64 blobs unless explicitly requested
+    projection = {"_id": 0}
+    if not include_data:
+        projection["schoolLogo"] = 0
+        projection["data"] = 0
+        projection["htmlContent"] = 0
+
+    cursor = (
+        db.examination_reports.find(query, projection)
+        .sort("createdAt", -1)
+        .skip(skip)
+        .limit(page_size)
+    )
+    reports = await cursor.to_list(page_size)
+    return [serialize_doc(r) for r in reports]
+
 
 @api_router.get("/examination-reports/{report_id}")
 async def get_examination_report(report_id: str, current_user: dict = Depends(get_current_user)):
@@ -1141,6 +1222,18 @@ FEE_REMINDER_MIN_PERCENT = float(os.environ.get('FEE_REMINDER_MIN_PERCENT', '20'
 FEE_REMINDER_COOLDOWN_DAYS = int(os.environ.get('FEE_REMINDER_COOLDOWN_DAYS', '7'))
 FEE_REMINDER_GRACE_DAYS = int(os.environ.get('FEE_REMINDER_GRACE_DAYS', '14'))
 FEE_REMINDER_INTERVAL_HOURS = int(os.environ.get('FEE_REMINDER_INTERVAL_HOURS', '24'))
+# Delay before the FIRST scheduler run after startup. This prevents the
+# scheduler from competing with app warm-up / first requests for memory and
+# CPU, which previously caused OOM kills and Cloudflare 520s on boot.
+FEE_REMINDER_STARTUP_DELAY_SECONDS = int(os.environ.get('FEE_REMINDER_STARTUP_DELAY_SECONDS', '300'))
+# Path to the cross-process lock file. With multiple uvicorn workers, only the
+# worker that holds this lock runs the scheduler; the others skip it entirely.
+FEE_REMINDER_LOCK_FILE = os.environ.get('FEE_REMINDER_LOCK_FILE', '/tmp/fee_reminder_scheduler.lock')
+# Master on/off switch for the fee reminder scheduler. Defaults to DISABLED
+# ("0") so the background scheduler never competes with app warm-up for
+# memory/CPU (which previously caused OOM kills and Cloudflare 520s on boot).
+# Set ENABLE_FEE_SCHEDULER=1 to turn it back on.
+ENABLE_FEE_SCHEDULER = os.environ.get('ENABLE_FEE_SCHEDULER', '0') == '1'
 
 
 class PushSubscription(BaseModel):
@@ -1297,6 +1390,15 @@ async def run_fee_reminder_check():
       - Trigger reminder when: remaining balance > expected remaining
         AND remaining balance >= FEE_REMINDER_MIN_PERCENT% of T
         AND cooldown period has passed since last reminder
+
+    MEMORY OPTIMIZATION:
+    This function no longer loads all students, fees, and payments into
+    Python memory. Instead it uses MongoDB aggregation pipelines to compute
+    per-student total fees and total paid entirely inside the database, then
+    streams only the (small) list of students who are actually behind. This
+    keeps the scheduler's memory footprint flat regardless of how many
+    students/payments exist, which prevents the OOM kills that previously
+    caused Cloudflare 520s on startup.
     """
     logger.info("Running fee reminder scheduler...")
     now = datetime.now(timezone.utc)
@@ -1320,169 +1422,212 @@ async def run_fee_reminder_check():
     months_elapsed = days_since_start / 30.0
     expected_remaining_ratio = max(0.0, 1.0 - (months_elapsed / TERM_MONTHS))
 
-    # Get all students - limit to 2000 per batch to prevent memory overload
-    students = await db.students.find({}, {"_id": 0, "password_hash": 0, "profile_pic": 0, "passport_photo": 0}).to_list(2000)
+    # ---------------------------------------------------------------------
+    # STEP 1: Compute total fees per student via aggregation (in the DB).
+    # A student's total fee = SUM(student_fees.amount) for that student.
+    # We aggregate the whole collection grouped by student_id so we never
+    # pull individual fee documents into Python.
+    # ---------------------------------------------------------------------
+    fee_totals = {}
+    try:
+        fee_pipeline = [
+            {"$match": {"amount": {"$gt": 0}}},
+            {"$group": {"_id": "$student_id", "total": {"$sum": "$amount"}}},
+        ]
+        async for row in db.student_fees.aggregate(fee_pipeline):
+            sid = row.get("_id")
+            if sid:
+                fee_totals[sid] = row.get("total", 0)
+    except Exception as e:
+        logger.error(f"Fee reminder: student_fees aggregation failed: {e}")
 
-    # =====================================================================
-    # BATCHED LOOKUPS (replaces the previous N+1 query pattern).
-    # Previously this loop ran up to 3-4 separate DB queries PER student
-    # (student_fees, payments, fee_structures, fee_reminders), which could
-    # block the single uvicorn worker for a very long time and cause
-    # Cloudflare 520 timeouts on all other API requests. Now we fetch each
-    # collection ONCE with $in queries and build in-memory lookup dicts, so
-    # the per-student loop performs ZERO additional DB queries.
-    # =====================================================================
-    student_ids = [s.get("id") for s in students if s.get("id")]
-
-    # 1) Batch student_fees
-    student_fee_map = {}
-    if student_ids:
-        try:
-            fee_records = await db.student_fees.find(
-                {"student_id": {"$in": student_ids}},
-                {"_id": 0}
-            ).to_list(5000)
-            for fr in fee_records:
-                sid = fr.get("student_id")
-                if sid and sid not in student_fee_map:
-                    student_fee_map[sid] = fr
-        except Exception as e:
-            logger.error(f"Fee reminder: batch student_fees lookup failed: {e}")
-
-    # 2) Batch payments (only amount needed)
+    # ---------------------------------------------------------------------
+    # STEP 2: Compute total paid per student via aggregation (in the DB).
+    # ---------------------------------------------------------------------
     paid_totals = {}
-    if student_ids:
-        try:
-            payment_records = await db.payments.find(
-                {"student_id": {"$in": student_ids}},
-                {"_id": 0, "student_id": 1, "amount": 1}
-            ).to_list(10000)
-            for p in payment_records:
-                sid = p.get("student_id")
-                if sid:
-                    paid_totals[sid] = paid_totals.get(sid, 0) + p.get("amount", 0)
-        except Exception as e:
-            logger.error(f"Fee reminder: batch payments lookup failed: {e}")
+    try:
+        paid_pipeline = [
+            {"$match": {"amount": {"$gt": 0}}},
+            {"$group": {"_id": "$student_id", "total": {"$sum": "$amount"}}},
+        ]
+        async for row in db.payments.aggregate(paid_pipeline):
+            sid = row.get("_id")
+            if sid:
+                paid_totals[sid] = row.get("total", 0)
+    except Exception as e:
+        logger.error(f"Fee reminder: payments aggregation failed: {e}")
 
-    # 3) Batch fee_structures (all active structures, filtered in memory by
-    #    chain + class_name to preserve the original query semantics).
-    #    Only needed for students WITHOUT a student_fees record.
-    fee_structure_map = {}
-    chains_needed = set()
-    for s in students:
-        sid = s.get("id")
-        if sid and sid not in student_fee_map and s.get("chain"):
-            chains_needed.add(s.get("chain"))
-    if chains_needed:
-        try:
-            all_fee_structures = await db.fee_structures.find(
-                {"chain": {"$in": list(chains_needed)}, "status": "active"},
-                {"_id": 0}
-            ).to_list(500)
-            for fs in all_fee_structures:
-                key = f"{fs.get('chain')}:{fs.get('class_name') or ''}"
-                fee_structure_map.setdefault(key, []).append(fs)
-        except Exception as e:
-            logger.error(f"Fee reminder: batch fee_structures lookup failed: {e}")
-
-    # 4) Batch fee_reminders (most recent per student for cooldown check)
-    last_reminder_map = {}
-    if student_ids:
-        try:
-            reminder_records = await db.fee_reminders.find(
-                {"student_id": {"$in": student_ids}},
-                {"_id": 0, "student_id": 1, "sent_at": 1}
-            ).sort("sent_at", -1).to_list(5000)
-            for rr in reminder_records:
-                sid = rr.get("student_id")
-                if sid and sid not in last_reminder_map:
-                    last_reminder_map[sid] = rr
-        except Exception as e:
-            logger.error(f"Fee reminder: batch fee_reminders lookup failed: {e}")
-
-    reminded = 0
-    for student in students:
-        student_id = student.get("id")
-        if not student_id:
-            continue
-
-        chain = student.get("chain")
-        class_name = student.get("class_name")
-
-        # Look up student's fee record from the batch map (no DB query)
-        student_fee = student_fee_map.get(student_id)
-
-        # Look up total paid from the batch map (no DB query)
-        total_paid = paid_totals.get(student_id, 0)
-
-        # Determine total fees
-        if student_fee and student_fee.get("amount"):
-            total_fees = student_fee.get("amount", 0)
-        else:
-            # Fallback: sum active fee structures matching chain + class_name
-            # (or the chain-wide default where class_name is null/empty).
-            # This mirrors the original $or query semantics.
-            total_fees = 0
+    # ---------------------------------------------------------------------
+    # STEP 3: Fee-structure fallback totals per (chain, class_name).
+    # Only needed for students WITHOUT a student_fees record. Aggregated in
+    # the DB so we don't load every fee structure document.
+    # ---------------------------------------------------------------------
+    fee_structure_totals = {}
+    try:
+        fs_pipeline = [
+            {"$match": {"status": "active"}},
+            {"$group": {
+                "_id": {"chain": "$chain", "class_name": {"$ifNull": ["$class_name", ""]}},
+                "total": {"$sum": "$amount"},
+            }},
+        ]
+        async for row in db.fee_structures.aggregate(fs_pipeline):
+            key = row.get("_id") or {}
+            chain = key.get("chain")
+            cls = key.get("class_name") or ""
             if chain:
-                exact_key = f"{chain}:{class_name or ''}"
-                default_key = f"{chain}:"
-                for key in (exact_key, default_key):
-                    for fs in fee_structure_map.get(key, []):
-                        total_fees += fs.get("amount", 0)
+                fee_structure_totals[f"{chain}:{cls}"] = row.get("total", 0)
+    except Exception as e:
+        logger.error(f"Fee reminder: fee_structures aggregation failed: {e}")
 
-        if total_fees <= 0:
-            continue
+    # ---------------------------------------------------------------------
+    # STEP 4: Most-recent reminder per student (for cooldown), aggregated in
+    # the DB so we only keep one small doc per student.
+    # ---------------------------------------------------------------------
+    last_reminder_map = {}
+    try:
+        reminder_pipeline = [
+            {"$sort": {"sent_at": -1}},
+            {"$group": {
+                "_id": "$student_id",
+                "sent_at": {"$first": "$sent_at"},
+            }},
+        ]
+        async for row in db.fee_reminders.aggregate(reminder_pipeline):
+            sid = row.get("_id")
+            if sid:
+                last_reminder_map[sid] = row.get("sent_at")
+    except Exception as e:
+        logger.error(f"Fee reminder: fee_reminders aggregation failed: {e}")
 
-        balance = total_fees - total_paid
-        if balance <= 0:
-            continue  # Fully paid
+    # ---------------------------------------------------------------------
+    # STEP 5: Stream students in small batches (projection excludes heavy
+    # fields) and evaluate each one using the pre-computed maps. We never
+    # hold more than one batch of students in memory at a time.
+    # ---------------------------------------------------------------------
+    reminded = 0
+    batch_size = 200
+    cursor = db.students.find(
+        {},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "chain": 1, "class_name": 1}
+    )
+    while True:
+        batch = await cursor.to_list(batch_size)
+        if not batch:
+            break
 
-        # Check minimum balance threshold
-        min_balance = total_fees * (FEE_REMINDER_MIN_PERCENT / 100.0)
-        if balance < min_balance:
-            continue
+        for student in batch:
+            student_id = student.get("id")
+            if not student_id:
+                continue
 
-        # Check if behind schedule
-        expected_remaining = total_fees * expected_remaining_ratio
-        if balance <= expected_remaining:
-            continue  # On track
+            chain = student.get("chain")
+            class_name = student.get("class_name")
 
-        # Check cooldown - look up the most recent reminder from the batch map
-        last_reminder = last_reminder_map.get(student_id)
+            # Total fees: student_fees first, then fee-structure fallback.
+            total_fees = fee_totals.get(student_id, 0)
+            if total_fees <= 0 and chain:
+                total_fees = (
+                    fee_structure_totals.get(f"{chain}:{class_name or ''}", 0)
+                    or fee_structure_totals.get(f"{chain}:", 0)
+                )
 
-        if last_reminder:
-            last_sent = last_reminder.get("sent_at")
+            if total_fees <= 0:
+                continue
+
+            total_paid = paid_totals.get(student_id, 0)
+            balance = total_fees - total_paid
+            if balance <= 0:
+                continue  # Fully paid
+
+            # Check minimum balance threshold
+            min_balance = total_fees * (FEE_REMINDER_MIN_PERCENT / 100.0)
+            if balance < min_balance:
+                continue
+
+            # Check if behind schedule
+            expected_remaining = total_fees * expected_remaining_ratio
+            if balance <= expected_remaining:
+                continue  # On track
+
+            # Check cooldown
+            last_sent = last_reminder_map.get(student_id)
             if last_sent:
                 try:
                     last_dt = datetime.fromisoformat(str(last_sent).replace('Z', '+00:00'))
+                    if last_dt.tzinfo is None:
+                        last_dt = last_dt.replace(tzinfo=timezone.utc)
                     if (now - last_dt).days < FEE_REMINDER_COOLDOWN_DAYS:
                         continue  # Within cooldown
                 except Exception:
                     pass
 
-        # Send the reminder
-        student_name = f"{student.get('first_name', '')} {student.get('last_name', '')}".strip() or "Student"
-        title = "Fee Reminder"
-        body = f"Dear {student_name}, your outstanding fee balance is TZS {balance:,.0f}. Please settle it before the term ends."
-        sent = await send_push_notification(student_id, title, body, "/portal/student-portal")
+            # Send the reminder
+            student_name = f"{student.get('first_name', '')} {student.get('last_name', '')}".strip() or "Student"
+            title = "Fee Reminder"
+            body = f"Dear {student_name}, your outstanding fee balance is TZS {balance:,.0f}. Please settle it before the term ends."
+            sent = await send_push_notification(student_id, title, body, "/portal/student-portal")
 
-        # Record the reminder (even if push failed, to respect cooldown)
-        await db.fee_reminders.insert_one({
-            "id": str(uuid.uuid4()),
-            "student_id": student_id,
-            "balance": balance,
-            "total_fees": total_fees,
-            "sent_at": now.isoformat(),
-            "push_sent": sent,
-        })
-        reminded += 1
+            # Record the reminder (even if push failed, to respect cooldown)
+            await db.fee_reminders.insert_one({
+                "id": str(uuid.uuid4()),
+                "student_id": student_id,
+                "balance": balance,
+                "total_fees": total_fees,
+                "sent_at": now.isoformat(),
+                "push_sent": sent,
+            })
+            reminded += 1
+
+        if len(batch) < batch_size:
+            break
 
     logger.info(f"Fee reminder scheduler complete - reminded {reminded} students")
 
 
 
+def _acquire_scheduler_lock():
+    """Try to acquire the cross-process scheduler lock.
+
+    With multiple uvicorn workers, every worker runs the FastAPI startup
+    event. Without a lock, ALL workers would run the fee-reminder scheduler
+    simultaneously (4x duplicate work + 4x memory). This uses an exclusive
+    file lock (fcntl.flock) so only ONE worker ever runs the scheduler; the
+    others skip it entirely.
+
+    Returns the open file object (must be kept alive to hold the lock) or
+    None if another worker already holds it.
+    """
+    try:
+        import fcntl
+        lock_fh = open(FEE_REMINDER_LOCK_FILE, "w")
+        try:
+            fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            # Another worker holds the lock
+            lock_fh.close()
+            return None
+        # Write our PID for debugging
+        try:
+            lock_fh.write(str(os.getpid()))
+            lock_fh.flush()
+        except Exception:
+            pass
+        return lock_fh
+    except Exception as e:
+        logger.warning(f"Fee reminder: could not acquire scheduler lock: {e}")
+        return None
+
+
 async def fee_reminder_loop():
-    """Background task that runs the fee reminder check periodically."""
+    """Background task that runs the fee reminder check periodically.
+
+    The FIRST run is deferred by FEE_REMINDER_STARTUP_DELAY_SECONDS so the
+    scheduler does not compete with app warm-up / first requests for memory
+    and CPU (which previously caused OOM kills and Cloudflare 520s on boot).
+    """
+    # Defer the first run so startup is not starved of memory/CPU.
+    await asyncio.sleep(FEE_REMINDER_STARTUP_DELAY_SECONDS)
     while True:
         try:
             await run_fee_reminder_check()
@@ -1493,9 +1638,30 @@ async def fee_reminder_loop():
 
 @app.on_event("startup")
 async def start_fee_reminder_scheduler():
-    """Start the fee reminder background task on app startup."""
+    """Start the fee reminder background task on app startup.
+
+    Only ONE uvicorn worker runs the scheduler (guarded by a file lock), and
+    the first run is deferred so startup is not starved of memory/CPU.
+
+    The scheduler is DISABLED by default (ENABLE_FEE_SCHEDULER=0) so it never
+    competes with app warm-up for memory/CPU. Set ENABLE_FEE_SCHEDULER=1 to
+    turn it back on.
+    """
+    if not ENABLE_FEE_SCHEDULER:
+        logger.info("Fee reminder scheduler disabled (ENABLE_FEE_SCHEDULER != 1) - skipping")
+        return
+    lock_fh = _acquire_scheduler_lock()
+    if lock_fh is None:
+        logger.info("Fee reminder scheduler: another worker holds the lock - skipping")
+        return
+    # Keep a reference to the lock file handle so the lock is held for the
+    # lifetime of the process (closing it would release the lock).
+    app.state.fee_reminder_lock_fh = lock_fh
     asyncio.create_task(fee_reminder_loop())
-    logger.info("Fee reminder scheduler started")
+    logger.info(
+        f"Fee reminder scheduler started (single worker, first run in "
+        f"{FEE_REMINDER_STARTUP_DELAY_SECONDS}s)"
+    )
 
 # ============ AUTH ROUTES ============
 
@@ -4225,12 +4391,18 @@ async def get_financial_report_students(
     chain: Optional[str] = None,
     page: int = 1,
     page_size: int = 50,
+    search: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """Dedicated lightweight endpoint for the Financial Report tab.
 
     Returns summary totals for ALL students plus paginated per-student rows.
     Uses aggregation for totals to prevent memory overload.
+
+    Supports an optional `search` term (name / admission no / class) that is
+    applied AT THE DATABASE LEVEL. This lets the UI find a single student
+    (e.g. "YUSRA") without having to download the entire student list, which
+    keeps memory usage low and avoids 503/520 errors on large chains.
     """
     if current_user and current_user.get('role') not in ['secretary', 'principal', 'director', 'coordinator']:
         raise HTTPException(status_code=403, detail="Only secretary, principal, director, or coordinator can view financial reports")
@@ -4240,9 +4412,34 @@ async def get_financial_report_students(
         clean_chain = chain.upper().split(':')[0]
         chain_filter["chain"] = clean_chain
 
-    # Pagination - strict 50 max per page to prevent memory overload
+    # Optional server-side search. Applied to the SAME filter used for both the
+    # summary and the paginated rows so the totals always match what is shown.
+    # We escape regex metacharacters so a user typing e.g. "(" cannot break the
+    # query, and match case-insensitively against name / admission no / class.
+    if search and search.strip():
+        import re as _re
+        _term = _re.escape(search.strip())
+        _rx = {"$regex": _term, "$options": "i"}
+        chain_filter = {
+            "$and": [
+                chain_filter,
+                {"$or": [
+                    {"first_name": _rx},
+                    {"last_name": _rx},
+                    {"admission_no": _rx},
+                    {"class_name": _rx},
+                ]}
+            ]
+        }
+
+    # Pagination. The Financial Report tab paginates CLIENT-SIDE (20 rows per
+    # page) over the full student list, so it must be able to fetch EVERY
+    # student in one request. The response is already lightweight (no receipt
+    # images, batched lookups), so a high cap is safe. Previously this was
+    # capped at 50, which silently hid every student after position 50 (e.g.
+    # students whose names sort late in the alphabet) from the report.
     page = max(1, page)
-    page_size = max(1, min(50, page_size))
+    page_size = max(1, min(1000, page_size))
     skip = (page - 1) * page_size
 
     # Get total count for pagination

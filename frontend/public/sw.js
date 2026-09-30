@@ -1,26 +1,33 @@
 // Service Worker for IHEZA School Management System
 // Version-based cache to ensure updates are applied immediately
 // Bump this version on EVERY deployment to force cache refresh
-const CACHE_VERSION = 'v11-20260825';  // BUMPED: force cache refresh for DUP chain mobile layout fix (3+3+2)
+const CACHE_VERSION = 'v12-20260915';  // BUMPED: resilient precache (allSettled, drop favicon) so a CDN 520 can't break SW install
 
 const CACHE_NAME = `iheza-cache-${CACHE_VERSION}`;
 
-// Only cache truly static assets that rarely change
+// Only cache truly static assets that rarely change.
+// NOTE: /favicon.ico is intentionally NOT precached here. It is served by the
+// edge/CDN and can transiently fail (e.g. Cloudflare 520). Because cache.addAll()
+// is atomic, a single failing URL aborts the whole install and breaks the SW.
+// We precache only assets that reliably exist, and use Promise.allSettled so a
+// single failure can never block activation.
 const STATIC_ASSETS = [
   '/manifest.json',
   '/logo192.png',
-  '/logo512.png',
-  '/favicon.ico'
+  '/logo512.png'
 ];
 
-// Install event - cache only static assets
+// Install event - cache only static assets (resilient to individual failures)
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing new service worker...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[SW] Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
+        // allSettled: one failed asset must not abort the install
+        return Promise.allSettled(
+          STATIC_ASSETS.map((url) => cache.add(url))
+        );
       })
       .then(() => {
         console.log('[SW] Skip waiting - activating immediately');

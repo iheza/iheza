@@ -285,16 +285,45 @@ const Documents = () => {
     }
   };
 
-  const downloadDocument = (doc) => {
+  // Lazily fetch the full document (including its base64 `data` blob) from the
+  // backend. The list endpoint intentionally omits `data` to keep payloads
+  // small, so preview/download must fetch it on demand via GET /documents/{id}.
+  const fetchFullDocument = async (doc) => {
+    if (doc.data) return doc; // already have the blob (e.g. local doc)
+    const token = localStorage.getItem('sessionToken');
+    if (!token || !doc.id) return doc;
+    try {
+      const response = await fetch(`${API_URL}/api/documents/${doc.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const full = await response.json();
+        return { ...doc, ...full };
+      }
+    } catch (e) {
+      console.error('Error fetching full document:', e);
+    }
+    return doc;
+  };
+
+  const downloadDocument = async (doc) => {
+    const fullDoc = await fetchFullDocument(doc);
+    if (!fullDoc.data) {
+      alert('This document has no downloadable content.');
+      return;
+    }
     const link = document.createElement('a');
-    link.href = doc.data;
-    link.download = doc.name;
+    link.href = fullDoc.data;
+    link.download = fullDoc.name;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const previewDocument = (doc) => {
+  const previewDocument = async (doc) => {
+    // Fetch the full blob on demand if the list response omitted it
+    doc = await fetchFullDocument(doc);
+
     // For examination reports stored with metadata only (no full HTML content),
     // regenerate the HTML from the stored form data
     if (doc.source === 'examination_report' && (!doc.data || doc.data === null) && doc.metadata?.formData) {

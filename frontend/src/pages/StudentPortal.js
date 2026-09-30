@@ -37,7 +37,10 @@ function StudentPortal() {
   const [selectedReportCard, setSelectedReportCard] = useState(null);
   const [showReportCardModal, setShowReportCardModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(null);
+  // Task selected for the "View" detail modal (full task details + download)
+  const [viewTask, setViewTask] = useState(null);
   const [showFeeModal, setShowFeeModal] = useState(null);
+
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(null);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [studentInfo, setStudentInfo] = useState(null);
@@ -46,14 +49,15 @@ function StudentPortal() {
   const [openSection, setOpenSection] = useState(null);
 
   // LAZY-LOAD PER SECTION (see audit report).
-  // On mount we fetch ONLY the student's profile info (needed for the header).
-  // Each section's data is fetched ON DEMAND the first time its card is
-  // clicked, then cached for the session so re-opening a modal is instant.
-  // This eliminates the previous 7-request mount storm: a student who only
-  // opens "My Tasks" triggers 1 mount request + 1 section request instead of
-  // 7 concurrent requests on every login.
+  // On mount we fetch the profile info AND each section's data SEQUENTIALLY
+  // (one request at a time) so the dashboard cards populate immediately on
+  // first load without requiring a manual refresh, while still avoiding the
+  // 502 overload caused by firing all 7 requests concurrently.
+  // Each section's data is cached for the session so re-opening a modal is
+  // instant (no refetch).
   const [sectionLoading, setSectionLoading] = useState(null); // section key currently loading
   const loadedSectionsRef = useRef(new Set());
+
 
   const SECTION_ENDPOINTS = {
     tasks: '/api/student-portal/my-tasks',
@@ -106,7 +110,10 @@ function StudentPortal() {
     }
   };
 
-  // Load the student's profile info on mount (1 request instead of 7).
+  // Load the student's profile info on mount, then fetch each section's data
+  // SEQUENTIALLY (one request at a time) so the dashboard cards populate
+  // immediately on first load WITHOUT requiring a manual refresh, while still
+  // avoiding the 502 overload caused by firing all 7 requests concurrently.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -118,9 +125,32 @@ function StudentPortal() {
       } catch (error) {
         console.error('Failed to load student info:', error);
       }
+      // Populate dashboard card counts by fetching each section one-by-one.
+      for (const section of Object.keys(SECTION_ENDPOINTS)) {
+        if (cancelled) return;
+        if (loadedSectionsRef.current.has(section)) continue;
+        try {
+          const endpoint = SECTION_ENDPOINTS[section];
+          const res = await fetch(`${API_URL}${endpoint}`, { headers: getHeaders() });
+          if (cancelled) return;
+          if (handleUnauthorized(res)) return;
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (section === 'tasks') setTasks(data);
+          else if (section === 'report-cards') setReportCards(data);
+          else if (section === 'fees') setFeeData(data);
+          else if (section === 'announcements') setAnnouncements(data);
+          else if (section === 'results') setGrades(data);
+          else if (section === 'almanac') setAlmanacEvents(data.events || []);
+          loadedSectionsRef.current.add(section);
+        } catch (error) {
+          console.error(`Failed to load ${section}:`, error);
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, []);
+
 
   // Open a section modal, lazily fetching its data on first open.
   // The modal opens immediately and shows a loading spinner while the
@@ -136,6 +166,8 @@ function StudentPortal() {
   const closeModal = () => setOpenSection(null);
 
   // Refresh: reload the profile info and every section (clears the cache).
+  // Sections are fetched SEQUENTIALLY (one at a time) to avoid the 502
+  // overload that happens when all requests fire concurrently.
   const loadAllData = async () => {
     setLoading(true);
     loadedSectionsRef.current.clear();
@@ -143,13 +175,16 @@ function StudentPortal() {
       const res = await fetch(`${API_URL}/api/student-portal/my-info`, { headers: getHeaders() });
       if (handleUnauthorized(res)) return;
       if (res.ok) setStudentInfo(await res.json());
-      await Promise.all(Object.keys(SECTION_ENDPOINTS).map(section => fetchSection(section)));
+      for (const section of Object.keys(SECTION_ENDPOINTS)) {
+        await fetchSection(section);
+      }
     } catch (error) {
       console.error('Failed to refresh data:', error);
     } finally {
       setLoading(false);
     }
   };
+
 
 
 
@@ -388,7 +423,14 @@ function StudentPortal() {
         .modal-table .fee-status.paid { background: #d1fae5; color: #059669; }
         .modal-table .fee-status.partial { background: #fef3c7; color: #d97706; }
         .modal-table .fee-status.unpaid { background: #fee2e2; color: #dc2626; }
+        .act-btn { display: inline-flex; align-items: center; gap: 3px; padding: 0.15rem 0.45rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; color: #475569; font-size: 0.62rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease; font-family: 'Inter', sans-serif; white-space: nowrap; }
+        .act-btn:hover { background: #e2e8f0; color: #0f172a; }
+        .act-btn.view { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+        .act-btn.view:hover { background: #dbeafe; }
+        .act-btn.download { background: #ecfdf5; border-color: #a7f3d0; color: #059669; }
+        .act-btn.download:hover { background: #d1fae5; }
         .modal-footer-note { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid #e2e8f0; text-align: center; font-size: 0.7rem; color: #94a3b8; }
+
         .modal-footer-note .act-btn { display: inline-flex; align-items: center; gap: 2px; padding: 0.1rem 0.35rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; color: #64748b; font-size: 0.6rem; font-weight: 500; cursor: pointer; transition: all 0.15s ease; font-family: 'Inter', sans-serif; }
         .modal-footer-note .act-btn:hover { background: #e2e8f0; color: #0f172a; }
         .modal-footer-note .act-btn.view:hover { background: #dbeafe; color: #2563eb; border-color: #bfdbfe; }
@@ -570,6 +612,7 @@ function StudentPortal() {
                     <th>Subject</th>
                     <th>Status</th>
                     <th>Performance</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -600,6 +643,12 @@ function StudentPortal() {
                             <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>—</span>
                           )}
                         </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                            <button className="act-btn view" onClick={() => setViewTask(task)}>👁 View</button>
+                            <button className="act-btn download" onClick={() => handleDownloadTask(task, 'pdf')}>⬇ Download</button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -608,14 +657,97 @@ function StudentPortal() {
               </table>
             )}
             <div className="modal-footer-note">
-              <i className="fas fa-info-circle"></i> {tasks.length} tasks shown · Click <i className="fas fa-download"></i> or <i className="fas fa-eye"></i> for details
+              <i className="fas fa-info-circle"></i> {tasks.length} tasks shown · Click <i className="fas fa-eye"></i> to view full task details or <i className="fas fa-download"></i> to download
             </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* ======================== MODAL: VIEW TASK DETAIL ======================== */}
+      <div className={`modal-overlay ${viewTask ? 'active' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setViewTask(null); }}>
+        <div className="modal" style={{ maxWidth: '620px' }}>
+          <div className="modal-header">
+            <h2><span className="icon-sm blue"><i className="fas fa-tasks"></i></span> Task Details</h2>
+            <button className="modal-close" onClick={() => setViewTask(null)}><i className="fas fa-times"></i></button>
+          </div>
+          <div className="modal-body">
+            {viewTask && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                  <span className={`type-badge ${viewTask.task_type || 'homework'}`}>{(TASK_TYPE_INFO[viewTask.task_type]?.label || viewTask.task_type || 'Homework')}</span>
+                  {getStatusBadge(viewTask.my_status)}
+                  {viewTask.score !== null && viewTask.score !== undefined && (
+                    <span className={`perf-badge ${getPerformanceLevel(viewTask.score)?.cls || ''}`}>{getPerformanceLevel(viewTask.score)?.label || '—'}</span>
+                  )}
+                </div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.5rem', lineHeight: 1.3 }}>
+                  {viewTask.title || 'Untitled Task'}
+                </h3>
+                <div className="detail-row"><span className="label">Subject</span><span className="value">{viewTask.subject_name || 'N/A'}</span></div>
+                <div className="detail-row"><span className="label">Class</span><span className="value">{viewTask.class_name || 'N/A'}</span></div>
+                <div className="detail-row"><span className="label">Assigned By</span><span className="value">{viewTask.assigned_by_name || 'Teacher'}</span></div>
+                <div className="detail-row"><span className="label">Due Date</span><span className="value">{viewTask.due_date ? new Date(viewTask.due_date).toLocaleDateString() : 'No due date'}</span></div>
+                <div className="detail-row"><span className="label">Status</span><span className="value">{getStatusBadge(viewTask.my_status)}</span></div>
+                {viewTask.score !== null && viewTask.score !== undefined && (
+                  <div className="detail-row"><span className="label">Score</span><span className="value" style={{ fontWeight: 700, color: '#059669' }}>{viewTask.score}/100</span></div>
+                )}
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.4rem' }}>Description</div>
+                  <div style={{ fontSize: '0.9rem', color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem' }}>
+                    {viewTask.description || 'No description provided.'}
+                  </div>
+                </div>
+                {viewTask.feedback && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.4rem' }}>Teacher Feedback</div>
+                    <div style={{ fontSize: '0.9rem', color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '10px', padding: '1rem', fontStyle: 'italic' }}>
+                      "{viewTask.feedback}"
+                    </div>
+                  </div>
+                )}
+                {viewTask.attachments && viewTask.attachments.length > 0 && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.4rem' }}>Attachments ({viewTask.attachments.length})</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {viewTask.attachments.map((att, ai) => {
+                        let name = `Attachment ${ai + 1}`;
+                        if (typeof att === 'string') {
+                          if (att.startsWith('data:')) {
+                            const mimeMatch = att.match(/^data:([^;]+);/);
+                            const mimeType = mimeMatch ? mimeMatch[1] : 'file';
+                            name = `Attachment ${ai + 1}.${mimeType.split('/')[1] || 'bin'}`;
+                          } else if (att.startsWith('http')) {
+                            const parts = att.split('/');
+                            name = parts[parts.length - 1] || `Attachment ${ai + 1}`;
+                          }
+                        }
+                        return (
+                          <div key={ai} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem 0.75rem' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <i className="fas fa-paperclip" style={{ marginRight: '0.4rem', color: '#64748b' }}></i>{name}
+                            </span>
+                            <button className="act-btn download" onClick={() => handleDownloadTask(viewTask, 'pdf')}><i className="fas fa-download"></i> Download</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="modal-footer-note">
+                  <button className="act-btn download" onClick={() => handleDownloadTask(viewTask, 'pdf')}><i className="fas fa-file-pdf"></i> PDF</button>
+                  <button className="act-btn download" onClick={() => handleDownloadTask(viewTask, 'docx')}><i className="fas fa-file-word"></i> DOCX</button>
+                  <button className="act-btn download" onClick={() => handleDownloadTask(viewTask, 'png')}><i className="fas fa-image"></i> PNG</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       {/* ======================== MODAL: REPORT CARDS ======================== */}
       <div className={`modal-overlay ${openSection === 'report-cards' ? 'active' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+
         <div className="modal">
           <div className="modal-header">
             <h2><span className="icon-sm purple"><i className="fas fa-file-alt"></i></span> Report Cards</h2>

@@ -804,6 +804,13 @@ function FinancialReportsTab({ currentUser, selectedChain }) {
       // /api/all-student-fees?page_size=1000 which was heavy and caused Nginx
       // upstream timeouts (Cloudflare 520) because it had to process and strip
       // receipt images for every student.
+      //
+      // IMPORTANT: This tab paginates CLIENT-SIDE (20 rows per page), so we
+      // must fetch EVERY student in one request. Without an explicit page_size
+      // the backend defaulted to 50, which silently hid every student after
+      // position 50 (e.g. names sorting late in the alphabet) from the report.
+      params.append('page', '1');
+      params.append('page_size', '1000');
       const url = `${API_URL}/api/financial-report-students${params.toString() ? '?' + params.toString() : ''}`;
       const response = await fetch(url, {
         headers: getAuthHeaders(),
