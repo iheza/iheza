@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"6698f9e48d5c4431bc0d1e6051026207","collectionName":"fee_structures","type":"collection"}

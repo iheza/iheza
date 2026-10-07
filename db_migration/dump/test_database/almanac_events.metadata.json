@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"051ed875adb348bc80a65feb311cc867","collectionName":"almanac_events","type":"collection"}

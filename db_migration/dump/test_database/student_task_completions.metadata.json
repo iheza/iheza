@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"16ea271b6175477898719b0bf74dc5a2","collectionName":"student_task_completions","type":"collection"}
