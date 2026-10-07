@@ -33,22 +33,26 @@ const AssessmentForm = () => {
   const [teacherName, setTeacherName] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+  const [saving, setSaving] = useState(false);
+
   
   // Class selection state
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState("");
   const [loadingStudents, setLoadingStudents] = useState(false);
 
-  // Generate a storage key based on teacher + subject
+  // Generate a storage key based on class + teacher + subject.
+  // Falls back to class/subject so auto-save works even before a teacher is picked.
   const getStorageKey = () => {
+    const classKey = selectedClass ? selectedClass.replace(/\s+/g, '_') : 'noclass';
     const teacherKey = teacherName ? teacherName.replace(/\s+/g, '_') : 'default';
     const subjectKey = subject ? subject.replace(/\s+/g, '_') : 'default';
-    return `assessmentData_${teacherKey}_${subjectKey}`;
+    return `assessmentData_${classKey}_${teacherKey}_${subjectKey}`;
   };
 
-  // Load saved data from localStorage when teacher or subject changes
+  // Load saved data from localStorage when class/teacher/subject changes
   useEffect(() => {
-    if (!dataLoaded && teacherName && subject) {
+    if (!dataLoaded && subject) {
       try {
         const storageKey = getStorageKey();
         const saved = localStorage.getItem(storageKey);
@@ -66,17 +70,20 @@ const AssessmentForm = () => {
       }
       setDataLoaded(true);
     }
-  }, [teacherName, subject, dataLoaded]);
+  }, [teacherName, subject, selectedClass, dataLoaded]);
 
-  // Auto-save to localStorage whenever data changes (with debounce)
+  // Auto-save to localStorage whenever data changes (with debounce).
+  // Works as soon as a subject is chosen, even without a teacher selected.
   useEffect(() => {
-    if (teacherName && subject && dataLoaded) {
+    if (subject && dataLoaded) {
+      setSaving(true);
       const timer = setTimeout(() => {
         try {
           const storageKey = getStorageKey();
           const saveData = {
             students,
             subject,
+            selectedClass,
             teacherRemarks,
             teacherSignature,
             teacherName,
@@ -87,11 +94,14 @@ const AssessmentForm = () => {
           setLastSaved(new Date().toISOString());
         } catch (error) {
           console.error('Error auto-saving assessment data:', error);
+        } finally {
+          setSaving(false);
         }
       }, 500); // 500ms debounce to avoid excessive writes
       return () => clearTimeout(timer);
     }
-  }, [students, subject, teacherRemarks, teacherSignature, teacherName, teacherId, dataLoaded]);
+  }, [students, subject, selectedClass, teacherRemarks, teacherSignature, teacherName, teacherId, dataLoaded]);
+
 
   // Reset dataLoaded when teacher changes so we load the new teacher's data
   const handleTeacherChange = (selectedId) => {
@@ -214,6 +224,16 @@ const AssessmentForm = () => {
     });
   };
 
+  // Parse a marks value allowing decimals (e.g. 9.5 for half marks).
+  // Returns "" for empty input, otherwise a number (or the raw string if not yet valid).
+  const parseMarkValue = (value) => {
+    if (value === "" || value === null || value === undefined) return "";
+    // Allow partial input like "9." or "9.5" while typing
+    if (value === "." || value.endsWith(".")) return value;
+    const num = parseFloat(value);
+    return isNaN(num) ? "" : num;
+  };
+
   const handleMarksChange = (studentId, type, index, value) => {
     setStudents(prevStudents => {
       return prevStudents.map(student => {
@@ -222,21 +242,22 @@ const AssessmentForm = () => {
           
           if (type === 'classwork') {
             const updatedClasswork = [...student.classwork];
-            updatedClasswork[index] = value === "" ? "" : parseInt(value) || 0;
+            updatedClasswork[index] = parseMarkValue(value);
             updatedStudent.classwork = updatedClasswork;
           } else if (type === 'homework') {
             const updatedHomework = [...student.homework];
-            updatedHomework[index] = value === "" ? "" : parseInt(value) || 0;
+            updatedHomework[index] = parseMarkValue(value);
             updatedStudent.homework = updatedHomework;
           } else if (type === 'topicTests') {
             const updatedTopicTests = [...student.topicTests];
-            updatedTopicTests[index] = value === "" ? "" : parseInt(value) || 0;
+            updatedTopicTests[index] = parseMarkValue(value);
             updatedStudent.topicTests = updatedTopicTests;
           } else if (type === 'term40') {
-            updatedStudent.term40 = value === "" ? "" : parseInt(value) || 0;
+            updatedStudent.term40 = parseMarkValue(value);
           } else if (type === 'term60') {
-            updatedStudent.term60 = value === "" ? "" : parseInt(value) || 0;
+            updatedStudent.term60 = parseMarkValue(value);
           }
+
           
           // Recalculate total and grade whenever term40 or term60 changes
           if (type === 'term40' || type === 'term60') {
@@ -626,11 +647,16 @@ const AssessmentForm = () => {
         <button className="btn btn-primary" onClick={saveForm}>Save as Word Document</button>
         <button className="btn btn-secondary" onClick={printAssessment}>Print</button>
         <button className="btn btn-warning" onClick={clearSavedData} style={{ background: '#dc3545', color: 'white', border: 'none' }}>Clear Saved Data</button>
-        {lastSaved && (
-          <span style={{ fontSize: '10px', color: '#6b7280', marginLeft: '10px', alignSelf: 'center' }}>
-            Auto-saved: {new Date(lastSaved).toLocaleTimeString()}
+        {saving ? (
+          <span style={{ fontSize: '10px', color: '#f59e0b', marginLeft: '10px', alignSelf: 'center', fontWeight: 'bold' }}>
+            ● Saving...
           </span>
-        )}
+        ) : lastSaved ? (
+          <span style={{ fontSize: '10px', color: '#16a34a', marginLeft: '10px', alignSelf: 'center' }}>
+            ✓ Auto-saved: {new Date(lastSaved).toLocaleTimeString()}
+          </span>
+        ) : null}
+
       </div>
 
       {/* Class Selection Section */}
@@ -848,9 +874,10 @@ const AssessmentForm = () => {
                     inputMode="numeric"
                     value={student.total}
                     onChange={(e) => {
-                      const value = e.target.value === "" ? "" : parseInt(e.target.value) || 0;
-                      setStudents(prevStudents => prevStudents.map(s => s.id === student.id ? { ...s, total: value, grade: getGrade(value) } : s));
+                      const value = parseMarkValue(e.target.value);
+                      setStudents(prevStudents => prevStudents.map(s => s.id === student.id ? { ...s, total: value, grade: getGrade(parseFloat(value) || 0) } : s));
                     }}
+
                     onKeyDown={(e) => handleKeyDown(e, getNextInputId(student.id, 'total', 0))}
                     style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'center' }}
                   />

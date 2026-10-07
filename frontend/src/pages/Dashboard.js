@@ -19,7 +19,13 @@ import {
 // TTL so re-mounts within the window reuse the previous fetch instead of
 // firing another 7-call burst per chain.
 const whatsNewCache = new Map(); // chain -> { data, expiresAt }
-const WHATS_NEW_TTL_MS = 60000; // 60s
+// Short TTL so newly recorded payments/documents show up quickly on the
+// dashboard. Previously 60s, which combined with the backend's 30s
+// Cache-Control meant a new payment could take up to ~90s to appear (and
+// looked "stuck" on an old month). 10s keeps it responsive while still
+// absorbing rapid re-mounts.
+const WHATS_NEW_TTL_MS = 10000; // 10s
+
 
 function getCachedWhatsNew(chain) {
   const entry = whatsNewCache.get(chain);
@@ -71,9 +77,14 @@ function Dashboard() {
   // 7-call parallel burst per chain into 1 request, dramatically reducing
   // origin load under concurrent dashboard loads.
   const buildChainWhatsNew = async (chain) => {
-    const params = chain ? { chain } : {};
+    // Add a cache-busting timestamp so the browser/proxy never serves a stale
+    // cached response. This guarantees newly recorded payments/documents show
+    // up immediately instead of the dashboard appearing "stuck" on old data.
+    const params = { _t: Date.now() };
+    if (chain) params.chain = chain;
     const response = await apiClient.get('/dashboard/whats-new', { params });
     const data = response.data || {};
+
 
     return {
       payments: data.payments || [],

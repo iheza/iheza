@@ -6638,12 +6638,16 @@ async def get_dashboard_whats_new(
         reverse=True
     )[:5]
 
-    # Short cache window so the browser/reverse proxy can serve repeat
-    # dashboard loads from cache instead of re-hitting the origin. 30s is
-    # short enough that "What's New" stays reasonably fresh while still
-    # absorbing concurrent dashboard-load bursts.
+    # Keep "What's New" fresh: do NOT let the browser or any shared proxy
+    # cache this response. Previously this used "public, max-age=30", which
+    # caused the dashboard to keep showing stale payments (e.g. stuck on an
+    # old month) after a new payment was recorded. "no-store" guarantees the
+    # latest payments/documents are always fetched.
     if response is not None:
-        response.headers["Cache-Control"] = "public, max-age=30"
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
 
     return {
         "chain": chain,
@@ -7646,7 +7650,15 @@ async def toggle_ebook_lock(
     if user_role not in ["principal", "director", "coordinator"]:
         raise HTTPException(status_code=403, detail="Only principal, director, or coordinator can lock/unlock e-books")
     
+    # Find the ebook - try by id first, then by _id (for backward compatibility
+    # with ebooks that don't have an explicit id field)
     ebook = await db.ebooks.find_one({"id": ebook_id})
+    if not ebook:
+        from bson.objectid import ObjectId
+        try:
+            ebook = await db.ebooks.find_one({"_id": ObjectId(ebook_id)})
+        except Exception:
+            pass
     if not ebook:
         raise HTTPException(status_code=404, detail="e-Book not found")
     
@@ -7654,11 +7666,12 @@ async def toggle_ebook_lock(
     new_locked = not current_locked
     
     await db.ebooks.update_one(
-        {"id": ebook_id},
+        {"_id": ebook["_id"]},
         {"$set": {"locked": new_locked}}
     )
     
     return {"locked": new_locked, "id": ebook_id}
+
 
 
 @api_router.delete("/ebooks/{ebook_id}")
@@ -7674,11 +7687,24 @@ async def delete_ebook(
     if user_role not in ["principal", "director", "coordinator"]:
         raise HTTPException(status_code=403, detail="Only principal, director, or coordinator can delete e-books")
     
-    result = await db.ebooks.delete_one({"id": ebook_id})
+    # Find the ebook - try by id first, then by _id (for backward compatibility
+    # with ebooks that don't have an explicit id field)
+    ebook = await db.ebooks.find_one({"id": ebook_id})
+    if not ebook:
+        from bson.objectid import ObjectId
+        try:
+            ebook = await db.ebooks.find_one({"_id": ObjectId(ebook_id)})
+        except Exception:
+            pass
+    if not ebook:
+        raise HTTPException(status_code=404, detail="e-Book not found")
+    
+    result = await db.ebooks.delete_one({"_id": ebook["_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="e-Book not found")
     
     return {"success": True, "message": "e-Book deleted successfully"}
+
 
 
 # ============ ROOT-LEVEL HEALTH ENDPOINT ============
